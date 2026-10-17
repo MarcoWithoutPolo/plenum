@@ -1,0 +1,185 @@
+import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import type { ProviderId, Seat } from '@conclave/shared';
+import { INSTALL_PACKAGES, streamProcess, type Engine } from '@conclave/core';
+import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
+import { openInTerminal } from './terminal.js';
+
+const PROVIDERS = new Set<ProviderId>(['claude', 'codex', 'gemini']);
+
+export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | null): void {
+  const running = new Map<string, AbortController>();
+  const send = (channel: string, payload: unknown) => {
+    const win = getWindow();
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  };
+  const update = (u: RunUpdate) => send(IPC.runUpdate, u);
+
+  const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R | Promise<R>) =>
+    ipcMain.handle(channel, (_event: IpcMainInvokeEvent, ...args: unknown[]) => fn(...(args as A)));
+
+  const adapter = (provider: unknown) => {
+    if (typeof provider !== 'string' || !PROVIDERS.has(provider as ProviderId)) {
+      throw new Error('Unknown provider');
+    }
+    const found = engine.adapters.get(provider as ProviderId);
+    if (!found) throw new Error(`Provider not available: ${provider}`);
+    return found;
+  };
+
+  const track = (requestId: string) => {
+    if (typeof requestId !== 'string' || !requestId) throw new Error('Missing request id');
+    const controller = new AbortController();
+    running.set(requestId, controller);
+    return { signal: controller.signal, done: () => running.delete(requestId) };
+  };
+
+  handle(IPC.accountsList, async (): Promise<ProviderInfo[]> => {
+    const statuses = await engine.detectAll();
+    return statuses.map((status) => {
+      const a = engine.adapters.get(status.provider)!;
+      const pkg = INSTALL_PACKAGES[status.provider];
+      return {
+        ...status,
+        displayName: a.displayName,
+        models: a.capabilities.models,
+        ...(a.capabilities.defaultModel && { defaultModel: a.capabilities.defaultModel }),
+        ...(pkg && { installPackage: pkg }),
+        loginHint: a.login().hint,
+      };
+    });
+  });
+
+  handle(IPC.accountsSignIn, (provider: ProviderId) => openInTerminal(adapter(provider).login()));
+
+  handle(IPC.accountsInstall, async (provider: ProviderId) => {
+    const pkg = INSTALL_PACKAGES[provider];
+    if (!pkg) return { ok: false, error: 'No installer for this provider' };
+    const win = getWindow();
+    const options = {
+      type: 'question' as const,
+      buttons: ['Install', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Install CLI',
+      message: `Install ${adapter(provider).displayName}?`,
+      detail: `Conclave will run:\n\nnpm install -g ${pkg}\n\nThis downloads the official package from the npm registry.`,
+    };
+    const choice = win
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options);
+    if (choice.response !== 0) return { ok: false, cancelled: true };
+
+    let code: number | null = null;
+    let error: string | undefined;
+    for await (const chunk of streamProcess({
+      command: 'npm',
+      args: ['install', '-g', pkg],
+      timeoutMs: 10 * 60_000,
+    })) {
+      if (chunk.kind === 'line') send(IPC.installLog, { provider, text: `${chunk.line}\n` });
+      else if (chunk.kind === 'stderr') send(IPC.installLog, { provider, text: chunk.text });
+      else {
+        code = chunk.code;
+        error = chunk.error;
+      }
+    }
+    return code === 0
+      ? { ok: true }
+      : { ok: false, error: error ?? `npm exited with code ${code}` };
+  });
+
+  handle(IPC.accountsQuotas, () => engine.store.listQuotas());
+
+  handle(IPC.threadsList, () => engine.store.listThreads(200));
+  handle(IPC.threadsGet, (id: string) => {
+    const thread = engine.store.getThread(id);
+    return thread ? { thread, messages: engine.store.listMessages(id) } : null;
+  });
+  handle(
+    IPC.threadsRename,
+    (id: string, title: string) =>
+      engine.store.updateThread(id, { title: String(title).trim().slice(0, 200) || 'Untitled' }) ??
+      null,
+  );
+  handle(IPC.threadsRemove, (id: string) => engine.store.deleteThread(id));
+
+  handle(IPC.chatCreate, (seat: Seat) => {
+    adapter(seat.provider);
+    return engine.chat.createThread(seat);
+  });
+
+  handle(
+    IPC.chatSend,
+    async (input: { requestId: string; threadId: string; text: string; seat: Seat }) => {
+      adapter(input.seat.provider);
+      const run = track(input.requestId);
+      try {
+        const { thread, user, reply } = await engine.chat.send(input.threadId, input.text, {
+          provider: input.seat.provider,
+          model: input.seat.model ?? null,
+          signal: run.signal,
+          onEvent: (event) => update({ requestId: input.requestId, kind: 'chat', event }),
+        });
+        return { thread, user, reply };
+      } finally {
+        run.done();
+      }
+    },
+  );
+
+  handle(
+    IPC.councilAsk,
+    async (input: {
+      requestId: string;
+      question: string;
+      members: Seat[];
+      synthesizer: Seat;
+      threadId?: string;
+    }): Promise<CouncilRoundResult> => {
+      for (const seat of [...input.members, input.synthesizer]) adapter(seat.provider);
+      const run = track(input.requestId);
+      try {
+        const result = await engine.council.ask(input.question, {
+          members: input.members,
+          synthesizer: input.synthesizer,
+          signal: run.signal,
+          ...(input.threadId && { threadId: input.threadId }),
+          onEvent: (u) =>
+            update(
+              u.phase === 'member'
+                ? {
+                    requestId: input.requestId,
+                    kind: 'member',
+                    index: u.index,
+                    label: u.label,
+                    seat: u.seat,
+                    event: u.event,
+                  }
+                : { requestId: input.requestId, kind: 'synthesis', seat: u.seat, event: u.event },
+            ),
+        });
+        return {
+          thread: result.thread,
+          groupId: result.groupId,
+          answers: result.answers.map((a) => ({
+            seat: a.seat,
+            label: a.label,
+            message: a.message,
+          })),
+          merged: result.merged,
+          mergedBy: result.mergedBy,
+        };
+      } finally {
+        run.done();
+      }
+    },
+  );
+
+  handle(IPC.runsCancel, (requestId: string) => {
+    running.get(requestId)?.abort();
+  });
+
+  handle(IPC.openExternal, async (url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) await shell.openExternal(url);
+  });
+}

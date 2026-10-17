@@ -12,3 +12,8 @@ Thumbs.db
 
 # Local runtime data (database, worktrees, logs)
 .conclave/
+
+# Playwright output
+test-results/
+playwright-report/
+apps/desktop/e2e/screenshots/

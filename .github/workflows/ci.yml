@@ -23,5 +23,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
-      - run: npm run build
+      - run: npm run typecheck
       - run: npm test
+      - run: npm run desktop:build
+      - name: Desktop end-to-end (demo mode)
+        if: runner.os != 'Linux'
+        run: npm run -w @conclave/desktop e2e

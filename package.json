@@ -20,8 +20,12 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run lint && npm run format:check && npm run build && npm test",
-    "conclave": "tsx --conditions=development apps/cli/src/main.ts"
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
+    "conclave": "tsx --conditions=development apps/cli/src/main.ts",
+    "typecheck": "tsc -b && npm run -s -w @conclave/desktop typecheck",
+    "desktop": "npm run -w @conclave/desktop dev",
+    "desktop:build": "npm run -w @conclave/desktop build",
+    "e2e": "npm run desktop:build && npm run -w @conclave/desktop e2e"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

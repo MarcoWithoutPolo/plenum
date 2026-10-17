@@ -1,0 +1,73 @@
+import { useEffect } from 'react';
+import { AlertCircle, X } from 'lucide-react';
+import { Sidebar } from '@/components/Sidebar';
+import { useApp } from '@/lib/store';
+import { AccountsScreen } from '@/screens/AccountsScreen';
+import { ChatScreen } from '@/screens/ChatScreen';
+import { CouncilScreen } from '@/screens/CouncilScreen';
+
+export function App() {
+  const ready = useApp((s) => s.ready);
+  const screen = useApp((s) => s.screen);
+  const init = useApp((s) => s.init);
+  const open = useApp((s) => s.open);
+
+  useEffect(() => {
+    void init();
+  }, [init]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        open({ name: 'chat' });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  return (
+    <div className="flex h-full">
+      <Sidebar />
+      <main className="relative flex min-w-0 flex-1 flex-col">
+        {!ready ? (
+          <div className="grid flex-1 place-items-center text-muted">Loading…</div>
+        ) : screen.name === 'accounts' ? (
+          <AccountsScreen />
+        ) : screen.name === 'council' ? (
+          <CouncilScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
+        ) : (
+          <ChatScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
+        )}
+        <Toast />
+      </main>
+    </div>
+  );
+}
+
+function Toast() {
+  const toast = useApp((s) => s.toast);
+  if (!toast) return null;
+  return (
+    <div
+      role="alert"
+      className={`absolute right-5 bottom-5 z-50 flex max-w-md items-start gap-2.5 rounded-xl border px-3.5 py-3 text-[13px] shadow-card ${
+        toast.kind === 'error'
+          ? 'border-danger/30 bg-danger-soft text-danger'
+          : 'border-line bg-elev text-ink'
+      }`}
+    >
+      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+      <span className="selectable flex-1">{toast.text}</span>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        onClick={() => useApp.setState({ toast: undefined })}
+        className="rounded p-0.5 opacity-70 hover:opacity-100"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}

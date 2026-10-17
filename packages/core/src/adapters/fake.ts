@@ -17,6 +17,8 @@ export interface FakeOptions {
   displayName?: string;
   /** Advertise session resume (sessions are only remembered, not replayed). */
   resume?: boolean;
+  /** Override what detect() reports, e.g. to show a signed-out provider. */
+  status?: Partial<Omit<ProviderStatus, 'provider'>>;
 }
 
 let runCounter = 0;
@@ -29,10 +31,13 @@ export class FakeAdapter implements Adapter {
   /** Every request this adapter received, for assertions. */
   readonly requests: RunRequest[] = [];
 
+  private readonly status: Partial<Omit<ProviderStatus, 'provider'>>;
+
   constructor(
     private readonly script: FakeScript,
     opts: FakeOptions = {},
   ) {
+    this.status = opts.status ?? {};
     this.id = opts.id ?? 'fake';
     this.displayName = opts.displayName ?? 'Fake';
     this.capabilities = {
@@ -45,7 +50,13 @@ export class FakeAdapter implements Adapter {
   }
 
   async detect(): Promise<ProviderStatus> {
-    return { provider: this.id, installed: true, version: '1.0.0', auth: 'signed_in' };
+    return {
+      provider: this.id,
+      installed: true,
+      version: '1.0.0',
+      auth: 'signed_in',
+      ...this.status,
+    };
   }
 
   login(): LoginCommand {

@@ -137,8 +137,15 @@ export class CodexParser implements LineParser {
     switch (item.type) {
       case 'agent_message': {
         const text = str(item.text) ?? '';
+        if (!text) return [];
+        // Codex sends whole messages; keep consecutive ones apart in the stream.
+        const delta = this.lastMessage
+          ? `
+
+${text}`
+          : text;
         this.lastMessage = text;
-        return text ? [{ type: 'message.delta', text }] : [];
+        return [{ type: 'message.delta', text: delta }];
       }
       case 'command_execution':
         return [{ type: 'tool.call', tool: 'shell', input: { command: item.command } }];

@@ -6,7 +6,7 @@ A desktop command center that runs the AI coding tools you already use (Claude C
 - **Council**: ask all of them at once, see their answers side by side, and get one merged answer that shows where they agree and disagree.
 - **Projects**: an autonomous "brain" that plans, builds, tests and reviews a repo for days. It splits work by role and model and paces itself against each subscription's usage limits.
 
-> Status: early development. M2 is done: chat with Claude or Codex from the terminal (switch models mid-chat without losing context) and ask both at once with `conclave ask`. Gemini is detected but needs `GEMINI_API_KEY`, because Google no longer accepts individual sign-ins from its CLI.
+> Status: early development. M3 is done: a desktop app with Accounts (connect each AI through its official sign-in), Chat with a per-chat model picker (switch mid-chat; the new model sees the whole conversation), and Council (every model answers, one merges with citations). The same features run in the terminal. Gemini is detected but needs `GEMINI_API_KEY`.
 
 ## Bring your own CLI
 
@@ -18,7 +18,16 @@ Conclave never asks for your passwords, API keys or tokens. It drives the offici
 | OpenAI Codex | `npm i -g @openai/codex`             | `codex login`           |
 | Gemini       | `npm i -g @google/gemini-cli`        | set `GEMINI_API_KEY`    |
 
-## Try it
+## Desktop app
+
+```bash
+npm install
+npm run desktop                  # opens the app (dev mode with hot reload)
+CONCLAVE_DEMO=1 npm run desktop  # offline demo with fake providers, costs nothing
+npm run e2e                      # build, then drive the real app with Playwright
+```
+
+## Terminal
 
 ```bash
 npm install
@@ -45,7 +54,7 @@ npm run conclave -- --help
 packages/shared   event and provider schemas (zod), shared by everything
 packages/core     the engine: adapters, chat, council, brain, governor, store
 apps/cli          the `conclave` command
-apps/desktop      the Electron app (coming in M3)
+apps/desktop      the Electron app (main process runs the engine; React UI)
 docs/             architecture and plan
 ```
 
