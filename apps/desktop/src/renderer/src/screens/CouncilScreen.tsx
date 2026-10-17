@@ -5,7 +5,7 @@ import type { ProviderInfo } from '../../../shared/api';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
 import { ModelPicker } from '@/components/ModelPicker';
-import { Badge, ProviderDot, Thinking, formatStats } from '@/components/bits';
+import { Badge, ProviderDot, Thinking, formatStats, usageTitle } from '@/components/bits';
 import {
   NEW,
   councilRounds,
@@ -186,9 +186,12 @@ function MemberChips({
                 className="h-5 rounded border-0 bg-transparent text-[12px] text-accent-ink outline-none"
               >
                 <option value="">default</option>
-                {[...new Set([...(seat?.model ? [seat.model] : []), ...p.models])].map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                {seat?.model && !p.models.some((m) => m.id === seat.model) && (
+                  <option value={seat.model}>{seat.model}</option>
+                )}
+                {p.models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label ?? m.id}
                   </option>
                 ))}
               </select>
@@ -228,6 +231,7 @@ function StoredRound({ round }: { round: Round }) {
             text={a.ok ? a.content : ''}
             error={a.error}
             meta={formatStats(a.durationMs, a.usage)}
+            metaTitle={usageTitle(a.usage)}
           />
         ))}
       </AnswerGrid>
@@ -275,6 +279,7 @@ function AnswerCard({
   text,
   error,
   meta,
+  metaTitle,
 }: {
   provider: ProviderId;
   label: string;
@@ -283,6 +288,7 @@ function AnswerCard({
   text: string;
   error?: string | null;
   meta?: string;
+  metaTitle?: string | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 700;
@@ -297,7 +303,9 @@ function AnswerCard({
         {model && <span className="truncate text-faint">{model}</span>}
         <span className="ml-auto shrink-0">
           {status === 'done' ? (
-            <span className="text-faint">{meta}</span>
+            <span className="cursor-default text-faint" title={metaTitle}>
+              {meta}
+            </span>
           ) : status === 'failed' ? (
             <Badge tone="danger">Failed</Badge>
           ) : status === 'thinking' ? (
@@ -365,7 +373,9 @@ function MergedCard({ message, answerCount }: { message: Message; answerCount: n
                 : ''}
           </span>
           <span className="ml-auto text-[12px] text-faint">
-            {formatStats(message.durationMs, message.usage)}
+            <span className="cursor-default" title={usageTitle(message.usage)}>
+              {formatStats(message.durationMs, message.usage)}
+            </span>
           </span>
         </>
       }

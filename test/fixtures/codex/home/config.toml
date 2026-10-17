@@ -1,0 +1,5 @@
+model = "gpt-a"
+model_reasoning_effort = "ultra"
+
+[profiles.other]
+model = "gpt-b"

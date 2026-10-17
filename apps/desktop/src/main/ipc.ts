@@ -35,18 +35,25 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
 
   handle(IPC.accountsList, async (): Promise<ProviderInfo[]> => {
     const statuses = await engine.detectAll();
-    return statuses.map((status) => {
-      const a = engine.adapters.get(status.provider)!;
-      const pkg = INSTALL_PACKAGES[status.provider];
-      return {
-        ...status,
-        displayName: a.displayName,
-        models: a.capabilities.models,
-        ...(a.capabilities.defaultModel && { defaultModel: a.capabilities.defaultModel }),
-        ...(pkg && { installPackage: pkg }),
-        loginHint: a.login().hint,
-      };
-    });
+    return Promise.all(
+      statuses.map(async (status) => {
+        const a = engine.adapters.get(status.provider)!;
+        const pkg = INSTALL_PACKAGES[status.provider];
+        const listed = await a.models?.().catch(() => undefined);
+        const models = listed?.models.length
+          ? listed.models
+          : a.capabilities.models.map((id) => ({ id }));
+        return {
+          ...status,
+          displayName: a.displayName,
+          models,
+          ...(listed?.defaultModel && { defaultModel: listed.defaultModel }),
+          ...(listed?.defaultEffort && { defaultEffort: listed.defaultEffort }),
+          ...(pkg && { installPackage: pkg }),
+          loginHint: a.login().hint,
+        };
+      }),
+    );
   });
 
   handle(IPC.accountsSignIn, (provider: ProviderId) => openInTerminal(adapter(provider).login()));
@@ -88,7 +95,23 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
       : { ok: false, error: error ?? `npm exited with code ${code}` };
   });
 
-  handle(IPC.accountsQuotas, () => engine.store.listQuotas());
+  handle(IPC.accountsQuotas, async () => {
+    // Providers that log their plan usage locally (Codex) are read fresh, at no cost.
+    const at = Date.now();
+    for (const a of engine.adapters.values()) {
+      const limits = await a.limits?.().catch(() => []);
+      for (const l of limits ?? []) {
+        engine.store.recordQuota({
+          provider: a.id,
+          window: l.window,
+          utilization: l.utilization,
+          resetsAt: l.resetsAt ?? null,
+          at,
+        });
+      }
+    }
+    return engine.store.listQuotas();
+  });
 
   handle(IPC.threadsList, () => engine.store.listThreads(200));
   handle(IPC.threadsGet, (id: string) => {

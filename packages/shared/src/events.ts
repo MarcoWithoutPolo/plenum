@@ -12,8 +12,10 @@ const base = {
 };
 
 export const Usage = z.object({
+  /** Every input token sent, including those served from the provider's cache. */
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
+  /** The part of inputTokens read from cache (much cheaper; mostly the CLI's own fixed instructions). */
   cachedInputTokens: z.number().optional(),
   costUsd: z.number().optional(),
 });

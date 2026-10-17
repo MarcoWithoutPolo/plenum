@@ -89,6 +89,12 @@ body,
   height: 100%;
 }
 
+/* The window itself never scrolls; only panes inside it do. */
+html,
+body {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);

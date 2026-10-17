@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Plug } from 'lucide-react';
 import type { Seat } from '@conclave/shared';
 import type { ProviderInfo } from '../../../shared/api';
 import { providerName, useApp } from '@/lib/store';
 import { ProviderDot } from './bits';
+
+const GAP = 6;
+const MARGIN = 12;
 
 /** Who answers the next message: provider plus model (or the CLI's default). */
 export function ModelPicker({
@@ -20,8 +23,27 @@ export function ModelPicker({
   const providers = useApp((s) => s.providers);
   const open = useApp((s) => s.open);
   const [show, setShow] = useState(false);
-  const [custom, setCustom] = useState('');
+  const [place, setPlace] = useState<{ up: boolean; maxHeight: number }>({
+    up: false,
+    maxHeight: 400,
+  });
   const ref = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+
+  // Open toward the side with more room and never past the window edge.
+  useLayoutEffect(() => {
+    if (!show || !button.current) return;
+    const measure = () => {
+      const r = button.current!.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom - GAP - MARGIN;
+      const above = r.top - GAP - MARGIN;
+      const up = below < 320 && above > below;
+      setPlace({ up, maxHeight: Math.max(160, up ? above : below) });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [show]);
 
   useEffect(() => {
     if (!show) return;
@@ -43,12 +65,15 @@ export function ModelPicker({
   const pick = (seat: Seat) => {
     onChange(seat);
     setShow(false);
-    setCustom('');
   };
+
+  const current = providers.find((p) => p.provider === value.provider);
+  const label = value.model ? modelLabel(current, value.model) : 'default';
 
   return (
     <div ref={ref} className="relative no-drag">
       <button
+        ref={button}
         type="button"
         aria-haspopup="menu"
         aria-expanded={show}
@@ -60,16 +85,17 @@ export function ModelPicker({
       >
         <ProviderDot provider={value.provider} />
         <span>{providerName(value.provider)}</span>
-        <span className="text-muted">{value.model ?? 'default'}</span>
+        <span className="max-w-40 truncate text-muted">{label}</span>
         <ChevronDown className="size-3.5 text-faint" />
       </button>
 
       {show && (
         <div
           role="menu"
-          className={`absolute top-full z-40 mt-1.5 w-72 rounded-xl border border-line bg-elev p-1.5 shadow-card ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
+          style={{ maxHeight: place.maxHeight }}
+          className={`absolute z-40 w-80 overflow-y-auto overscroll-contain rounded-xl border border-line bg-elev p-1.5 shadow-card ${
+            place.up ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+          } ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           {providers.map((p) => (
             <ProviderSection
@@ -77,8 +103,6 @@ export function ModelPicker({
               info={p}
               value={value}
               onPick={pick}
-              custom={value.provider === p.provider ? custom : ''}
-              setCustom={setCustom}
               onConnect={() => {
                 setShow(false);
                 open({ name: 'accounts' });
@@ -91,26 +115,49 @@ export function ModelPicker({
   );
 }
 
+function modelLabel(info: ProviderInfo | undefined, id: string): string {
+  return info?.models.find((m) => m.id === id)?.label ?? id;
+}
+
 function ProviderSection({
   info,
   value,
   onPick,
-  custom,
-  setCustom,
   onConnect,
 }: {
   info: ProviderInfo;
   value: Seat;
   onPick: (seat: Seat) => void;
-  custom: string;
-  setCustom: (v: string) => void;
   onConnect: () => void;
 }) {
+  const [custom, setCustom] = useState('');
   const ready = info.auth === 'signed_in';
-  const options: (string | undefined)[] = [undefined, ...info.models];
+  const defaultNote = [
+    info.defaultModel && modelLabel(info, info.defaultModel),
+    info.defaultEffort && `${info.defaultEffort} effort`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const options: { id?: string; label: string; note?: string }[] = [
+    { label: 'Default', note: defaultNote || 'CLI setting' },
+    ...info.models.map((m) => ({
+      id: m.id,
+      label: m.label ?? m.id,
+      ...(m.label && m.label !== m.id && { note: m.id }),
+    })),
+  ];
+  // Keep a custom model that isn't in the list visible and selectable.
+  if (
+    value.provider === info.provider &&
+    value.model &&
+    !info.models.some((m) => m.id === value.model)
+  ) {
+    options.push({ id: value.model, label: value.model, note: 'custom' });
+  }
+
   return (
     <div className="border-b border-line px-1 py-1.5 last:border-0">
-      <div className="flex items-center gap-2 px-2 pb-1 text-[12px] font-semibold text-muted">
+      <div className="sticky -top-1.5 z-10 -mx-1 flex items-center gap-2 bg-elev px-3 py-1 text-[12px] font-semibold text-muted">
         <ProviderDot provider={info.provider} />
         {info.displayName}
         {!ready && (
@@ -125,22 +172,22 @@ function ProviderSection({
       </div>
       {ready && (
         <>
-          {options.map((model) => {
-            const selected = value.provider === info.provider && value.model === model;
+          {options.map((o) => {
+            const selected = value.provider === info.provider && value.model === o.id;
             return (
               <button
-                key={model ?? 'default'}
+                key={o.id ?? 'default'}
                 type="button"
                 role="menuitemradio"
                 aria-checked={selected}
-                onClick={() => onPick({ provider: info.provider, ...(model && { model }) })}
+                onClick={() => onPick({ provider: info.provider, ...(o.id && { model: o.id }) })}
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-sunken"
               >
-                <span className="flex-1">
-                  {model ?? 'Default'}
-                  {!model && <span className="ml-1.5 text-[12px] text-faint">CLI setting</span>}
+                <span className="min-w-0 flex-1 truncate">
+                  {o.label}
+                  {o.note && <span className="ml-1.5 text-[12px] text-faint">{o.note}</span>}
                 </span>
-                {selected && <Check className="size-3.5 text-accent" />}
+                {selected && <Check className="size-3.5 shrink-0 text-accent" />}
               </button>
             );
           })}
@@ -149,7 +196,10 @@ function ProviderSection({
             onSubmit={(e) => {
               e.preventDefault();
               const model = custom.trim();
-              if (/^[\w.:/[\]-]+$/.test(model)) onPick({ provider: info.provider, model });
+              if (/^[\w.:/[\]-]+$/.test(model)) {
+                onPick({ provider: info.provider, model });
+                setCustom('');
+              }
             }}
           >
             <input

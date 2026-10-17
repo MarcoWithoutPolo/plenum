@@ -197,8 +197,12 @@ export class ClaudeParser implements LineParser {
   private result(message: Record<string, unknown>): EventBody[] {
     const out: EventBody[] = [];
     const usage = isRecord(message.usage) ? message.usage : {};
-    const input = (num(usage.input_tokens) ?? 0) + (num(usage.cache_creation_input_tokens) ?? 0);
+    // Same convention as OpenAI: inputTokens counts every input token, cachedInputTokens the cache reads among them.
     const cached = num(usage.cache_read_input_tokens);
+    const input =
+      (num(usage.input_tokens) ?? 0) +
+      (num(usage.cache_creation_input_tokens) ?? 0) +
+      (cached ?? 0);
     const output = num(usage.output_tokens);
     const cost = num(message.total_cost_usd);
     out.push({

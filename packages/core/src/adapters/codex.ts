@@ -1,4 +1,4 @@
-import type { ProviderStatus } from '@conclave/shared';
+import type { AgentEvent, ProviderStatus } from '@conclave/shared';
 import { runCommand, isNotFound } from '../process.js';
 import {
   assertSafeModel,
@@ -12,7 +12,13 @@ import {
   type Exec,
   type LineParser,
 } from './cli.js';
-import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
+import { codexHome, readCodexDefaults, readCodexLimits, readCodexModels } from './codex-home.js';
+import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+
+export interface CodexAdapterOptions extends CliAdapterOptions {
+  /** The Codex data folder; defaults to CODEX_HOME or ~/.codex. */
+  home?: string;
+}
 
 /**
  * Drives the official OpenAI Codex CLI in headless mode:
@@ -31,10 +37,12 @@ export class CodexAdapter implements Adapter {
   };
   private readonly command: string;
   private readonly exec: Exec;
+  private readonly home: string;
 
-  constructor(opts: CliAdapterOptions = {}) {
+  constructor(opts: CodexAdapterOptions = {}) {
     this.command = opts.command ?? 'codex';
     this.exec = opts.exec ?? defaultExec;
+    this.home = opts.home ?? codexHome();
   }
 
   async detect(): Promise<ProviderStatus> {
@@ -72,7 +80,34 @@ export class CodexAdapter implements Adapter {
     };
   }
 
-  run(request: RunRequest) {
+  async models(): Promise<ModelList> {
+    const defaults = readCodexDefaults(this.home);
+    return {
+      models: readCodexModels(this.home).map((m) => ({ id: m.id, label: m.label })),
+      ...(defaults.model && { defaultModel: defaults.model }),
+      ...(defaults.effort && { defaultEffort: defaults.effort }),
+    };
+  }
+
+  async limits() {
+    return readCodexLimits(undefined, this.home);
+  }
+
+  /** Runs the CLI, then reports the plan usage Codex logged for this session. */
+  async *run(request: RunRequest): AsyncGenerator<AgentEvent> {
+    let threadId: string | undefined;
+    for await (const event of this.runCli(request)) {
+      if (event.type === 'session') threadId = event.sessionId;
+      if (event.type === 'done' && threadId) {
+        for (const limit of readCodexLimits(threadId, this.home)) {
+          yield { provider: 'codex', runId: event.runId, at: Date.now(), type: 'quota', ...limit };
+        }
+      }
+      yield event;
+    }
+  }
+
+  private runCli(request: RunRequest) {
     return runCli(
       'codex',
       this.exec,

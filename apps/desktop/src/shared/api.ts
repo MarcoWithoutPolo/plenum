@@ -10,8 +10,11 @@ import type {
 /** What the Accounts screen and model pickers need to know about each provider. */
 export interface ProviderInfo extends ProviderStatus {
   displayName: string;
-  models: string[];
+  /** Models to offer, best first. Codex reads these from its own cache of what your plan allows. */
+  models: { id: string; label?: string }[];
+  /** What "Default" resolves to: the model the CLI is configured with, when known. */
   defaultModel?: string;
+  defaultEffort?: string;
   /** npm package of the official CLI, for one-click install. */
   installPackage?: string;
   loginHint: string;

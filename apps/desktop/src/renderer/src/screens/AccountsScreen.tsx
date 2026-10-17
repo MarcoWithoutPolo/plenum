@@ -137,6 +137,14 @@ function ProviderCard({
                 ? info.loginHint
                 : `Install the official CLI to use ${info.displayName}.`)}
           </p>
+          {signedIn && info.defaultModel && (
+            <p className="mt-0.5 text-[12.5px] text-faint">
+              Default model:{' '}
+              {info.models.find((m) => m.id === info.defaultModel)?.label ?? info.defaultModel}
+              {info.defaultEffort && ` · ${info.defaultEffort} reasoning effort`}
+              {info.models.length > 0 && ` · ${info.models.length} models available`}
+            </p>
+          )}
           {signedIn && quotas.length > 0 && <QuotaBars quotas={quotas} />}
           {note && <p className="mt-2 text-[12.5px] text-accent-ink">{note}</p>}
         </div>

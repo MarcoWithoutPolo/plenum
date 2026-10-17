@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { AgentEvent } from '@conclave/shared';
 import { CodexAdapter, CodexParser, codexArgs, collect } from '../src/index.js';
-import { replay } from './helpers.js';
+import { fixturePath, replay } from './helpers.js';
+
+const home = fixturePath('codex/home');
 
 describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
   it('turns a run into session, text, usage and done events', async () => {
     const exec = replay('codex/pong.jsonl');
     const result = await collect(
-      new CodexAdapter({ exec }).run({ prompt: 'Reply with: pong', cwd: '.' }),
+      new CodexAdapter({ exec, home }).run({ prompt: 'Reply with: pong', cwd: '.' }),
     );
 
     expect(result.ok).toBe(true);
@@ -16,11 +18,32 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
     expect(result.usage).toEqual({ inputTokens: 16002, cachedInputTokens: 7296, outputTokens: 5 });
     for (const event of result.events) expect(AgentEvent.safeParse(event).success).toBe(true);
     expect(exec.calls[0]?.stdin).toBe('Reply with: pong');
+    // Plan usage comes from the session log Codex wrote for this thread.
+    expect(result.quotas).toEqual([
+      { window: 'five_hour', utilization: 0.14, resetsAt: 1792294764000 },
+      { window: 'seven_day', utilization: 0.02, resetsAt: 1792881564000 },
+    ]);
+  });
+
+  it('lists the models the plan offers, best first, with the configured default', async () => {
+    expect(await new CodexAdapter({ home }).models()).toEqual({
+      models: [
+        { id: 'gpt-a', label: 'GPT-A' },
+        { id: 'gpt-b', label: 'GPT-B' },
+      ],
+      defaultModel: 'gpt-a',
+      defaultEffort: 'ultra',
+    });
+  });
+
+  it('reads current limits without running anything', async () => {
+    expect(await new CodexAdapter({ home }).limits()).toHaveLength(2);
+    expect(await new CodexAdapter({ home: fixturePath('codex/missing') }).limits()).toEqual([]);
   });
 
   it('reports one readable error for a failed turn', async () => {
     const result = await collect(
-      new CodexAdapter({ exec: replay('codex/unknown-model.jsonl', 1) }).run({
+      new CodexAdapter({ exec: replay('codex/unknown-model.jsonl', 1), home }).run({
         prompt: 'x',
         cwd: '.',
       }),

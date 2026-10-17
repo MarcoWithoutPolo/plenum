@@ -4,7 +4,7 @@ import type { Message, Seat } from '@conclave/shared';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
 import { ModelPicker } from '@/components/ModelPicker';
-import { Button, ProviderDot, Thinking, formatStats } from '@/components/bits';
+import { Button, ProviderDot, Thinking, formatStats, usageTitle } from '@/components/bits';
 import { NEW, defaultSeat, providerName, readyProviders, useApp, type LiveChat } from '@/lib/store';
 
 export function ChatScreen({ threadId }: { threadId?: string }) {
@@ -154,17 +154,23 @@ function AssistantHeader({
   provider,
   model,
   meta,
+  metaTitle,
 }: {
   provider: Message['provider'];
   model?: string | null;
   meta?: string;
+  metaTitle?: string;
 }) {
   return (
     <div className="mb-1.5 flex items-center gap-2 text-[12.5px]">
       {provider && <ProviderDot provider={provider} />}
       <span className="font-semibold">{provider ? providerName(provider) : 'Assistant'}</span>
       {model && <span className="text-faint">{model}</span>}
-      {meta && <span className="text-faint">· {meta}</span>}
+      {meta && (
+        <span className="cursor-default text-faint" title={metaTitle}>
+          · {meta}
+        </span>
+      )}
     </div>
   );
 }
@@ -176,6 +182,7 @@ function AssistantMessage({ message }: { message: Message }) {
         provider={message.provider}
         model={message.model}
         meta={formatStats(message.durationMs, message.usage)}
+        {...(message.usage && { metaTitle: usageTitle(message.usage) })}
       />
       {message.ok ? (
         <Markdown text={message.content} />

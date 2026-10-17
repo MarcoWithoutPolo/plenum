@@ -41,4 +41,15 @@ export interface Adapter {
   detect(): Promise<ProviderStatus>;
   login(): LoginCommand;
   run(request: RunRequest): AsyncIterable<AgentEvent>;
+  /** Models available to the signed-in account, when the CLI can tell. Falls back to capabilities. */
+  models?(): Promise<ModelList>;
+  /** Current plan usage without spending a request, when the CLI records it. */
+  limits?(): Promise<{ window: string; utilization: number; resetsAt?: number }[]>;
+}
+
+export interface ModelList {
+  models: { id: string; label?: string }[];
+  /** What "Default" means right now (the CLI's configured model). */
+  defaultModel?: string;
+  defaultEffort?: string;
 }

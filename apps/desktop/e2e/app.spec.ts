@@ -94,6 +94,13 @@ test('chat streams a reply, then switches model and keeps the thread', async () 
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Choose model' }).click();
+  // The menu opens upward from the bottom composer and stays inside the window.
+  const menu = await page.getByRole('menu').boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(menu!.y).toBeGreaterThanOrEqual(0);
+  expect(menu!.y + menu!.height).toBeLessThanOrEqual(viewport.height);
+  await page.mouse.wheel(0, 2000);
+  expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
   await page
     .getByRole('menu')
     .getByRole('menuitemradio')

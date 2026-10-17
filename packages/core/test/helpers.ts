@@ -4,6 +4,10 @@ import type { Exec, ProcessChunk, ProcessOptions } from '../src/index.js';
 
 const fixtures = fileURLToPath(new URL('../../../test/fixtures/', import.meta.url));
 
+export function fixturePath(name: string): string {
+  return fixtures + name;
+}
+
 export function fixtureLines(name: string): string[] {
   return readFileSync(fixtures + name, 'utf8')
     .split(/\r?\n/)

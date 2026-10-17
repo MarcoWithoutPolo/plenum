@@ -1,0 +1,3 @@
+{"type":"session_meta","payload":{"id":"01a14c04-fafb-72d3-b9a9-d3ab6e1e34de"}}
+{"type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"codex","primary":{"used_percent":10.0,"window_minutes":300,"resets_at":1792290000},"secondary":{"used_percent":1.0,"window_minutes":10080,"resets_at":1792880000}}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"note":"brace } in a \"string\""},"rate_limits":{"limit_id":"codex","primary":{"used_percent":14.0,"window_minutes":300,"resets_at":1792294764},"secondary":{"used_percent":2.0,"window_minutes":10080,"resets_at":1792881564},"credits":{"has_credits":true}}}}
