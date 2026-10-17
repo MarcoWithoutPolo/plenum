@@ -41,6 +41,17 @@ export const AgentEvent = z.discriminatedUnion('type', [
     kind: z.enum(['add', 'update', 'delete']).optional(),
   }),
   z.object({ ...base, type: z.literal('usage'), usage: Usage }),
+  /** How much of a subscription window is used, when the CLI reports it. Feeds the governor. */
+  z.object({
+    ...base,
+    type: z.literal('quota'),
+    window: z.string(),
+    /** 0 to 1. */
+    utilization: z.number().optional(),
+    /** Epoch milliseconds. */
+    resetsAt: z.number().optional(),
+  }),
+  /** The provider refused the request because a usage limit was hit. resetsAt is epoch ms. */
   z.object({
     ...base,
     type: z.literal('rate_limit'),

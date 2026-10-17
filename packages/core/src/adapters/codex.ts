@@ -1,0 +1,209 @@
+import type { ProviderStatus } from '@conclave/shared';
+import { runCommand, isNotFound } from '../process.js';
+import {
+  assertSafeModel,
+  defaultExec,
+  isRecord,
+  num,
+  runCli,
+  str,
+  type CliAdapterOptions,
+  type EventBody,
+  type Exec,
+  type LineParser,
+} from './cli.js';
+import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
+
+/**
+ * Drives the official OpenAI Codex CLI in headless mode:
+ * `codex exec --json -`, prompt on stdin.
+ * Format recorded from codex-cli 0.163 (see test/fixtures/codex).
+ */
+export class CodexAdapter implements Adapter {
+  readonly id = 'codex' as const;
+  readonly displayName = 'OpenAI Codex';
+  readonly capabilities: Capabilities = {
+    // Codex picks the model allowed for the signed-in plan; override per chat if needed.
+    models: [],
+    readOnly: true,
+    resume: true,
+    streaming: false,
+  };
+  private readonly command: string;
+  private readonly exec: Exec;
+
+  constructor(opts: CliAdapterOptions = {}) {
+    this.command = opts.command ?? 'codex';
+    this.exec = opts.exec ?? defaultExec;
+  }
+
+  async detect(): Promise<ProviderStatus> {
+    const version = await runCommand(this.command, ['--version']);
+    if (version.code !== 0) {
+      return {
+        provider: 'codex',
+        installed: false,
+        auth: 'unknown',
+        detail: isNotFound(version) ? 'Codex CLI not found on PATH' : version.stderr.trim(),
+      };
+    }
+    const status: ProviderStatus = {
+      provider: 'codex',
+      installed: true,
+      version: version.stdout.trim().replace(/^codex-cli\s+/, ''),
+      auth: 'unknown',
+    };
+    const auth = await runCommand(this.command, ['login', 'status']);
+    const text = `${auth.stdout}\n${auth.stderr}`.trim();
+    if (auth.code === 0 && /logged in/i.test(text)) {
+      status.auth = 'signed_in';
+      status.detail = text.split(/\r?\n/)[0];
+    } else if (/not logged in/i.test(text) || auth.code !== 0) {
+      status.auth = 'signed_out';
+    }
+    return status;
+  }
+
+  login(): LoginCommand {
+    return {
+      command: this.command,
+      args: ['login'],
+      hint: 'Your browser opens the ChatGPT sign-in page. Choose "Sign in with ChatGPT".',
+    };
+  }
+
+  run(request: RunRequest) {
+    return runCli(
+      'codex',
+      this.exec,
+      {
+        command: this.command,
+        args: codexArgs(request),
+        cwd: request.cwd,
+        stdin: request.prompt,
+        ...(request.signal && { signal: request.signal }),
+        ...(request.timeoutMs && { timeoutMs: request.timeoutMs }),
+      },
+      new CodexParser(),
+    );
+  }
+}
+
+export function codexArgs(request: RunRequest): string[] {
+  assertSafeModel(request.model);
+  const args = ['exec'];
+  if (request.sessionId) {
+    if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
+    args.push('resume', request.sessionId);
+  }
+  args.push('--json', '--skip-git-repo-check', '--color', 'never');
+  // resume inherits the original session's sandbox, so only set it on new sessions.
+  if (!request.sessionId) {
+    args.push('--sandbox', (request.readOnly ?? true) ? 'read-only' : 'workspace-write');
+  }
+  if (request.model) args.push('-m', request.model);
+  args.push('-');
+  return args;
+}
+
+export class CodexParser implements LineParser {
+  failed = false;
+  private lastMessage = '';
+  private lastError = '';
+
+  parse(message: unknown): EventBody[] {
+    if (!isRecord(message)) return [];
+    switch (message.type) {
+      case 'thread.started': {
+        const id = str(message.thread_id);
+        return id ? [{ type: 'session', sessionId: id }] : [];
+      }
+      case 'item.completed':
+        return this.item(message.item);
+      case 'turn.completed':
+        return this.turnCompleted(message.usage);
+      case 'error':
+        return this.error(str(message.message));
+      case 'turn.failed':
+        this.failed = true;
+        return this.error(isRecord(message.error) ? str(message.error.message) : undefined);
+      default:
+        return [];
+    }
+  }
+
+  private item(item: unknown): EventBody[] {
+    if (!isRecord(item)) return [];
+    switch (item.type) {
+      case 'agent_message': {
+        const text = str(item.text) ?? '';
+        this.lastMessage = text;
+        return text ? [{ type: 'message.delta', text }] : [];
+      }
+      case 'command_execution':
+        return [{ type: 'tool.call', tool: 'shell', input: { command: item.command } }];
+      case 'mcp_tool_call':
+        return [
+          { type: 'tool.call', tool: `${str(item.server) ?? 'mcp'}:${str(item.tool) ?? '?'}` },
+        ];
+      case 'web_search':
+        return [{ type: 'tool.call', tool: 'web_search', input: { query: item.query } }];
+      case 'file_change': {
+        const changes = Array.isArray(item.changes) ? item.changes : [];
+        return changes.filter(isRecord).flatMap((c): EventBody[] => {
+          const path = str(c.path);
+          if (!path) return [];
+          const kind = c.kind === 'add' || c.kind === 'delete' ? c.kind : 'update';
+          return [{ type: 'file.edit', path, kind }];
+        });
+      }
+      default:
+        // 'error' items are non-fatal warnings (e.g. unknown model metadata); 'reasoning' is hidden thinking.
+        return [];
+    }
+  }
+
+  private turnCompleted(usage: unknown): EventBody[] {
+    const out: EventBody[] = [{ type: 'message.done', text: this.lastMessage }];
+    if (isRecord(usage)) {
+      const input = num(usage.input_tokens);
+      const cached = num(usage.cached_input_tokens);
+      const output = (num(usage.output_tokens) ?? 0) + (num(usage.reasoning_output_tokens) ?? 0);
+      out.push({
+        type: 'usage',
+        usage: {
+          ...(input !== undefined && { inputTokens: input }),
+          ...(cached !== undefined && { cachedInputTokens: cached }),
+          outputTokens: output,
+        },
+      });
+    }
+    return out;
+  }
+
+  private error(raw: string | undefined): EventBody[] {
+    this.failed = true;
+    const message = unwrapApiError(raw) ?? 'Codex failed';
+    if (message === this.lastError) return []; // turn.failed repeats the preceding error
+    this.lastError = message;
+    if (/rate.?limit|usage limit|quota|status\W*429/i.test(`${raw} ${message}`)) {
+      return [{ type: 'rate_limit', message }];
+    }
+    return [{ type: 'error', message }];
+  }
+}
+
+/** Codex wraps API errors as a JSON string inside `message`; pull out the readable part. */
+function unwrapApiError(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (isRecord(parsed)) {
+      const inner = isRecord(parsed.error) ? str(parsed.error.message) : str(parsed.message);
+      if (inner) return inner;
+    }
+  } catch {
+    // not JSON, use as is
+  }
+  return raw;
+}

@@ -16,6 +16,10 @@
     "dist"
   ],
   "dependencies": {
-    "@conclave/shared": "*"
+    "@conclave/shared": "*",
+    "cross-spawn": "^7.0.6"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6"
   }
 }

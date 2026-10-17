@@ -6,7 +6,7 @@ A desktop command center that runs the AI coding tools you already use (Claude C
 - **Council**: ask all of them at once, see their answers side by side, and get one merged answer that shows where they agree and disagree.
 - **Projects**: an autonomous "brain" that plans, builds, tests and reviews a repo for days. It splits work by role and model and paces itself against each subscription's usage limits.
 
-> Status: early development (milestone M0, scaffold). Nothing here is usable yet.
+> Status: early development. M1 done: `conclave doctor` detects and live-checks the Claude Code and Codex CLIs. Gemini is detected but needs `GEMINI_API_KEY` because Google stopped accepting individual sign-ins from its CLI.
 
 ## Bring your own CLI
 
@@ -16,7 +16,7 @@ Conclave never asks for your passwords, API keys or tokens. It drives the offici
 | ------------ | ------------------------------------ | ----------------------- |
 | Claude       | `npm i -g @anthropic-ai/claude-code` | `claude`, then `/login` |
 | OpenAI Codex | `npm i -g @openai/codex`             | `codex login`           |
-| Gemini       | `npm i -g @google/gemini-cli`        | `gemini`                |
+| Gemini       | `npm i -g @google/gemini-cli`        | set `GEMINI_API_KEY`    |
 
 ## Development
 

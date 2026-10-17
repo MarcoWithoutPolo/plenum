@@ -7,6 +7,7 @@ export interface RunResult {
   model?: string;
   usage: Usage;
   rateLimited?: { message: string; resetsAt?: number };
+  quotas: { window: string; utilization?: number; resetsAt?: number }[];
   errors: string[];
   durationMs: number;
   events: AgentEvent[];
@@ -21,6 +22,7 @@ export async function collect(
     ok: false,
     text: '',
     usage: {},
+    quotas: [],
     errors: [],
     durationMs: 0,
     events: [],
@@ -43,6 +45,15 @@ export async function collect(
       case 'usage':
         result.usage = mergeUsage(result.usage, event.usage);
         break;
+      case 'quota': {
+        const { window, utilization, resetsAt } = event;
+        result.quotas.push({
+          window,
+          ...(utilization !== undefined && { utilization }),
+          ...(resetsAt !== undefined && { resetsAt }),
+        });
+        break;
+      }
       case 'rate_limit':
         result.rateLimited = {
           message: event.message,
