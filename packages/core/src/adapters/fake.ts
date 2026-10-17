@@ -1,4 +1,4 @@
-import type { AgentEvent, ProviderStatus } from '@conclave/shared';
+import type { AgentEvent, ProviderId, ProviderStatus } from '@conclave/shared';
 import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
 
 export interface FakeScript {
@@ -6,32 +6,46 @@ export interface FakeScript {
   reply: string | ((request: RunRequest) => string);
   /** Pretend the provider hit its usage limit instead of answering. */
   rateLimited?: { message: string; resetsAt?: number };
+  /** Fail with this error instead of answering. */
+  fail?: string;
   delayMs?: number;
+}
+
+export interface FakeOptions {
+  /** Impersonate a real provider id, so tests can build multi-provider councils. */
+  id?: ProviderId;
+  displayName?: string;
+  /** Advertise session resume (sessions are only remembered, not replayed). */
+  resume?: boolean;
 }
 
 let runCounter = 0;
 
 /** A deterministic adapter for tests and demos: costs nothing, needs no CLI. */
 export class FakeAdapter implements Adapter {
-  readonly id = 'fake' as const;
+  readonly id: ProviderId;
   readonly displayName: string;
-  readonly capabilities: Capabilities = {
-    models: ['fake-1'],
-    defaultModel: 'fake-1',
-    readOnly: true,
-    resume: false,
-    streaming: true,
-  };
+  readonly capabilities: Capabilities;
+  /** Every request this adapter received, for assertions. */
+  readonly requests: RunRequest[] = [];
 
   constructor(
     private readonly script: FakeScript,
-    displayName = 'Fake',
+    opts: FakeOptions = {},
   ) {
-    this.displayName = displayName;
+    this.id = opts.id ?? 'fake';
+    this.displayName = opts.displayName ?? 'Fake';
+    this.capabilities = {
+      models: ['fake-1'],
+      defaultModel: 'fake-1',
+      readOnly: true,
+      resume: opts.resume ?? false,
+      streaming: true,
+    };
   }
 
   async detect(): Promise<ProviderStatus> {
-    return { provider: 'fake', installed: true, version: '1.0.0', auth: 'signed_in' };
+    return { provider: this.id, installed: true, version: '1.0.0', auth: 'signed_in' };
   }
 
   login(): LoginCommand {
@@ -39,20 +53,34 @@ export class FakeAdapter implements Adapter {
   }
 
   async *run(request: RunRequest): AsyncIterable<AgentEvent> {
+    this.requests.push(request);
     const runId = `fake-${++runCounter}`;
     const started = Date.now();
-    const ev = { provider: 'fake' as const, runId };
+    const ev = { provider: this.id, runId };
 
     yield {
       ...ev,
       at: Date.now(),
       type: 'session',
-      sessionId: runId,
+      sessionId: request.sessionId ?? runId,
       model: request.model ?? 'fake-1',
     };
 
     if (this.script.rateLimited) {
       yield { ...ev, at: Date.now(), type: 'rate_limit', ...this.script.rateLimited };
+      yield {
+        ...ev,
+        at: Date.now(),
+        type: 'done',
+        ok: false,
+        exitCode: 1,
+        durationMs: Date.now() - started,
+      };
+      return;
+    }
+
+    if (this.script.fail) {
+      yield { ...ev, at: Date.now(), type: 'error', message: this.script.fail };
       yield {
         ...ev,
         at: Date.now(),
