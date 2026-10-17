@@ -11,7 +11,9 @@ import type {
 export interface ProviderInfo extends ProviderStatus {
   displayName: string;
   /** Models to offer, best first. Codex reads these from its own cache of what your plan allows. */
-  models: { id: string; label?: string }[];
+  models: { id: string; label?: string; efforts?: string[]; defaultEffort?: string }[];
+  /** Effort levels when the model has no list of its own. */
+  efforts?: string[];
   /** What "Default" resolves to: the model the CLI is configured with, when known. */
   defaultModel?: string;
   defaultEffort?: string;

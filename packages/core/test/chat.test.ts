@@ -78,6 +78,23 @@ describe('ChatService', () => {
     expect(store.listMessages(thread.id)).toHaveLength(6);
   });
 
+  it('keeps the chosen effort for later messages until changed', async () => {
+    const codex = fake('codex', 'ok');
+    const { store, chat } = setup([codex]);
+    const thread = chat.createThread({ provider: 'codex', effort: 'low' });
+    await chat.send(thread.id, 'one');
+    await chat.send(thread.id, 'two');
+    await chat.send(thread.id, 'three', { effort: null });
+    expect(codex.requests.map((r) => r.effort)).toEqual(['low', 'low', undefined]);
+    expect(store.getThread(thread.id)?.effort).toBeNull();
+    expect(
+      store
+        .listMessages(thread.id)
+        .filter((m) => m.role === 'assistant')
+        .map((m) => m.effort),
+    ).toEqual(['low', 'low', null]);
+  });
+
   it('stores failures with the error instead of throwing', async () => {
     const claude = new FakeAdapter({ reply: '', fail: 'boom' }, { id: 'claude' });
     const { chat } = setup([claude]);

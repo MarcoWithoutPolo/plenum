@@ -6,6 +6,8 @@ export interface RunRequest {
   /** Working directory the CLI runs in. Agents may only write inside it. */
   cwd: string;
   model?: string;
+  /** Reasoning effort, one of capabilities.efforts (or the model's own list). */
+  effort?: string;
   role?: Role;
   /** When true the adapter asks its CLI for a no-write, no-shell mode. */
   readOnly?: boolean;
@@ -18,6 +20,8 @@ export interface RunRequest {
 export interface Capabilities {
   models: string[];
   defaultModel?: string;
+  /** Reasoning effort levels the CLI accepts; per-model lists come from models(). */
+  efforts?: string[];
   readOnly: boolean;
   resume: boolean;
   streaming: boolean;
@@ -48,7 +52,7 @@ export interface Adapter {
 }
 
 export interface ModelList {
-  models: { id: string; label?: string }[];
+  models: { id: string; label?: string; efforts?: string[]; defaultEffort?: string }[];
   /** What "Default" means right now (the CLI's configured model). */
   defaultModel?: string;
   defaultEffort?: string;

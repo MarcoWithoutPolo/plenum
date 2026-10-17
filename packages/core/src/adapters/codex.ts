@@ -1,6 +1,7 @@
 import type { AgentEvent, ProviderStatus } from '@conclave/shared';
 import { runCommand, isNotFound } from '../process.js';
 import {
+  assertSafeEffort,
   assertSafeModel,
   defaultExec,
   isRecord,
@@ -83,7 +84,12 @@ export class CodexAdapter implements Adapter {
   async models(): Promise<ModelList> {
     const defaults = readCodexDefaults(this.home);
     return {
-      models: readCodexModels(this.home).map((m) => ({ id: m.id, label: m.label })),
+      models: readCodexModels(this.home).map((m) => ({
+        id: m.id,
+        label: m.label,
+        efforts: m.efforts,
+        ...(m.defaultEffort && { defaultEffort: m.defaultEffort }),
+      })),
       ...(defaults.model && { defaultModel: defaults.model }),
       ...(defaults.effort && { defaultEffort: defaults.effort }),
     };
@@ -126,6 +132,7 @@ export class CodexAdapter implements Adapter {
 
 export function codexArgs(request: RunRequest): string[] {
   assertSafeModel(request.model);
+  assertSafeEffort(request.effort);
   const args = ['exec'];
   if (request.sessionId) {
     if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
@@ -137,6 +144,8 @@ export function codexArgs(request: RunRequest): string[] {
     args.push('--sandbox', (request.readOnly ?? true) ? 'read-only' : 'workspace-write');
   }
   if (request.model) args.push('-m', request.model);
+  // A bare value that isn't valid TOML is taken as a literal string by Codex.
+  if (request.effort) args.push('-c', `model_reasoning_effort=${request.effort}`);
   args.push('-');
   return args;
 }

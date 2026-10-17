@@ -48,12 +48,18 @@ export class Engine {
   }
 }
 
-/** Parse "claude" or "claude:opus" into a seat. */
+/** Parse "claude", "claude:opus", "codex@low" or "claude:opus@high" into a seat. */
 export function parseSeat(text: string): Seat {
-  const [provider = '', ...rest] = text.trim().split(':');
+  const [who = '', effort = ''] = text.trim().split('@');
+  const [provider = '', ...rest] = who.split(':');
   const model = rest.join(':').trim();
   if (!['claude', 'codex', 'gemini', 'fake'].includes(provider)) {
     throw new Error(`Unknown provider "${provider}". Use claude, codex or gemini.`);
   }
-  return { provider: provider as ProviderId, ...(model && { model }) };
+  if (effort && !/^[a-z]+$/.test(effort)) throw new Error(`Invalid effort "${effort}".`);
+  return {
+    provider: provider as ProviderId,
+    ...(model && { model }),
+    ...(effort && { effort }),
+  };
 }

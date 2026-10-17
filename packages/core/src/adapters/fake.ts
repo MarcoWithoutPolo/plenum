@@ -17,6 +17,8 @@ export interface FakeOptions {
   displayName?: string;
   /** Advertise session resume (sessions are only remembered, not replayed). */
   resume?: boolean;
+  /** Reasoning effort levels to advertise. */
+  efforts?: string[];
   /** Override what detect() reports, e.g. to show a signed-out provider. */
   status?: Partial<Omit<ProviderStatus, 'provider'>>;
 }
@@ -46,6 +48,7 @@ export class FakeAdapter implements Adapter {
       readOnly: true,
       resume: opts.resume ?? false,
       streaming: true,
+      ...(opts.efforts && { efforts: opts.efforts }),
     };
   }
 

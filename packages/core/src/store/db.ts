@@ -70,6 +70,10 @@ const MIGRATIONS = [
   CREATE INDEX messages_thread ON messages(thread_id, seq);
   CREATE INDEX threads_updated ON threads(updated_at DESC);
   `,
+  `
+  ALTER TABLE threads ADD COLUMN effort TEXT;
+  ALTER TABLE messages ADD COLUMN effort TEXT;
+  `,
 ];
 
 export function defaultHome(): string {

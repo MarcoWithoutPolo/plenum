@@ -89,6 +89,12 @@ export function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Effort levels go on the command line too: lowercase words only. */
+export function assertSafeEffort(effort: string | undefined): void {
+  if (effort !== undefined && !/^[a-z]+$/.test(effort))
+    throw new Error(`Invalid effort: ${effort}`);
+}
+
 /** Model names go on the command line, so only allow plain identifiers. */
 export function assertSafeModel(model: string | undefined): void {
   if (model !== undefined && !/^[\w.:/[\]-]+$/.test(model)) {

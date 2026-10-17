@@ -28,8 +28,8 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
   it('lists the models the plan offers, best first, with the configured default', async () => {
     expect(await new CodexAdapter({ home }).models()).toEqual({
       models: [
-        { id: 'gpt-a', label: 'GPT-A' },
-        { id: 'gpt-b', label: 'GPT-B' },
+        { id: 'gpt-a', label: 'GPT-A', efforts: ['low'], defaultEffort: 'low' },
+        { id: 'gpt-b', label: 'GPT-B', efforts: ['low', 'medium'], defaultEffort: 'medium' },
       ],
       defaultModel: 'gpt-a',
       defaultEffort: 'ultra',
@@ -101,6 +101,14 @@ describe('codexArgs', () => {
       'read-only',
       '-',
     ]);
+  });
+
+  it('sets reasoning effort through a config override', () => {
+    const args = codexArgs({ prompt: 'x', cwd: '.', model: 'gpt-a', effort: 'low' });
+    expect(args.slice(-3)).toEqual(['-c', 'model_reasoning_effort=low', '-']);
+    expect(() => codexArgs({ prompt: 'x', cwd: '.', effort: 'low"; rm' })).toThrow(
+      /Invalid effort/,
+    );
   });
 
   it('lets builders write to the workspace and resumes sessions', () => {

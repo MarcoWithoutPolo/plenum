@@ -12,6 +12,8 @@ export const Thread = z.object({
   /** The provider and model new messages go to unless the caller picks another. */
   provider: ProviderId,
   model: z.string().nullable(),
+  /** Reasoning effort for new messages; null means the CLI's own setting. */
+  effort: z.string().nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -28,6 +30,7 @@ export const Message = z.object({
   kind: MessageKind,
   provider: ProviderId.nullable(),
   model: z.string().nullable(),
+  effort: z.string().nullable(),
   content: z.string(),
   ok: z.boolean(),
   error: z.string().nullable(),
@@ -39,6 +42,10 @@ export const Message = z.object({
 });
 export type Message = z.infer<typeof Message>;
 
-/** Who answers: a provider plus an optional model (the CLI's default when omitted). */
-export const Seat = z.object({ provider: ProviderId, model: z.string().optional() });
+/** Who answers: a provider plus optional model and reasoning effort (the CLI's defaults when omitted). */
+export const Seat = z.object({
+  provider: ProviderId,
+  model: z.string().optional(),
+  effort: z.string().optional(),
+});
 export type Seat = z.infer<typeof Seat>;

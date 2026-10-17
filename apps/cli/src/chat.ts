@@ -10,8 +10,9 @@ export interface ChatArgs {
 }
 
 const HELP = `Commands inside chat:
-  /use <provider>[:model]  switch who answers, e.g. /use codex or /use claude:opus
+  /use <provider>[:model][@effort]  switch who answers, e.g. /use codex@low or /use claude:opus
   /model <name|default>    change the model for the current provider
+  /effort <level|default>  reasoning effort, e.g. /effort low (faster, uses less of your plan)
   /new                     start a fresh chat
   /history                 show this chat so far
   /threads                 list recent chats
@@ -43,6 +44,7 @@ export async function chatCommand(engine: Engine, args: ChatArgs): Promise<numbe
       const who = seatName({
         provider: thread.provider,
         ...(thread.model && { model: thread.model }),
+        ...(thread.effort && { effort: thread.effort }),
       });
       let line: string;
       try {
@@ -96,7 +98,11 @@ async function sendOne(
   let streamed = false;
   try {
     const { reply } = await engine.chat.send(thread.id, text, {
-      ...(seat && { provider: seat.provider, model: seat.model ?? null }),
+      ...(seat && {
+        provider: seat.provider,
+        model: seat.model ?? null,
+        effort: seat.effort ?? null,
+      }),
       signal: controller.signal,
       onEvent: (event) => {
         if (event.type === 'message.delta') {
@@ -139,6 +145,7 @@ async function slash(
         return engine.store.updateThread(thread.id, {
           provider: seat.provider,
           model: seat.model ?? null,
+          effort: seat.effort ?? null,
         });
       }
       case 'model': {
@@ -146,10 +153,22 @@ async function slash(
         console.log(dim(`Model: ${model ?? 'provider default'}`));
         return engine.store.updateThread(thread.id, { model });
       }
+      case 'effort': {
+        const effort = !arg || arg === 'default' ? null : arg;
+        if (effort && !/^[a-z]+$/.test(effort)) throw new Error(`Invalid effort "${effort}"`);
+        const levels = engine.adapters.get(thread.provider)?.capabilities.efforts;
+        console.log(
+          dim(
+            `Effort: ${effort ?? 'CLI default'}${levels ? ` (options: ${levels.join(', ')})` : ''}`,
+          ),
+        );
+        return engine.store.updateThread(thread.id, { effort });
+      }
       case 'new': {
         const next = engine.chat.createThread({
           provider: thread.provider,
           ...(thread.model && { model: thread.model }),
+          ...(thread.effort && { effort: thread.effort }),
         });
         console.log(dim(`New chat ${shortId(next.id)}`));
         return next;

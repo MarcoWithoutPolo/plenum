@@ -295,7 +295,22 @@ export function providerName(provider: ProviderId): string {
 }
 
 export function seatText(seat: Seat): string {
-  return seat.model ? `${SHORT[seat.provider]} · ${seat.model}` : SHORT[seat.provider];
+  return [SHORT[seat.provider], seat.model, seat.effort && `${seat.effort} effort`]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** The seat a stored message or thread was answered with. */
+export function seatOf(m: {
+  provider: ProviderId | null;
+  model: string | null;
+  effort: string | null;
+}): Seat {
+  return {
+    provider: m.provider ?? 'claude',
+    ...(m.model && { model: m.model }),
+    ...(m.effort && { effort: m.effort }),
+  };
 }
 
 /** Same rule as the engine: show the model only when a provider sits twice. */

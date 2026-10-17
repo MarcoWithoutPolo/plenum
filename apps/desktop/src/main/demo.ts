@@ -25,7 +25,12 @@ export function demoAdapters(): Adapter[] {
   return [
     new FakeAdapter(
       { reply: answer('Claude'), delayMs: 25 },
-      { id: 'claude', displayName: 'Claude Code', resume: true },
+      {
+        id: 'claude',
+        displayName: 'Claude Code',
+        resume: true,
+        efforts: ['low', 'medium', 'high'],
+      },
     ),
     new FakeAdapter(
       { reply: answer('Codex'), delayMs: 40 },

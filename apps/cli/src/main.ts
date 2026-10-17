@@ -15,11 +15,11 @@ Commands:
   doctor                 Check which AI CLIs are installed and signed in
       --live             also send each signed-in provider a tiny test prompt
   chat [message]         Chat with one model; interactive when no message is given
-      --use <p[:model]>  who answers, e.g. claude, codex, claude:opus
+      --use <p[:m][@e]>  who answers, e.g. claude, codex@low, claude:opus@high
       --thread <id>      continue an earlier chat
   ask <question>         Ask every signed-in model at once and merge the answers
-      --with <p,p:m>     council members (default: every signed-in provider)
-      --synth <p[:m]>    who merges the answers (default: Claude)
+      --with <p,p:m@e>   council members (default: every signed-in provider)
+      --synth <p[:m][@e]>  who merges the answers (default: Claude)
       --thread <id>      follow up on an earlier council
   threads                List recent chats and councils
   show <id>              Print a chat or council

@@ -4,6 +4,7 @@ import type { Message, ProviderId, Seat } from '@conclave/shared';
 import type { ProviderInfo } from '../../../shared/api';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
+import { EffortPicker, effortOptions, fitEffort } from '@/components/EffortPicker';
 import { ModelPicker } from '@/components/ModelPicker';
 import { Badge, ProviderDot, Thinking, formatStats, usageTitle } from '@/components/bits';
 import {
@@ -12,6 +13,7 @@ import {
   labelSeats,
   providerName,
   readyProviders,
+  seatOf,
   seatText,
   useApp,
   type LiveCouncil,
@@ -38,14 +40,9 @@ export function CouncilScreen({ threadId }: { threadId?: string }) {
   useEffect(() => {
     const last = rounds.at(-1);
     if (last && last.answers.length) {
-      setMembers(
-        last.answers.map((a) => ({ provider: a.provider!, ...(a.model && { model: a.model }) })),
-      );
+      setMembers(last.answers.map((a) => seatOf(a)));
       if (last.merged?.provider) {
-        setSynth({
-          provider: last.merged.provider,
-          ...(last.merged.model && { model: last.merged.model }),
-        });
+        setSynth(seatOf(last.merged));
       }
     } else if (members.length === 0 && ready.length) {
       setMembers(ready.map((p) => ({ provider: p.provider })));
@@ -89,7 +86,12 @@ export function CouncilScreen({ threadId }: { threadId?: string }) {
             <span className="ml-1 flex items-center gap-1.5 text-[12px] text-faint">
               <GitMerge className="size-3.5" />
               merged by
-              <ModelPicker value={synth} onChange={setSynth} compact />
+              <ModelPicker
+                value={synth}
+                onChange={(next) => setSynth(fitEffort(next, providers))}
+                compact
+              />
+              <EffortPicker value={synth} onChange={setSynth} />
             </span>
           )}
         </>
@@ -149,9 +151,25 @@ function MemberChips({
     const has = members.some((m) => m.provider === provider);
     onChange(has ? members.filter((m) => m.provider !== provider) : [...members, { provider }]);
   };
+  const providers = ready;
   const setModel = (provider: ProviderId, model: string) =>
     onChange(
-      members.map((m) => (m.provider === provider ? { provider, ...(model && { model }) } : m)),
+      members.map((m) =>
+        m.provider === provider
+          ? fitEffort(
+              { provider, ...(model && { model }), ...(m.effort && { effort: m.effort }) },
+              providers,
+            )
+          : m,
+      ),
+    );
+  const setEffort = (provider: ProviderId, effort: string) =>
+    onChange(
+      members.map((m) => {
+        if (m.provider !== provider) return m;
+        const { effort: _old, ...rest } = m;
+        return effort ? { ...rest, effort } : rest;
+      }),
     );
 
   return (
@@ -196,6 +214,21 @@ function MemberChips({
                 ))}
               </select>
             )}
+            {on && seat && effortOptions(seat, providers).levels.length > 0 && (
+              <select
+                aria-label={`${p.displayName} effort`}
+                value={seat.effort ?? ''}
+                onChange={(e) => setEffort(p.provider, e.target.value)}
+                className="h-5 rounded border-0 bg-transparent text-[12px] text-accent-ink outline-none"
+              >
+                <option value="">effort</option>
+                {effortOptions(seat, providers).levels.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            )}
           </span>
         );
       })}
@@ -212,10 +245,7 @@ function Question({ text }: { text: string }) {
 }
 
 function StoredRound({ round }: { round: Round }) {
-  const seats = round.answers.map((a) => ({
-    provider: a.provider!,
-    ...(a.model && { model: a.model }),
-  }));
+  const seats = round.answers.map((a) => seatOf(a));
   const labels = labelSeats(seats);
   return (
     <section className="flex flex-col gap-4">
@@ -357,9 +387,7 @@ function MergedShell({ title, children }: { title: React.ReactNode; children: Re
 }
 
 function MergedCard({ message, answerCount }: { message: Message; answerCount: number }) {
-  const by = message.provider
-    ? seatText({ provider: message.provider, ...(message.model && { model: message.model }) })
-    : '';
+  const by = message.provider ? seatText(seatOf(message)) : '';
   return (
     <MergedShell
       title={

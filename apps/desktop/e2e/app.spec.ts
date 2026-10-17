@@ -82,10 +82,12 @@ test('accounts show which providers are connected', async () => {
 test('chat streams a reply, then switches model and keeps the thread', async () => {
   await page.getByRole('button', { name: 'New chat' }).click();
   const box = page.getByRole('textbox', { name: 'Message' });
+  await page.getByRole('combobox', { name: 'Reasoning effort' }).selectOption('low');
   await box.fill('How should I store app settings?');
   await box.press('Enter');
 
   await expect(page.getByText('Claude (demo) here.')).toBeVisible();
+  await expect(page.getByText('· low effort')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible(); // finished streaming
   await expect(
     page

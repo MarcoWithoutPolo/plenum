@@ -1,6 +1,7 @@
 import type { ProviderStatus, Role } from '@conclave/shared';
 import { runCommand, isNotFound } from '../process.js';
 import {
+  assertSafeEffort,
   assertSafeModel,
   defaultExec,
   isRecord,
@@ -28,6 +29,7 @@ export class ClaudeAdapter implements Adapter {
   readonly capabilities: Capabilities = {
     models: ['fable', 'opus', 'sonnet', 'haiku'],
     defaultModel: 'sonnet',
+    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
     readOnly: true,
     resume: true,
     streaming: true,
@@ -100,6 +102,7 @@ export class ClaudeAdapter implements Adapter {
 
 export function claudeArgs(request: RunRequest): string[] {
   assertSafeModel(request.model);
+  assertSafeEffort(request.effort);
   const args = [
     '-p',
     '--output-format',
@@ -113,6 +116,7 @@ export function claudeArgs(request: RunRequest): string[] {
     'none',
   ];
   if (request.model) args.push('--model', request.model);
+  if (request.effort) args.push('--effort', request.effort);
   if (request.sessionId) {
     if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
     args.push('--resume', request.sessionId);

@@ -72,6 +72,16 @@ describe('Store', () => {
     expect(store.listMessages(t.id)).toEqual([]);
   });
 
+  it('stores the reasoning effort on threads and messages', () => {
+    const store = new Store(':memory:');
+    const t = store.createThread({ provider: 'codex', model: 'gpt-a', effort: 'low' });
+    expect(store.getThread(t.id)?.effort).toBe('low');
+    store.updateThread(t.id, { effort: null });
+    expect(store.getThread(t.id)?.effort).toBeNull();
+    store.addMessage(t.id, { role: 'assistant', provider: 'codex', effort: 'high', content: 'x' });
+    expect(store.listMessages(t.id)[0]?.effort).toBe('high');
+  });
+
   it('persists to disk and reopens at the same schema version', () => {
     const dir = mkdtempSync(join(tmpdir(), 'conclave-'));
     dirs.push(dir);
@@ -82,7 +92,7 @@ describe('Store', () => {
 
     const db = openDatabase(path);
     expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
-      1,
+      2,
     );
     const second = new Store(db);
     expect(second.getThread(t.id)?.provider).toBe('claude');

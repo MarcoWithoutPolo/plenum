@@ -13,6 +13,7 @@ export interface NewMessage {
   kind?: MessageKind;
   provider?: ProviderId | null;
   model?: string | null;
+  effort?: string | null;
   content: string;
   ok?: boolean;
   error?: string | null;
@@ -47,6 +48,7 @@ export class Store {
     mode?: ThreadMode;
     provider: ProviderId;
     model?: string | null;
+    effort?: string | null;
   }): Thread {
     const now = Date.now();
     const thread: Thread = {
@@ -55,15 +57,25 @@ export class Store {
       mode: input.mode ?? 'chat',
       provider: input.provider,
       model: input.model ?? null,
+      effort: input.effort ?? null,
       createdAt: now,
       updatedAt: now,
     };
     this.db
       .prepare(
-        `INSERT INTO threads (id, title, mode, provider, model, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO threads (id, title, mode, provider, model, effort, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(thread.id, thread.title, thread.mode, thread.provider, thread.model, now, now);
+      .run(
+        thread.id,
+        thread.title,
+        thread.mode,
+        thread.provider,
+        thread.model,
+        thread.effort,
+        now,
+        now,
+      );
     return thread;
   }
 
@@ -90,14 +102,16 @@ export class Store {
 
   updateThread(
     id: string,
-    patch: Partial<Pick<Thread, 'title' | 'provider' | 'model'>>,
+    patch: Partial<Pick<Thread, 'title' | 'provider' | 'model' | 'effort'>>,
   ): Thread | undefined {
     const current = this.getThread(id);
     if (!current) return undefined;
     const next = { ...current, ...patch, updatedAt: Date.now() };
     this.db
-      .prepare('UPDATE threads SET title = ?, provider = ?, model = ?, updated_at = ? WHERE id = ?')
-      .run(next.title, next.provider, next.model, next.updatedAt, id);
+      .prepare(
+        'UPDATE threads SET title = ?, provider = ?, model = ?, effort = ?, updated_at = ? WHERE id = ?',
+      )
+      .run(next.title, next.provider, next.model, next.effort, next.updatedAt, id);
     return next;
   }
 
@@ -118,6 +132,7 @@ export class Store {
         kind: input.kind ?? 'message',
         provider: input.provider ?? null,
         model: input.model ?? null,
+        effort: input.effort ?? null,
         content: input.content,
         ok: input.ok ?? true,
         error: input.error ?? null,
@@ -128,9 +143,9 @@ export class Store {
       };
       this.db
         .prepare(
-          `INSERT INTO messages (id, thread_id, seq, role, kind, provider, model, content, ok, error,
+          `INSERT INTO messages (id, thread_id, seq, role, kind, provider, model, effort, content, ok, error,
              usage, duration_ms, group_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           message.id,
@@ -140,6 +155,7 @@ export class Store {
           message.kind,
           message.provider,
           message.model,
+          message.effort,
           message.content,
           message.ok ? 1 : 0,
           message.error,
@@ -220,6 +236,7 @@ function toThread(r: Row): Thread {
     mode: r.mode as ThreadMode,
     provider: r.provider as ProviderId,
     model: (r.model as string | null) ?? null,
+    effort: (r.effort as string | null) ?? null,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };
@@ -234,6 +251,7 @@ function toMessage(r: Row): Message {
     kind: r.kind as MessageKind,
     provider: (r.provider as ProviderId | null) ?? null,
     model: (r.model as string | null) ?? null,
+    effort: (r.effort as string | null) ?? null,
     content: r.content as string,
     ok: r.ok === 1,
     error: (r.error as string | null) ?? null,

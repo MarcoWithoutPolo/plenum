@@ -11,6 +11,16 @@ describe('parseSeat', () => {
     });
   });
 
+  it('reads an @effort suffix', () => {
+    expect(parseSeat('codex@low')).toEqual({ provider: 'codex', effort: 'low' });
+    expect(parseSeat('claude:opus@high')).toEqual({
+      provider: 'claude',
+      model: 'opus',
+      effort: 'high',
+    });
+    expect(() => parseSeat('claude@LOW!')).toThrow(/Invalid effort/);
+  });
+
   it('rejects unknown providers', () => {
     expect(() => parseSeat('chatgpt')).toThrow(/Unknown provider "chatgpt"/);
   });

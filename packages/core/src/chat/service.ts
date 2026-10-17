@@ -16,6 +16,8 @@ export interface SendOptions {
   /** Switch this thread to another provider (and model) from this message on. */
   provider?: ProviderId;
   model?: string | null;
+  /** Reasoning effort from this message on; null goes back to the CLI's setting. */
+  effort?: string | null;
   onEvent?: (event: AgentEvent) => void;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -37,6 +39,7 @@ export class ChatService {
     return this.ctx.store.createThread({
       provider: seat.provider,
       model: seat.model ?? null,
+      effort: seat.effort ?? null,
       ...(title && { title }),
     });
   }
@@ -48,10 +51,15 @@ export class ChatService {
     if (!text.trim()) throw new Error('Message is empty');
 
     const seat = resolveSeat(thread, opts);
-    if (seat.provider !== thread.provider || (seat.model ?? null) !== thread.model) {
+    if (
+      seat.provider !== thread.provider ||
+      (seat.model ?? null) !== thread.model ||
+      (seat.effort ?? null) !== thread.effort
+    ) {
       thread = store.updateThread(thread.id, {
         provider: seat.provider,
         model: seat.model ?? null,
+        effort: seat.effort ?? null,
       })!;
     }
     const adapter = this.adapter(seat.provider);
@@ -69,6 +77,7 @@ export class ChatService {
           readOnly: true,
           timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
           ...(seat.model && { model: seat.model }),
+          ...(seat.effort && { effort: seat.effort }),
           ...(resume && session && { sessionId: session.sessionId }),
           ...(opts.signal && { signal: opts.signal }),
         }),
@@ -86,6 +95,7 @@ export class ChatService {
       role: 'assistant',
       provider: seat.provider,
       model: result.model ?? seat.model ?? null,
+      effort: seat.effort ?? null,
       content: result.text,
       ok: result.ok,
       error: result.ok ? null : (result.rateLimited?.message ?? result.errors[0] ?? 'No reply'),
@@ -110,10 +120,15 @@ export class ChatService {
 
 function resolveSeat(thread: Thread, opts: SendOptions): Seat {
   if (opts.provider && opts.provider !== thread.provider) {
-    return { provider: opts.provider, ...(opts.model && { model: opts.model }) };
+    return {
+      provider: opts.provider,
+      ...(opts.model && { model: opts.model }),
+      ...(opts.effort && { effort: opts.effort }),
+    };
   }
   const model = opts.model === undefined ? thread.model : opts.model;
-  return { provider: thread.provider, ...(model && { model }) };
+  const effort = opts.effort === undefined ? thread.effort : opts.effort;
+  return { provider: thread.provider, ...(model && { model }), ...(effort && { effort }) };
 }
 
 export function recordQuotas(store: Store, provider: ProviderId, result: RunResult): void {

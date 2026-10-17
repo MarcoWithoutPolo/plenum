@@ -3,9 +3,18 @@ import { ArrowLeftRight, Plug, TriangleAlert } from 'lucide-react';
 import type { Message, Seat } from '@conclave/shared';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
+import { EffortPicker, fitEffort } from '@/components/EffortPicker';
 import { ModelPicker } from '@/components/ModelPicker';
 import { Button, ProviderDot, Thinking, formatStats, usageTitle } from '@/components/bits';
-import { NEW, defaultSeat, providerName, readyProviders, useApp, type LiveChat } from '@/lib/store';
+import {
+  NEW,
+  defaultSeat,
+  providerName,
+  readyProviders,
+  seatOf,
+  useApp,
+  type LiveChat,
+} from '@/lib/store';
 
 export function ChatScreen({ threadId }: { threadId?: string }) {
   const providers = useApp((s) => s.providers);
@@ -18,14 +27,11 @@ export function ChatScreen({ threadId }: { threadId?: string }) {
 
   const thread = detail?.thread;
   const [seat, setSeat] = useState<Seat | undefined>(() =>
-    thread
-      ? { provider: thread.provider, ...(thread.model && { model: thread.model }) }
-      : defaultSeat(providers, lastSeat),
+    thread ? seatOf(thread) : defaultSeat(providers, lastSeat),
   );
   // Adopt the thread's seat once it loads, and pick a default when providers arrive.
   useEffect(() => {
-    if (thread)
-      setSeat({ provider: thread.provider, ...(thread.model && { model: thread.model }) });
+    if (thread) setSeat(seatOf(thread));
   }, [thread?.id]);
   useEffect(() => {
     if (!seat) setSeat(defaultSeat(providers, lastSeat));
@@ -57,7 +63,18 @@ export function ChatScreen({ threadId }: { threadId?: string }) {
           ? 'Connect an AI account first'
           : `Message ${seat ? providerName(seat.provider) : ''}…`
       }
-      toolbar={seat && <ModelPicker value={seat} onChange={setSeat} compact />}
+      toolbar={
+        seat && (
+          <>
+            <ModelPicker
+              value={seat}
+              onChange={(next) => setSeat(fitEffort(next, providers))}
+              compact
+            />
+            <EffortPicker value={seat} onChange={setSeat} />
+          </>
+        )
+      }
     />
   );
 
@@ -153,11 +170,13 @@ function UserBubble({ text }: { text: string }) {
 function AssistantHeader({
   provider,
   model,
+  effort,
   meta,
   metaTitle,
 }: {
   provider: Message['provider'];
   model?: string | null;
+  effort?: string | null;
   meta?: string;
   metaTitle?: string;
 }) {
@@ -166,6 +185,7 @@ function AssistantHeader({
       {provider && <ProviderDot provider={provider} />}
       <span className="font-semibold">{provider ? providerName(provider) : 'Assistant'}</span>
       {model && <span className="text-faint">{model}</span>}
+      {effort && <span className="text-faint">· {effort} effort</span>}
       {meta && (
         <span className="cursor-default text-faint" title={metaTitle}>
           · {meta}
@@ -181,6 +201,7 @@ function AssistantMessage({ message }: { message: Message }) {
       <AssistantHeader
         provider={message.provider}
         model={message.model}
+        effort={message.effort}
         meta={formatStats(message.durationMs, message.usage)}
         {...(message.usage && { metaTitle: usageTitle(message.usage) })}
       />
@@ -200,7 +221,11 @@ function LiveExchange({ live, previous }: { live: LiveChat; previous?: Message }
       <UserBubble text={live.userText} />
       {switched && <SwitchMarker name={providerName(live.seat.provider)} />}
       <div aria-live="polite">
-        <AssistantHeader provider={live.seat.provider} model={live.seat.model ?? null} />
+        <AssistantHeader
+          provider={live.seat.provider}
+          model={live.seat.model ?? null}
+          effort={live.seat.effort ?? null}
+        />
         {live.text ? <Markdown text={live.text} streaming /> : <Thinking />}
       </div>
     </div>

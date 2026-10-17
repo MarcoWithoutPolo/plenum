@@ -47,6 +47,7 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
           ...status,
           displayName: a.displayName,
           models,
+          ...(a.capabilities.efforts && { efforts: a.capabilities.efforts }),
           ...(listed?.defaultModel && { defaultModel: listed.defaultModel }),
           ...(listed?.defaultEffort && { defaultEffort: listed.defaultEffort }),
           ...(pkg && { installPackage: pkg }),
@@ -140,6 +141,7 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
         const { thread, user, reply } = await engine.chat.send(input.threadId, input.text, {
           provider: input.seat.provider,
           model: input.seat.model ?? null,
+          effort: input.seat.effort ?? null,
           signal: run.signal,
           onEvent: (event) => update({ requestId: input.requestId, kind: 'chat', event }),
         });

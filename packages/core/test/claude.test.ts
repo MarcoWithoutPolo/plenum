@@ -68,6 +68,13 @@ describe('claudeArgs', () => {
     ]);
   });
 
+  it('passes the reasoning effort', () => {
+    expect(claudeArgs({ prompt: 'x', cwd: '.', effort: 'low' })).toEqual(
+      expect.arrayContaining(['--effort', 'low']),
+    );
+    expect(claudeArgs({ prompt: 'x', cwd: '.' })).not.toContain('--effort');
+  });
+
   it('limits read-only agents to read tools', () => {
     const args = claudeArgs({ prompt: 'x', cwd: '.', role: 'reviewer', readOnly: true });
     expect(args).toEqual(

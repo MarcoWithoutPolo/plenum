@@ -11,7 +11,8 @@ const SHORT_NAMES: Record<ProviderId, string> = {
 export const MAX_TRANSCRIPT_CHARS = 60_000;
 
 export function seatLabel(seat: Seat): string {
-  return SHORT_NAMES[seat.provider] + (seat.model ? ` (${seat.model})` : '');
+  const detail = [seat.model, seat.effort && `${seat.effort} effort`].filter(Boolean).join(', ');
+  return SHORT_NAMES[seat.provider] + (detail ? ` (${detail})` : '');
 }
 
 /** Labels for a set of seats; the model is only shown when a provider appears more than once. */
