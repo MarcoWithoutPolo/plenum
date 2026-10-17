@@ -1,0 +1,35 @@
+{
+  "name": "conclave",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Desktop command center that runs Claude Code, Codex and Gemini together: chat with any of them, ask them all at once, or let them build a project for days.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run lint && npm run format:check && npm run build && npm test",
+    "conclave": "tsx --conditions=development apps/cli/src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^4.1.12"
+  }
+}

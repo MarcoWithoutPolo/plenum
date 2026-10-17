@@ -1,0 +1,21 @@
+{
+  "name": "@conclave/core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Conclave engine: CLI adapters, chat, council, brain loop, governor and store.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@conclave/shared": "*"
+  }
+}

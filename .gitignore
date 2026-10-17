@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+release/
+*.tsbuildinfo
+coverage/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# Local runtime data (database, worktrees, logs)
+.conclave/
