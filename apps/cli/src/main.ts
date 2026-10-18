@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { Engine, VERSION, parseSeat } from '@conclave/core';
 import { askCommand } from './ask.js';
 import { chatCommand } from './chat.js';
+import { projectCommand } from './project.js';
 import { doctor } from './doctor.js';
 import { showCommand, threadsCommand } from './threads.js';
 
@@ -23,7 +24,14 @@ Commands:
       --thread <id>      follow up on an earlier council
   threads                List recent chats and councils
   show <id>              Print a chat or council
-  project                Run the autonomous brain on a repo   (M4)
+  project new <repo>     Set up an autonomous project on a git repo
+      --goal "..."       what it should achieve (required)
+      --test "cmd"       command that must pass after every task, e.g. "npm test"
+      --done "..."       how to tell the goal is met
+      --planner/--builder/--reviewer <p[:m][@e],...>  who does each job, in order
+  project run <id>       Work on it until the goal is met (Ctrl+C stops after the step)
+  project status <id>    Tasks, approvals and recent activity
+  project list | stop <id>
 
 Options:
   --json         Machine-readable output (doctor, ask)
@@ -47,6 +55,14 @@ export async function main(argv: string[]): Promise<number> {
       thread: { type: 'string' },
       with: { type: 'string' },
       synth: { type: 'string' },
+      goal: { type: 'string' },
+      test: { type: 'string' },
+      done: { type: 'string' },
+      planner: { type: 'string' },
+      builder: { type: 'string' },
+      reviewer: { type: 'string' },
+      attempts: { type: 'string' },
+      rounds: { type: 'string' },
     },
   });
 
@@ -84,6 +100,20 @@ export async function main(argv: string[]): Promise<number> {
           ...(values.with && { members: values.with.split(',').map(parseSeat) }),
           ...(values.synth && { synthesizer: parseSeat(values.synth) }),
           ...(values.thread && { threadId: values.thread }),
+        });
+      case 'project':
+      case 'projects':
+        return await projectCommand(engine, {
+          sub: command === 'projects' ? 'list' : rest[0],
+          rest: rest.slice(1),
+          ...(values.goal && { goal: values.goal }),
+          ...(values.test && { test: values.test }),
+          ...(values.done && { done: values.done }),
+          ...(values.planner && { planner: values.planner }),
+          ...(values.builder && { builder: values.builder }),
+          ...(values.reviewer && { reviewer: values.reviewer }),
+          ...(values.attempts && { attempts: values.attempts }),
+          ...(values.rounds && { rounds: values.rounds }),
         });
       case 'threads':
         return threadsCommand(engine);

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Store, openDatabase } from '../src/index.js';
+import { SCHEMA_VERSION, Store, openDatabase } from '../src/index.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -92,7 +92,7 @@ describe('Store', () => {
 
     const db = openDatabase(path);
     expect((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
-      2,
+      SCHEMA_VERSION,
     );
     const second = new Store(db);
     expect(second.getThread(t.id)?.provider).toBe('claude');

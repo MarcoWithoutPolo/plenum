@@ -1,3 +1,4 @@
+import { spawn as nodeSpawn } from 'node:child_process';
 import spawn from 'cross-spawn';
 
 export interface ProcessOptions {
@@ -131,4 +132,62 @@ export function isNotFound(result: CommandResult): boolean {
   return /ENOENT|command not found|is not recognized as an internal or external command/i.test(
     `${result.error ?? ''} ${result.stderr}`,
   );
+}
+
+export interface ShellResult {
+  code: number | null;
+  /** The last part of stdout and stderr, interleaved as they arrived. */
+  output: string;
+  timedOut: boolean;
+  durationMs: number;
+}
+
+/**
+ * Run a user-provided shell command (a project's test command) in `cwd`.
+ * On timeout or abort the whole process tree is killed.
+ */
+export function runShell(
+  command: string,
+  opts: { cwd: string; timeoutMs?: number; signal?: AbortSignal; maxOutput?: number },
+): Promise<ShellResult> {
+  const started = Date.now();
+  const max = opts.maxOutput ?? 12_000;
+  return new Promise((resolve) => {
+    const child = nodeSpawn(command, {
+      cwd: opts.cwd,
+      shell: true,
+      windowsHide: true,
+      env: { ...process.env, CI: '1', FORCE_COLOR: '0' },
+    });
+    let output = '';
+    let timedOut = false;
+    const add = (chunk: Buffer) => {
+      output = (output + chunk.toString('utf8')).slice(-max);
+    };
+    child.stdout?.on('data', add);
+    child.stderr?.on('data', add);
+    const killTree = () => {
+      if (child.exitCode !== null || child.pid === undefined) return;
+      if (process.platform === 'win32') {
+        nodeSpawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+      } else {
+        child.kill('SIGKILL');
+      }
+    };
+    const timer = setTimeout(
+      () => {
+        timedOut = true;
+        killTree();
+      },
+      opts.timeoutMs ?? 15 * 60_000,
+    );
+    const onAbort = () => killTree();
+    opts.signal?.addEventListener('abort', onAbort, { once: true });
+    child.on('error', (err) => add(Buffer.from(`\n${err.message}\n`)));
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', onAbort);
+      resolve({ code, output, timedOut, durationMs: Date.now() - started });
+    });
+  });
 }

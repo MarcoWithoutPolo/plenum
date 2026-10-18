@@ -10,9 +10,16 @@ export * from './collect.js';
 export * from './process.js';
 export * from './store/db.js';
 export * from './store/store.js';
+export * from './store/projects.js';
 export * from './chat/transcript.js';
 export * from './chat/service.js';
 export * from './council/council.js';
 export * from './engine.js';
+export * from './workspace/git.js';
+export * from './governor/governor.js';
+export * from './brain/json.js';
+export * from './brain/prompts.js';
+export * from './brain/brain.js';
+export * from './brain/projects.js';
 
 export const VERSION = '0.0.0';

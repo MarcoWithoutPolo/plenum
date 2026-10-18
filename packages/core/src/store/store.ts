@@ -1,12 +1,10 @@
-import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Message, MessageKind, ProviderId, Thread, ThreadMode, Usage } from '@conclave/shared';
 import { openDatabase, transaction } from './db.js';
+import { newId } from './ids.js';
+import { ProjectStore } from './projects.js';
 
-/** Time-sortable id: base36 millis + random suffix. */
-export function newId(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}${randomBytes(5).toString('hex')}`;
-}
+export { newId };
 
 export interface NewMessage {
   role: 'user' | 'assistant';
@@ -34,9 +32,11 @@ type Row = Record<string, unknown>;
 
 export class Store {
   readonly db: DatabaseSync;
+  readonly projects: ProjectStore;
 
   constructor(db: DatabaseSync | string = openDatabase()) {
     this.db = typeof db === 'string' ? openDatabase(db) : db;
+    this.projects = new ProjectStore(this.db);
   }
 
   close(): void {

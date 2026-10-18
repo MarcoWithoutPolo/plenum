@@ -74,7 +74,67 @@ const MIGRATIONS = [
   ALTER TABLE threads ADD COLUMN effort TEXT;
   ALTER TABLE messages ADD COLUMN effort TEXT;
   `,
+  `
+  CREATE TABLE projects (
+    id                  TEXT PRIMARY KEY,
+    name                TEXT NOT NULL,
+    repo_path           TEXT NOT NULL,
+    goal                TEXT NOT NULL,
+    done_when           TEXT,
+    test_command        TEXT,
+    base_branch         TEXT NOT NULL,
+    integration_branch  TEXT NOT NULL,
+    routing             TEXT NOT NULL,
+    max_attempts        INTEGER NOT NULL DEFAULT 3,
+    status              TEXT NOT NULL DEFAULT 'idle',
+    status_reason       TEXT,
+    created_at          INTEGER NOT NULL,
+    updated_at          INTEGER NOT NULL
+  );
+  CREATE TABLE tasks (
+    id            TEXT PRIMARY KEY,
+    project_id    TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title         TEXT NOT NULL,
+    spec          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'queued',
+    priority      INTEGER NOT NULL DEFAULT 0,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    feedback      TEXT,
+    built_by      TEXT,
+    reviewed_by   TEXT,
+    merge_commit  TEXT,
+    created_at    INTEGER NOT NULL,
+    updated_at    INTEGER NOT NULL
+  );
+  CREATE TABLE brain_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    task_id     TEXT,
+    kind        TEXT NOT NULL,
+    message     TEXT NOT NULL,
+    provider    TEXT,
+    data        TEXT,
+    at          INTEGER NOT NULL
+  );
+  CREATE TABLE approvals (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    task_id     TEXT,
+    kind        TEXT NOT NULL,
+    summary     TEXT NOT NULL,
+    payload     TEXT,
+    status      TEXT NOT NULL DEFAULT 'pending',
+    created_at  INTEGER NOT NULL,
+    decided_at  INTEGER
+  );
+  CREATE INDEX tasks_project ON tasks(project_id, status, priority);
+  CREATE INDEX brain_events_project ON brain_events(project_id, id);
+  CREATE INDEX approvals_project ON approvals(project_id, status);
+  `,
 ];
+
+/** Current schema version (number of migrations). */
+export const SCHEMA_VERSION = MIGRATIONS.length;
 
 export function defaultHome(): string {
   return process.env.CONCLAVE_HOME ?? join(homedir(), '.conclave');

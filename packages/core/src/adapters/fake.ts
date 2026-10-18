@@ -8,6 +8,10 @@ export interface FakeScript {
   rateLimited?: { message: string; resetsAt?: number };
   /** Fail with this error instead of answering. */
   fail?: string;
+  /** Side effects before replying, like a builder editing files in request.cwd. */
+  act?: (request: RunRequest) => void | Promise<void>;
+  /** Decide per request whether to hit a usage limit. */
+  limitWhen?: (request: RunRequest) => { message: string; resetsAt?: number } | undefined;
   delayMs?: number;
 }
 
@@ -89,8 +93,9 @@ export class FakeAdapter implements Adapter {
       model: request.model ?? 'fake-1',
     };
 
-    if (this.script.rateLimited) {
-      yield { ...ev, at: Date.now(), type: 'rate_limit', ...this.script.rateLimited };
+    const limited = this.script.rateLimited ?? this.script.limitWhen?.(request);
+    if (limited) {
+      yield { ...ev, at: Date.now(), type: 'rate_limit', ...limited };
       yield {
         ...ev,
         at: Date.now(),
@@ -115,6 +120,7 @@ export class FakeAdapter implements Adapter {
       return;
     }
 
+    await this.script.act?.(request);
     const reply =
       typeof this.script.reply === 'function' ? this.script.reply(request) : this.script.reply;
     const words = reply.split(/(?<=\s)/);

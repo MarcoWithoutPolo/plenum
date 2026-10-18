@@ -6,7 +6,7 @@ A desktop command center that runs the AI coding tools you already use (Claude C
 - **Council**: ask all of them at once, see their answers side by side, and get one merged answer that shows where they agree and disagree.
 - **Projects**: an autonomous "brain" that plans, builds, tests and reviews a repo for days. It splits work by role and model and paces itself against each subscription's usage limits.
 
-> Status: early development. M3 is done: a desktop app with Accounts (connect each AI through its official sign-in), Chat with a per-chat model picker (switch mid-chat; the new model sees the whole conversation), and Council (every model answers, one merges with citations). The same features run in the terminal. Gemini is detected but needs `GEMINI_API_KEY`.
+> Status: early development. M4 is done: autonomous projects run from the terminal (plan, build in isolated git worktrees, test, cross-review, merge), on top of the desktop app's Accounts, Chat with a model and effort picker, and Council. Gemini is detected but needs `GEMINI_API_KEY`.
 
 ## Bring your own CLI
 
@@ -37,6 +37,20 @@ npm run conclave -- chat --use claude:opus "..."  # one-shot message
 npm run conclave -- ask "..."                     # council: everyone answers, one merged result
 npm run conclave -- threads                       # history, stored in ~/.conclave/conclave.db
 ```
+
+## Autonomous projects
+
+Give Conclave a git repo, a goal and a test command. It works until the goal is met:
+
+```bash
+conclave project new ~/code/my-lib --goal "Add a slugify function with tests" --test "npm test"
+conclave project run <id>        # plan → build → test → review → merge, round after round
+conclave project status <id>     # tasks, approvals and recent activity
+```
+
+Each round, one AI plans small tasks, another builds each task in its own git worktree, your test command must pass, and a _different_ AI reviews the diff before it merges into `conclave/integration`. Failed tests and review comments go back to the builder as feedback. Your own branch and files are never touched. When the goal is met, the work waits for you to merge it.
+
+The governor reads each subscription's usage and moves work to another provider, or sleeps until a limit resets, so a project can run for hours or days. Every step is recorded, so a run that is interrupted resumes where it stopped. Choose who does each job with `--planner`, `--builder` and `--reviewer` (for example `--builder codex@low,claude:sonnet`).
 
 ## Development
 
