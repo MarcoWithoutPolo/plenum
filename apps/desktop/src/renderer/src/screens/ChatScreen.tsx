@@ -3,9 +3,9 @@ import { ArrowLeftRight, Plug, TriangleAlert } from 'lucide-react';
 import type { Message, Seat } from '@conclave/shared';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
-import { EffortPicker, fitEffort } from '@/components/EffortPicker';
-import { ModelPicker } from '@/components/ModelPicker';
-import { Button, ProviderDot, Thinking, formatStats, usageTitle } from '@/components/bits';
+import { SeatPicker } from '@/components/SeatPicker';
+import { EffortTag, UsageMeta } from '@/components/UsageMeta';
+import { Button, ProviderDot, Thinking } from '@/components/bits';
 import {
   NEW,
   defaultSeat,
@@ -63,18 +63,7 @@ export function ChatScreen({ threadId }: { threadId?: string }) {
           ? 'Connect an AI account first'
           : `Message ${seat ? providerName(seat.provider) : ''}…`
       }
-      toolbar={
-        seat && (
-          <>
-            <ModelPicker
-              value={seat}
-              onChange={(next) => setSeat(fitEffort(next, providers))}
-              compact
-            />
-            <EffortPicker value={seat} onChange={setSeat} />
-          </>
-        )
-      }
+      toolbar={seat && <SeatPicker value={seat} onChange={setSeat} />}
     />
   );
 
@@ -171,26 +160,22 @@ function AssistantHeader({
   provider,
   model,
   effort,
-  meta,
-  metaTitle,
+  durationMs,
+  usage,
 }: {
   provider: Message['provider'];
   model?: string | null;
   effort?: string | null;
-  meta?: string;
-  metaTitle?: string;
+  durationMs?: number | null;
+  usage?: Message['usage'];
 }) {
   return (
-    <div className="mb-1.5 flex items-center gap-2 text-[12.5px]">
+    <div className="mb-1.5 flex min-h-5 items-center gap-2 text-[12.5px]">
       {provider && <ProviderDot provider={provider} />}
       <span className="font-semibold">{provider ? providerName(provider) : 'Assistant'}</span>
       {model && <span className="text-faint">{model}</span>}
-      {effort && <span className="text-faint">· {effort} effort</span>}
-      {meta && (
-        <span className="cursor-default text-faint" title={metaTitle}>
-          · {meta}
-        </span>
-      )}
+      <EffortTag effort={effort} />
+      <UsageMeta durationMs={durationMs} usage={usage} />
     </div>
   );
 }
@@ -202,8 +187,8 @@ function AssistantMessage({ message }: { message: Message }) {
         provider={message.provider}
         model={message.model}
         effort={message.effort}
-        meta={formatStats(message.durationMs, message.usage)}
-        {...(message.usage && { metaTitle: usageTitle(message.usage) })}
+        durationMs={message.durationMs}
+        usage={message.usage}
       />
       {message.ok ? (
         <Markdown text={message.content} />

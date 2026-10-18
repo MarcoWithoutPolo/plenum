@@ -1,5 +1,5 @@
 {"fetched_at":"2026-10-17T23:11:07Z","client_version":"0.163.0","models":[
 {"slug":"gpt-hidden","display_name":"Hidden","visibility":"hide","priority":1},
 {"slug":"gpt-b","display_name":"GPT-B","visibility":"list","priority":3,"default_reasoning_level":"medium","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"}]},
-{"slug":"gpt-a","display_name":"GPT-A","visibility":"list","priority":0,"default_reasoning_level":"low","supported_reasoning_levels":[{"effort":"low"}]}
+{"slug":"gpt-a","display_name":"GPT-A","description":"Fast everyday model.","visibility":"list","priority":0,"default_reasoning_level":"low","supported_reasoning_levels":[{"effort":"low"}]}
 ]}

@@ -87,6 +87,7 @@ export class CodexAdapter implements Adapter {
       models: readCodexModels(this.home).map((m) => ({
         id: m.id,
         label: m.label,
+        ...(m.description && { description: m.description }),
         efforts: m.efforts,
         ...(m.defaultEffort && { defaultEffort: m.defaultEffort }),
       })),

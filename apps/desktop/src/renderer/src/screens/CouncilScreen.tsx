@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, GitMerge, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, GitMerge, Plus } from 'lucide-react';
 import type { Message, ProviderId, Seat } from '@conclave/shared';
 import type { ProviderInfo } from '../../../shared/api';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
-import { EffortPicker, effortOptions, fitEffort } from '@/components/EffortPicker';
-import { ModelPicker } from '@/components/ModelPicker';
-import { Badge, ProviderDot, Thinking, formatStats, usageTitle } from '@/components/bits';
+import { SeatPicker, modelLabel } from '@/components/SeatPicker';
+import { EffortTag, UsageMeta } from '@/components/UsageMeta';
+import { Badge, ProviderDot, Thinking } from '@/components/bits';
 import {
   NEW,
   councilRounds,
@@ -33,21 +33,22 @@ export function CouncilScreen({ threadId }: { threadId?: string }) {
   const ready = readyProviders(providers);
   const rounds = useMemo(() => councilRounds(detail?.messages ?? []), [detail?.messages]);
 
-  const [members, setMembers] = useState<Seat[]>([]);
-  const [synth, setSynth] = useState<Seat | undefined>();
+  const remembered = useApp((s) => s.councilSeats[threadId ?? NEW]);
+  const [members, setMembers] = useState<Seat[]>(() => remembered?.members ?? []);
+  const [synth, setSynth] = useState<Seat | undefined>(() => remembered?.synthesizer);
 
-  // Start from the last round's seats, or from every connected provider.
+  // Seats you picked for this thread win; otherwise rebuild them from the last round,
+  // or start with every connected provider.
   useEffect(() => {
+    if (remembered || members.length) return;
     const last = rounds.at(-1);
     if (last && last.answers.length) {
-      setMembers(last.answers.map((a) => seatOf(a)));
-      if (last.merged?.provider) {
-        setSynth(seatOf(last.merged));
-      }
-    } else if (members.length === 0 && ready.length) {
+      setMembers(last.answers.map((a) => pickable(seatOf(a), providers)));
+      if (last.merged?.provider) setSynth(pickable(seatOf(last.merged), providers));
+    } else if (ready.length) {
       setMembers(ready.map((p) => ({ provider: p.provider })));
     }
-  }, [detail?.thread.id, rounds.length, ready.length]); // re-run when the thread or providers change
+  }, [remembered, members.length, rounds, ready, providers]);
 
   useEffect(() => {
     if (!synth && ready.length) {
@@ -80,21 +81,16 @@ export function CouncilScreen({ threadId }: { threadId?: string }) {
             : 'Ask a follow-up…'
       }
       toolbar={
-        <>
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1.5">
           <MemberChips ready={ready} members={members} onChange={setMembers} />
           {synth && (
-            <span className="ml-1 flex items-center gap-1.5 text-[12px] text-faint">
-              <GitMerge className="size-3.5" />
-              merged by
-              <ModelPicker
-                value={synth}
-                onChange={(next) => setSynth(fitEffort(next, providers))}
-                compact
-              />
-              <EffortPicker value={synth} onChange={setSynth} />
+            <span className="flex items-center gap-1.5 text-[12px] text-faint">
+              <GitMerge className="size-3.5" aria-hidden />
+              <span>Merged by</span>
+              <SeatPicker value={synth} onChange={setSynth} label="Choose who merges" />
             </span>
           )}
-        </>
+        </div>
       }
     />
   );
@@ -138,6 +134,17 @@ export function CouncilScreen({ threadId }: { threadId?: string }) {
   );
 }
 
+/**
+ * Stored answers record the model the CLI resolved (e.g. "claude-opus-5-5"),
+ * not what was picked. Keep it only when it's one of the picker's options.
+ */
+function pickable(seat: Seat, providers: ProviderInfo[]): Seat {
+  const info = providers.find((p) => p.provider === seat.provider);
+  if (!seat.model || info?.models.some((m) => m.id === seat.model)) return seat;
+  const { model: _resolved, ...rest } = seat;
+  return rest;
+}
+
 function MemberChips({
   ready,
   members,
@@ -147,92 +154,106 @@ function MemberChips({
   members: Seat[];
   onChange: (m: Seat[]) => void;
 }) {
-  const toggle = (provider: ProviderId) => {
-    const has = members.some((m) => m.provider === provider);
-    onChange(has ? members.filter((m) => m.provider !== provider) : [...members, { provider }]);
+  const update = (provider: ProviderId, seat: Seat | null) => {
+    const others = members.filter((m) => m.provider !== provider);
+    // Keep the chip order stable: members follow the provider order.
+    const next = seat ? [...others, seat] : others;
+    onChange(ready.flatMap((p) => next.filter((m) => m.provider === p.provider)));
   };
-  const providers = ready;
-  const setModel = (provider: ProviderId, model: string) =>
-    onChange(
-      members.map((m) =>
-        m.provider === provider
-          ? fitEffort(
-              { provider, ...(model && { model }), ...(m.effort && { effort: m.effort }) },
-              providers,
-            )
-          : m,
-      ),
-    );
-  const setEffort = (provider: ProviderId, effort: string) =>
-    onChange(
-      members.map((m) => {
-        if (m.provider !== provider) return m;
-        const { effort: _old, ...rest } = m;
-        return effort ? { ...rest, effort } : rest;
-      }),
-    );
 
   return (
     <div role="group" aria-label="Council members" className="flex flex-wrap items-center gap-1.5">
       {ready.map((p) => {
         const seat = members.find((m) => m.provider === p.provider);
-        const on = Boolean(seat);
         return (
-          <span
+          <MemberChip
             key={p.provider}
-            className={`inline-flex h-7 items-center gap-1.5 rounded-lg border pr-1 pl-2 text-[12.5px] font-medium ${
-              on
-                ? 'border-accent/40 bg-accent-soft text-accent-ink'
-                : 'border-line-strong text-muted'
-            }`}
-          >
-            <button
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggle(p.provider)}
-              className="inline-flex items-center gap-1.5"
-            >
-              {on ? <Check className="size-3" /> : <X className="size-3 opacity-50" />}
-              <ProviderDot provider={p.provider} size={7} />
-              {providerName(p.provider)}
-            </button>
-            {on && (p.models.length > 0 || seat?.model) && (
-              <select
-                aria-label={`${p.displayName} model`}
-                value={seat?.model ?? ''}
-                onChange={(e) => setModel(p.provider, e.target.value)}
-                className="h-5 rounded border-0 bg-transparent text-[12px] text-accent-ink outline-none"
-              >
-                <option value="">default</option>
-                {seat?.model && !p.models.some((m) => m.id === seat.model) && (
-                  <option value={seat.model}>{seat.model}</option>
-                )}
-                {p.models.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label ?? m.id}
-                  </option>
-                ))}
-              </select>
-            )}
-            {on && seat && effortOptions(seat, providers).levels.length > 0 && (
-              <select
-                aria-label={`${p.displayName} effort`}
-                value={seat.effort ?? ''}
-                onChange={(e) => setEffort(p.provider, e.target.value)}
-                className="h-5 rounded border-0 bg-transparent text-[12px] text-accent-ink outline-none"
-              >
-                <option value="">effort</option>
-                {effortOptions(seat, providers).levels.map((level) => (
-                  <option key={level} value={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
-            )}
-          </span>
+            info={p}
+            seat={seat}
+            onToggle={() => update(p.provider, seat ? null : { provider: p.provider })}
+            onChange={(next) => update(p.provider, next)}
+          />
         );
       })}
     </div>
+  );
+}
+
+function MemberChip({
+  info,
+  seat,
+  onToggle,
+  onChange,
+}: {
+  info: ProviderInfo;
+  seat: Seat | undefined;
+  onToggle: () => void;
+  onChange: (seat: Seat) => void;
+}) {
+  const on = Boolean(seat);
+  return (
+    <span
+      className={`inline-flex h-7.5 items-center rounded-full border text-[12.5px] font-medium transition ${
+        on
+          ? 'border-accent/40 bg-accent-soft text-accent-ink'
+          : 'border-dashed border-line-strong text-muted'
+      }`}
+    >
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={`${on ? 'Remove' : 'Add'} ${info.displayName}`}
+        title={
+          on
+            ? `Remove ${providerName(info.provider)} from the council`
+            : `Add ${providerName(info.provider)}`
+        }
+        onClick={onToggle}
+        className="grid size-7.5 shrink-0 place-items-center rounded-full outline-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/5"
+      >
+        {on ? (
+          <span className="grid size-4 place-items-center rounded-full bg-accent text-white">
+            <Check className="size-2.5" strokeWidth={3} />
+          </span>
+        ) : (
+          <Plus className="size-3.5" />
+        )}
+      </button>
+      {on && seat ? (
+        <SeatPicker
+          value={seat}
+          onChange={onChange}
+          lockProvider={info.provider}
+          label={`${info.displayName} model`}
+          trigger={({ ref, toggle, open, seat: s, ...aria }) => (
+            <button
+              ref={ref}
+              type="button"
+              onClick={toggle}
+              aria-label={`${info.displayName} model`}
+              {...aria}
+              className="inline-flex h-full items-center gap-1.5 rounded-r-full pr-2.5 pl-0.5 outline-none hover:brightness-95 focus-visible:underline"
+            >
+              <ProviderDot provider={info.provider} size={7} />
+              {providerName(info.provider)}
+              <span className="font-normal opacity-75">{modelLabel(info, s.model)}</span>
+              {s.effort && <span className="font-normal opacity-75">· {s.effort}</span>}
+              <ChevronDown className={`size-3 opacity-60 transition ${open ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex h-full items-center gap-1.5 pr-3 pl-0.5"
+        >
+          <ProviderDot provider={info.provider} size={7} />
+          {providerName(info.provider)}
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -260,8 +281,9 @@ function StoredRound({ round }: { round: Round }) {
             status={a.ok ? 'done' : 'failed'}
             text={a.ok ? a.content : ''}
             error={a.error}
-            meta={formatStats(a.durationMs, a.usage)}
-            metaTitle={usageTitle(a.usage)}
+            effort={a.effort}
+            durationMs={a.durationMs}
+            usage={a.usage}
           />
         ))}
       </AnswerGrid>
@@ -286,7 +308,8 @@ function LiveRound({ live }: { live: LiveCouncil }) {
             model={m.seat.model ?? null}
             status={m.status}
             text={m.text}
-            meta={m.durationMs ? `${(m.durationMs / 1000).toFixed(1)}s` : ''}
+            effort={m.seat.effort ?? null}
+            durationMs={m.durationMs ?? null}
           />
         ))}
       </AnswerGrid>
@@ -308,8 +331,9 @@ function AnswerCard({
   status,
   text,
   error,
-  meta,
-  metaTitle,
+  effort,
+  durationMs,
+  usage,
 }: {
   provider: ProviderId;
   label: string;
@@ -317,8 +341,9 @@ function AnswerCard({
   status: LiveSeat['status'];
   text: string;
   error?: string | null;
-  meta?: string;
-  metaTitle?: string | undefined;
+  effort?: string | null;
+  durationMs?: number | null;
+  usage?: Message['usage'];
 }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 700;
@@ -331,11 +356,10 @@ function AnswerCard({
         <ProviderDot provider={provider} />
         <span className="font-semibold">{label}</span>
         {model && <span className="truncate text-faint">{model}</span>}
+        <EffortTag effort={effort} />
         <span className="ml-auto shrink-0">
           {status === 'done' ? (
-            <span className="cursor-default text-faint" title={metaTitle}>
-              {meta}
-            </span>
+            <UsageMeta durationMs={durationMs} usage={usage} align="right" />
           ) : status === 'failed' ? (
             <Badge tone="danger">Failed</Badge>
           ) : status === 'thinking' ? (
@@ -400,10 +424,8 @@ function MergedCard({ message, answerCount }: { message: Message; answerCount: n
                 ? 'only one member answered'
                 : ''}
           </span>
-          <span className="ml-auto text-[12px] text-faint">
-            <span className="cursor-default" title={usageTitle(message.usage)}>
-              {formatStats(message.durationMs, message.usage)}
-            </span>
+          <span className="ml-auto text-[12px]">
+            <UsageMeta durationMs={message.durationMs} usage={message.usage} align="right" />
           </span>
         </>
       }

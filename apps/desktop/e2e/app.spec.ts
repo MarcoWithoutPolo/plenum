@@ -82,12 +82,17 @@ test('accounts show which providers are connected', async () => {
 test('chat streams a reply, then switches model and keeps the thread', async () => {
   await page.getByRole('button', { name: 'New chat' }).click();
   const box = page.getByRole('textbox', { name: 'Message' });
-  await page.getByRole('combobox', { name: 'Reasoning effort' }).selectOption('low');
+  await page.getByRole('button', { name: 'Choose model' }).click();
+  const picker = page.getByRole('dialog', { name: 'Choose model' });
+  await expect(picker.getByRole('radiogroup', { name: 'Reasoning effort' })).toBeVisible();
+  await picker.getByRole('radio', { name: 'low', exact: true }).click(); // closes the picker
+  await expect(picker).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Choose model' })).toContainText('low');
   await box.fill('How should I store app settings?');
   await box.press('Enter');
 
   await expect(page.getByText('Claude (demo) here.')).toBeVisible();
-  await expect(page.getByText('· low effort')).toBeVisible();
+  await expect(page.locator('main').getByText('low', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible(); // finished streaming
   await expect(
     page
@@ -97,18 +102,18 @@ test('chat streams a reply, then switches model and keeps the thread', async () 
 
   await page.getByRole('button', { name: 'Choose model' }).click();
   // The menu opens upward from the bottom composer and stays inside the window.
-  const menu = await page.getByRole('menu').boundingBox();
+  const menu = await page.getByRole('dialog', { name: 'Choose model' }).boundingBox();
   const viewport = page.viewportSize()!;
   expect(menu!.y).toBeGreaterThanOrEqual(0);
   expect(menu!.y + menu!.height).toBeLessThanOrEqual(viewport.height);
   await page.mouse.wheel(0, 2000);
   expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
   await page
-    .getByRole('menu')
-    .getByRole('menuitemradio')
-    .filter({ hasText: 'Default' })
+    .getByRole('dialog', { name: 'Choose model' })
+    .getByRole('option', { name: /^Default/ })
     .nth(1)
     .click();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Choose model' })).toContainText('Codex');
 
   await box.fill('And on Linux?');

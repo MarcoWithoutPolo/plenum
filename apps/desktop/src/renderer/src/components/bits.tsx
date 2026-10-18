@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ProviderId, Usage } from '@conclave/shared';
+import type { ProviderId } from '@conclave/shared';
 
 export function ProviderDot({ provider, size = 8 }: { provider: ProviderId; size?: number }) {
   return (
@@ -70,41 +70,6 @@ export function Button({
       className={`inline-flex items-center justify-center rounded-lg border font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
     />
   );
-}
-
-/**
- * "4.6s · 2.1k new · 18k cached". Cached tokens are the CLI's fixed instructions
- * reused from the provider's cache; they cost far less, so they're shown apart.
- */
-export function formatStats(durationMs: number | null | undefined, usage?: Usage | null): string {
-  const parts: string[] = [];
-  if (durationMs) parts.push(`${(durationMs / 1000).toFixed(1)}s`);
-  const cached = usage?.cachedInputTokens ?? 0;
-  const fresh = Math.max(0, (usage?.inputTokens ?? 0) - cached) + (usage?.outputTokens ?? 0);
-  if (fresh) parts.push(`${compact(fresh)} new`);
-  if (cached) parts.push(`${compact(cached)} cached`);
-  return parts.join(' · ');
-}
-
-export function usageTitle(usage?: Usage | null): string | undefined {
-  if (!usage) return undefined;
-  const lines = [
-    usage.inputTokens !== undefined && `Input: ${usage.inputTokens.toLocaleString()} tokens`,
-    usage.cachedInputTokens !== undefined &&
-      `  from cache: ${usage.cachedInputTokens.toLocaleString()}`,
-    usage.outputTokens !== undefined && `Output: ${usage.outputTokens.toLocaleString()} tokens`,
-    usage.costUsd !== undefined &&
-      `List-price equivalent: $${usage.costUsd.toFixed(4)} (covered by your plan)`,
-  ];
-  return lines.filter(Boolean).join('\n');
-}
-
-function compact(n: number): string {
-  return n >= 10_000
-    ? `${Math.round(n / 1000)}k`
-    : n >= 1000
-      ? `${(n / 1000).toFixed(1)}k`
-      : String(n);
 }
 
 export function timeAgo(ms: number): string {

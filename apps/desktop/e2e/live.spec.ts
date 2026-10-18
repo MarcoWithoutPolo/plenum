@@ -26,7 +26,8 @@ test('chats with the real Claude CLI', async () => {
 
     await page.getByRole('button', { name: 'New chat' }).click();
     await page.getByRole('button', { name: 'Choose model' }).click();
-    await page.getByRole('menuitemradio', { name: 'haiku' }).click();
+    await page.getByRole('option', { name: 'Haiku' }).click();
+    await page.keyboard.press('Escape');
     const box = page.getByRole('textbox', { name: 'Message' });
     await box.fill('Reply with exactly the word: pong');
     await box.press('Enter');

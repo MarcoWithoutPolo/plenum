@@ -13,6 +13,7 @@ export function codexHome(): string {
 export interface CodexModel {
   id: string;
   label: string;
+  description?: string;
   defaultEffort?: string;
   efforts: string[];
 }
@@ -24,6 +25,7 @@ export function readCodexModels(home = codexHome()): CodexModel[] {
       models?: {
         slug?: string;
         display_name?: string;
+        description?: string;
         visibility?: string;
         priority?: number;
         default_reasoning_level?: string;
@@ -36,6 +38,7 @@ export function readCodexModels(home = codexHome()): CodexModel[] {
       .map((m) => ({
         id: m.slug!,
         label: m.display_name ?? m.slug!,
+        ...(m.description && { description: m.description }),
         ...(m.default_reasoning_level && { defaultEffort: m.default_reasoning_level }),
         efforts: (m.supported_reasoning_levels ?? []).flatMap((r) => (r.effort ? [r.effort] : [])),
       }));

@@ -137,15 +137,6 @@ function ProviderCard({
                 ? info.loginHint
                 : `Install the official CLI to use ${info.displayName}.`)}
           </p>
-          {signedIn && info.defaultModel && (
-            <p className="mt-0.5 text-[12.5px] text-faint">
-              Default model:{' '}
-              {info.models.find((m) => m.id === info.defaultModel)?.label ?? info.defaultModel}
-              {info.defaultEffort && ` · ${info.defaultEffort} reasoning effort`}
-              {info.models.length > 0 && ` · ${info.models.length} models available`}
-            </p>
-          )}
-          {signedIn && quotas.length > 0 && <QuotaBars quotas={quotas} />}
           {note && <p className="mt-2 text-[12.5px] text-accent-ink">{note}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -167,6 +158,8 @@ function ProviderCard({
           )}
         </div>
       </div>
+      {signedIn && <Facts info={info} />}
+      {signedIn && quotas.length > 0 && <PlanUsage quotas={quotas} />}
       {info.provider === 'gemini' && !signedIn && info.installed && (
         <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-muted">
           Google no longer accepts personal sign-ins from the Gemini CLI. Set{' '}
@@ -189,42 +182,115 @@ function ProviderCard({
   );
 }
 
-const WINDOW_NAMES: Record<string, string> = {
-  five_hour: '5-hour window',
-  seven_day: 'Weekly',
-  limit: 'Limit reached',
+function Facts({ info }: { info: ProviderInfo }) {
+  const facts = [
+    info.defaultModel && {
+      label: 'Default model',
+      value: info.models.find((m) => m.id === info.defaultModel)?.label ?? info.defaultModel,
+    },
+    info.defaultEffort && {
+      label: 'Reasoning',
+      value: info.defaultEffort[0]!.toUpperCase() + info.defaultEffort.slice(1),
+    },
+    info.models.length > 0 && {
+      label: 'Models',
+      value: `${info.models.length} available`,
+    },
+    (info.efforts?.length ?? 0) > 0 &&
+      !info.defaultEffort && {
+        label: 'Reasoning',
+        value: `${info.efforts!.length} effort levels`,
+      },
+  ].filter(Boolean) as { label: string; value: string }[];
+  if (facts.length === 0) return null;
+  return (
+    <dl className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
+      {facts.map((f) => (
+        <div key={f.label} className="rounded-xl border border-line bg-sunken/70 px-3 py-2">
+          <dt className="text-[11px] font-medium tracking-wide text-faint uppercase">{f.label}</dt>
+          <dd className="mt-0.5 truncate text-[13px] font-medium">{f.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+const WINDOWS: Record<string, { label: string; hint: string }> = {
+  five_hour: { label: '5-hour window', hint: 'Short-term limit that refills every five hours' },
+  seven_day: { label: 'Weekly', hint: 'Total usage across the week' },
+  limit: { label: 'Limit reached', hint: 'The provider refused a request' },
 };
 
-function QuotaBars({ quotas }: { quotas: QuotaInfo[] }) {
+function PlanUsage({ quotas }: { quotas: QuotaInfo[] }) {
+  const updated = Math.max(...quotas.map((q) => q.at));
   return (
-    <div className="mt-3 grid max-w-md grid-cols-2 gap-3">
-      {quotas.map((q) => {
-        const pct = Math.round((q.utilization ?? 0) * 100);
-        return (
-          <div key={q.window}>
-            <div className="flex justify-between text-[11.5px] text-muted">
-              <span>{WINDOW_NAMES[q.window] ?? q.window}</span>
-              <span>{pct}% used</span>
-            </div>
-            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-sunken">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${pct}%`, background: pct > 85 ? 'var(--warn)' : 'var(--accent)' }}
-              />
-            </div>
-            {q.resetsAt && (
-              <div className="mt-0.5 text-[11px] text-faint">
-                Resets{' '}
-                {new Date(q.resetsAt).toLocaleString([], {
-                  weekday: 'short',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="mt-4 rounded-xl border border-line px-4 pt-3 pb-3.5">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h3 className="text-[12px] font-semibold tracking-wide text-muted uppercase">Plan usage</h3>
+        <span className="text-[11.5px] text-faint">Updated {relative(updated, 'past')}</span>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-4">
+        {quotas.map((q) => (
+          <Meter key={q.window} quota={q} />
+        ))}
+      </div>
     </div>
   );
+}
+
+function Meter({ quota }: { quota: QuotaInfo }) {
+  const pct = Math.min(100, Math.round((quota.utilization ?? 0) * 100));
+  const tone = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--accent)';
+  const meta = WINDOWS[quota.window] ?? { label: quota.window.replace(/_/g, ' '), hint: '' };
+  return (
+    <div title={meta.hint}>
+      <div className="flex items-baseline justify-between">
+        <span className="text-[12.5px] font-medium">{meta.label}</span>
+        <span
+          className="text-[18px] font-semibold tabular-nums"
+          style={{ color: pct >= 70 ? tone : undefined }}
+        >
+          {pct}
+          <span className="ml-0.5 text-[12px] font-medium text-faint">%</span>
+        </span>
+      </div>
+      <div
+        role="meter"
+        aria-label={`${meta.label} used`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        className="mt-1.5 h-2 overflow-hidden rounded-full bg-sunken"
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-700 ease-out"
+          style={{ width: `${Math.max(pct, 2)}%`, background: tone }}
+        />
+      </div>
+      {quota.resetsAt && (
+        <div className="mt-1.5 text-[11.5px] text-faint">
+          Resets {relative(quota.resetsAt, 'future')} ·{' '}
+          {new Date(quota.resetsAt).toLocaleString([], {
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "in 2h 14m", "3m ago", "just now". */
+function relative(at: number, direction: 'past' | 'future'): string {
+  const ms = direction === 'future' ? at - Date.now() : Date.now() - at;
+  if (ms < 60_000) return direction === 'future' ? 'in a moment' : 'just now';
+  const m = Math.round(ms / 60_000);
+  const text =
+    m < 60
+      ? `${m}m`
+      : m < 48 * 60
+        ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}`
+        : `${Math.round(m / 1440)} days`;
+  return direction === 'future' ? `in ${text}` : `${text} ago`;
 }

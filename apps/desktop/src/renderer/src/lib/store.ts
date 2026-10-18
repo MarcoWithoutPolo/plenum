@@ -51,6 +51,8 @@ interface State {
   liveCouncils: Record<string, LiveCouncil>;
   /** The seat a new chat starts with; remembered between chats. */
   lastSeat?: Seat;
+  /** The seats picked for each council thread (what was asked for, not what the CLI resolved). */
+  councilSeats: Record<string, { members: Seat[]; synthesizer: Seat }>;
   toast?: { kind: 'error' | 'info'; text: string };
 
   init(): Promise<void>;
@@ -86,6 +88,7 @@ export const useApp = create<State>((set, get) => ({
   screen: { name: 'chat' },
   liveChats: {},
   liveCouncils: {},
+  councilSeats: {},
 
   async init() {
     // StrictMode runs effects twice in development; subscribe only once.
@@ -193,6 +196,13 @@ export const useApp = create<State>((set, get) => ({
         synthesizer,
         ...(threadId && { threadId }),
       });
+      set((s) => ({
+        councilSeats: {
+          ...s.councilSeats,
+          [result.thread.id]: { members, synthesizer },
+          [NEW]: { members, synthesizer },
+        },
+      }));
       await get().loadThread(result.thread.id);
       set({ screen: { name: 'council', threadId: result.thread.id } });
     } catch (err) {

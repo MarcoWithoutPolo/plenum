@@ -1,5 +1,5 @@
 import type { AgentEvent, ProviderId, ProviderStatus } from '@conclave/shared';
-import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
+import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
 
 export interface FakeScript {
   /** Text the fake model answers with; split into deltas word by word. */
@@ -19,6 +19,10 @@ export interface FakeOptions {
   resume?: boolean;
   /** Reasoning effort levels to advertise. */
   efforts?: string[];
+  /** Report these from models(), like a CLI that knows the plan's models. */
+  models?: ModelList;
+  /** Report these from limits(), like a CLI that logs plan usage. */
+  limits?: { window: string; utilization: number; resetsAt?: number }[];
   /** Override what detect() reports, e.g. to show a signed-out provider. */
   status?: Partial<Omit<ProviderStatus, 'provider'>>;
 }
@@ -32,6 +36,8 @@ export class FakeAdapter implements Adapter {
   readonly capabilities: Capabilities;
   /** Every request this adapter received, for assertions. */
   readonly requests: RunRequest[] = [];
+  readonly models?: () => Promise<ModelList>;
+  readonly limits?: () => Promise<{ window: string; utilization: number; resetsAt?: number }[]>;
 
   private readonly status: Partial<Omit<ProviderStatus, 'provider'>>;
 
@@ -40,6 +46,9 @@ export class FakeAdapter implements Adapter {
     opts: FakeOptions = {},
   ) {
     this.status = opts.status ?? {};
+    const { models, limits } = opts;
+    if (models) this.models = async () => models;
+    if (limits) this.limits = async () => limits;
     this.id = opts.id ?? 'fake';
     this.displayName = opts.displayName ?? 'Fake';
     this.capabilities = {

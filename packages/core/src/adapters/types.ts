@@ -51,8 +51,17 @@ export interface Adapter {
   limits?(): Promise<{ window: string; utilization: number; resetsAt?: number }[]>;
 }
 
+export interface ModelOption {
+  id: string;
+  label?: string;
+  /** One line on what the model is for, when the CLI provides it. */
+  description?: string;
+  efforts?: string[];
+  defaultEffort?: string;
+}
+
 export interface ModelList {
-  models: { id: string; label?: string; efforts?: string[]; defaultEffort?: string }[];
+  models: ModelOption[];
   /** What "Default" means right now (the CLI's configured model). */
   defaultModel?: string;
   defaultEffort?: string;

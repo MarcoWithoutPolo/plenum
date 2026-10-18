@@ -28,7 +28,13 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
   it('lists the models the plan offers, best first, with the configured default', async () => {
     expect(await new CodexAdapter({ home }).models()).toEqual({
       models: [
-        { id: 'gpt-a', label: 'GPT-A', efforts: ['low'], defaultEffort: 'low' },
+        {
+          id: 'gpt-a',
+          label: 'GPT-A',
+          description: 'Fast everyday model.',
+          efforts: ['low'],
+          defaultEffort: 'low',
+        },
         { id: 'gpt-b', label: 'GPT-B', efforts: ['low', 'medium'], defaultEffort: 'medium' },
       ],
       defaultModel: 'gpt-a',
