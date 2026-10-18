@@ -86,7 +86,7 @@ docs/             architecture and plan
 | M5        | Projects, approvals and usage screens                              |
 | M6        | MCP server, API-key mode, installers, first release                |
 
-See [docs/PLAN.md](docs/PLAN.md) for the full design.
+See [docs/PLAN.md](docs/PLAN.md) for the full design and [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
 
 ## License
 
