@@ -9,6 +9,7 @@ import type {
   Seat,
   Task,
 } from '@conclave/shared';
+import { looksLikeLimit } from '../adapters/cli.js';
 import { collect, type RunResult } from '../collect.js';
 import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
@@ -561,6 +562,11 @@ export class Brain {
         }
       },
     );
+    // Safety net for any provider: a failure that reads like a plan or spend limit is a limit,
+    // so the work moves to the next provider and the task keeps its attempts.
+    if (!result.ok && !result.rateLimited && looksLikeLimit(result.errors.join(' '))) {
+      result.rateLimited = { message: result.errors[0] ?? 'usage limit reached' };
+    }
     recordUsage(
       this.ctx.store,
       { seat, role, source: 'project', refId: this.projectId, taskId: task?.id ?? null },

@@ -69,6 +69,14 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
     expect(events).toEqual([{ type: 'rate_limit', message: "You've hit your usage limit." }]);
   });
 
+  it('treats a workspace spend cap as a usage limit, not a task failure', () => {
+    // Seen live: Codex refused with this when a ChatGPT workspace hit its spend cap.
+    const parser = new CodexParser();
+    const message =
+      'You hit your spend cap set by the owner of your workspace. Ask an owner to increase your spend cap to continue.';
+    expect(parser.parse({ type: 'error', message })).toEqual([{ type: 'rate_limit', message }]);
+  });
+
   it('reports shell commands and file changes', () => {
     const parser = new CodexParser();
     expect(

@@ -273,6 +273,29 @@ describe('Brain', () => {
     ).toBe(true);
   });
 
+  it('moves work to the next builder when one hits a spend cap, without charging attempts', async () => {
+    let plans = 0;
+    const { store, brain, project } = await setup({
+      codex: { reply: '', fail: 'You hit your spend cap set by the owner of your workspace.' },
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? plans++ === 0
+              ? PLAN
+              : DONE
+            : req.role === 'builder'
+              ? 'built'
+              : APPROVE,
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a + b')(req);
+        },
+      },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    const [task] = store.projects.listTasks(project.id);
+    expect(task).toMatchObject({ status: 'merged', builtBy: 'claude', attempts: 0 });
+  });
+
   it('waits until the earliest reset when every provider is out of headroom', async () => {
     const { store, project } = await setup();
     const resetsAt = Date.now() + 2 * 3_600_000;

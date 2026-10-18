@@ -4,6 +4,7 @@ import {
   assertSafeEffort,
   assertSafeModel,
   defaultExec,
+  looksLikeLimit,
   isRecord,
   num,
   runCli,
@@ -224,9 +225,10 @@ export class ClaudeParser implements LineParser {
       (message.subtype !== undefined && message.subtype !== 'success')
     ) {
       this.failed = true;
+      const reason = text || `Claude Code stopped: ${String(message.subtype)}`;
       out.push({
-        type: 'error',
-        message: text || `Claude Code stopped: ${String(message.subtype)}`,
+        type: looksLikeLimit(reason) ? 'rate_limit' : 'error',
+        message: reason,
       });
     } else {
       out.push({ type: 'message.done', text });

@@ -4,6 +4,7 @@ import {
   assertSafeEffort,
   assertSafeModel,
   defaultExec,
+  looksLikeLimit,
   isRecord,
   num,
   runCli,
@@ -238,7 +239,7 @@ ${text}`
     const message = unwrapApiError(raw) ?? 'Codex failed';
     if (message === this.lastError) return []; // turn.failed repeats the preceding error
     this.lastError = message;
-    if (/rate.?limit|usage limit|quota|status\W*429/i.test(`${raw} ${message}`)) {
+    if (looksLikeLimit(`${raw} ${message}`)) {
       return [{ type: 'rate_limit', message }];
     }
     return [{ type: 'error', message }];

@@ -60,7 +60,9 @@ export async function* runCli(
     if (!ok && !reportedError) {
       const message =
         chunk.error ?? lastMeaningfulLine(stderrTail) ?? `Exited with code ${chunk.code}`;
-      yield stamp({ type: 'error', message });
+      yield stamp(
+        looksLikeLimit(message) ? { type: 'rate_limit', message } : { type: 'error', message },
+      );
     }
     yield stamp({ type: 'done', ok, exitCode: chunk.code, durationMs: Date.now() - started });
     return;
@@ -87,6 +89,18 @@ export function str(value: unknown): string | undefined {
 
 export function num(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Messages that mean "this account can't do more right now" rather than
+ * "this task failed": rate limits, plan windows, spend caps, exhausted credits.
+ * The governor moves work elsewhere instead of charging the task an attempt.
+ */
+const LIMIT_PATTERN =
+  /rate.?limit|usage limit|limit (?:reached|exceeded)|quota|spend(?:ing)? cap|usage cap|credit balance|out of credits|insufficient (?:credits|quota|funds)|billing|too many requests|status\W*429|\b429\b/i;
+
+export function looksLikeLimit(text: string | undefined): boolean {
+  return Boolean(text && LIMIT_PATTERN.test(text));
 }
 
 /** Effort levels go on the command line too: lowercase words only. */
