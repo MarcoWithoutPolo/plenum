@@ -1,6 +1,16 @@
 import { useState } from 'react';
-import { FolderKanban, MessageSquarePlus, MessagesSquare, Plug, Trash2, Users } from 'lucide-react';
+import {
+  BarChart3,
+  FolderKanban,
+  Inbox,
+  MessageSquarePlus,
+  MessagesSquare,
+  Plug,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import type { Thread } from '@conclave/shared';
+import { pendingApprovalCount, useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
 import { ProviderDot, timeAgo } from './bits';
 
@@ -11,7 +21,11 @@ export function Sidebar() {
   const open = useApp((s) => s.open);
   const platform = window.conclave?.platform;
 
+  const summaries = useProjects((s) => s.summaries);
+  const approvals = useProjects((s) => s.approvals);
   const activeId = 'threadId' in screen ? screen.threadId : undefined;
+  const runningCount = summaries.filter((s) => s.running).length;
+  const pending = pendingApprovalCount(approvals);
   const ready = providers.filter((p) => p.auth === 'signed_in').length;
 
   return (
@@ -40,9 +54,16 @@ export function Sidebar() {
         <NavButton
           icon={<FolderKanban className="size-4" />}
           label="Projects"
-          disabled
-          hint="Soon"
-          onClick={() => {}}
+          active={screen.name === 'projects'}
+          onClick={() => open({ name: 'projects' })}
+          trailing={
+            runningCount > 0 ? (
+              <span className="ml-auto inline-flex items-center gap-1.5 text-[11.5px] font-medium text-ok">
+                <span className="live-dot size-1.5 rounded-full bg-ok" aria-hidden />
+                {runningCount} running
+              </span>
+            ) : undefined
+          }
         />
       </div>
 
@@ -68,7 +89,29 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="border-t border-line p-2.5">
+      <div className="flex flex-col gap-0.5 border-t border-line p-2.5">
+        <NavButton
+          icon={<Inbox className="size-4" />}
+          label="Approvals"
+          active={screen.name === 'approvals'}
+          onClick={() => open({ name: 'approvals' })}
+          trailing={
+            pending > 0 ? (
+              <span
+                className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white"
+                aria-label={`${pending} waiting`}
+              >
+                {pending}
+              </span>
+            ) : undefined
+          }
+        />
+        <NavButton
+          icon={<BarChart3 className="size-4" />}
+          label="Usage"
+          active={screen.name === 'usage'}
+          onClick={() => open({ name: 'usage' })}
+        />
         <NavButton
           icon={<Plug className="size-4" />}
           label="Accounts"

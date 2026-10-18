@@ -257,12 +257,27 @@ export class ProjectStore {
     };
   }
 
-  events(projectId: string, opts: { afterId?: number; limit?: number } = {}): BrainEvent[] {
+  /** Events in order. `latest` returns the newest N (still oldest first); `afterId` pages forward. */
+  events(
+    projectId: string,
+    opts: { afterId?: number; limit?: number; latest?: number } = {},
+  ): BrainEvent[] {
+    if (opts.latest !== undefined) {
+      const rows = this.db
+        .prepare('SELECT * FROM brain_events WHERE project_id = ? ORDER BY id DESC LIMIT ?')
+        .all(projectId, opts.latest) as Row[];
+      return rows.reverse().map(toEvent);
+    }
     return (
       this.db
         .prepare('SELECT * FROM brain_events WHERE project_id = ? AND id > ? ORDER BY id LIMIT ?')
         .all(projectId, opts.afterId ?? 0, opts.limit ?? 500) as Row[]
     ).map(toEvent);
+  }
+
+  /** Forget a project, its tasks, log and approvals. Its git branches are not touched. */
+  remove(id: string): boolean {
+    return this.db.prepare('DELETE FROM projects WHERE id = ?').run(id).changes > 0;
   }
 
   /* ── Approvals ─────────────────────────────────────────────────────── */

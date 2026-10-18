@@ -6,6 +6,9 @@ import { api, newRequestId } from './api';
 export type Screen =
   | { name: 'chat'; threadId?: string }
   | { name: 'council'; threadId?: string }
+  | { name: 'projects'; projectId?: string }
+  | { name: 'approvals' }
+  | { name: 'usage' }
   | { name: 'accounts' };
 
 export type RunStatus = 'waiting' | 'thinking' | 'done' | 'failed';
@@ -73,7 +76,7 @@ interface State {
   showToast(kind: 'error' | 'info', text: string): void;
 }
 
-const errorText = (err: unknown) =>
+export const errorText = (err: unknown) =>
   (err instanceof Error ? err.message : String(err)).replace(
     /^Error invoking remote method '[^']+': (Error: )?/,
     '',

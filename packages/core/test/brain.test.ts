@@ -198,6 +198,48 @@ describe('Brain', () => {
     expect(task?.feedback).toContain('should be 5, got 6');
   });
 
+  it('pauses instead of re-planning work that already failed', async () => {
+    const { store, brain, project } = await setup({
+      codex: { reply: 'done', act: writeSum('a * b') },
+      claude: { reply: (req) => (req.role === 'planner' ? PLAN : APPROVE) },
+      maxAttempts: 1,
+    });
+    const outcome = await brain.run({ maxRounds: 20 });
+    expect(outcome).toMatchObject({
+      kind: 'idle',
+      reason: expect.stringContaining('already failed'),
+    });
+    expect(store.projects.listTasks(project.id)).toHaveLength(1);
+    expect(store.projects.get(project.id)?.status).toBe('paused');
+  });
+
+  it('pauses after several tasks in a row fail', async () => {
+    let n = 0;
+    const { store, brain, project } = await setup({
+      codex: { reply: 'done', act: writeSum('a * b') },
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? JSON.stringify({
+                done: false,
+                tasks: [{ title: `Try ${++n}`, spec: 'Create sum.js' }],
+              })
+            : APPROVE,
+      },
+      maxAttempts: 1,
+    });
+    const outcome = await brain.run({ maxRounds: 20 });
+    expect(outcome).toMatchObject({
+      kind: 'idle',
+      reason: expect.stringContaining('3 tasks in a row failed'),
+    });
+    expect(store.projects.listTasks(project.id).map((t) => t.status)).toEqual([
+      'failed',
+      'failed',
+      'failed',
+    ]);
+  });
+
   it('routes building to the next provider when one hits its usage limit', async () => {
     let plans = 0;
     const { store, brain, project, claude, codex } = await setup({

@@ -1,9 +1,10 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, nativeTheme, shell } from 'electron';
-import { Engine, silenceSqliteWarning } from '@conclave/core';
+import { BrainManager, Engine, silenceSqliteWarning } from '@conclave/core';
 import { demoAdapters } from './demo.js';
 import { registerIpc } from './ipc.js';
+import { registerProjectIpc } from './projects-ipc.js';
 
 silenceSqliteWarning();
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -72,13 +73,30 @@ if (!singleInstance) {
 
   void app.whenReady().then(() => {
     const engine = new Engine(demo ? { adapters: demoAdapters() } : {});
+    const brains = new BrainManager(engine, engine.home);
+    brains.recoverOrphans();
     registerIpc(engine, () => window);
+    registerProjectIpc(engine, brains, () => window);
     window = createWindow();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) window = createWindow();
     });
-    app.on('will-quit', () => engine.close());
+
+    // Running projects stop cleanly (tasks back in the queue) before the app exits.
+    let quitting = false;
+    app.on('before-quit', (event) => {
+      if (quitting) return;
+      quitting = true;
+      event.preventDefault();
+      void brains
+        .stopAll('Conclave was closed')
+        .catch(() => {})
+        .finally(() => {
+          engine.close();
+          app.quit();
+        });
+    });
   });
 
   app.on('window-all-closed', () => {

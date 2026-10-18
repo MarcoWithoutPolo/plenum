@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
+import { useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
 import { AccountsScreen } from '@/screens/AccountsScreen';
+import { ApprovalsScreen } from '@/screens/ApprovalsScreen';
 import { ChatScreen } from '@/screens/ChatScreen';
 import { CouncilScreen } from '@/screens/CouncilScreen';
+import { ProjectsScreen } from '@/screens/ProjectsScreen';
+import { UsageScreen } from '@/screens/UsageScreen';
 
 export function App() {
   const ready = useApp((s) => s.ready);
@@ -12,9 +16,11 @@ export function App() {
   const init = useApp((s) => s.init);
   const open = useApp((s) => s.open);
 
+  const initProjects = useProjects((s) => s.init);
+
   useEffect(() => {
-    void init();
-  }, [init]);
+    void init().then(() => initProjects());
+  }, [init, initProjects]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -35,6 +41,12 @@ export function App() {
           <div className="grid flex-1 place-items-center text-muted">Loading…</div>
         ) : screen.name === 'accounts' ? (
           <AccountsScreen />
+        ) : screen.name === 'projects' ? (
+          <ProjectsScreen projectId={screen.projectId} />
+        ) : screen.name === 'approvals' ? (
+          <ApprovalsScreen />
+        ) : screen.name === 'usage' ? (
+          <UsageScreen />
         ) : screen.name === 'council' ? (
           <CouncilScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
         ) : (

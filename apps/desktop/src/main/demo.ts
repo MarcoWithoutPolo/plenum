@@ -1,4 +1,56 @@
+import { existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { FakeAdapter, type Adapter, type RunRequest } from '@conclave/core';
+
+/** Demo project work: a two-task plan, builders that write real files, reviewers that approve. */
+const DEMO_TASKS = [
+  {
+    title: 'Add a greet() helper',
+    spec: 'Create greet.js exporting greet(name) that returns "Hello, <name>!".',
+    file: 'greet.js',
+    body: ['module.exports = (name) => `Hello, ${name}!`;', ''].join('\n'),
+  },
+  {
+    title: 'Document greet() in the README',
+    spec: 'Add a Usage section showing greet("Ada").',
+    file: 'USAGE.md',
+    body: [
+      '# Usage',
+      '',
+      '```js',
+      'const greet = require("./greet");',
+      'greet("Ada"); // Hello, Ada!',
+      '```',
+      '',
+    ].join('\n'),
+  },
+];
+
+function projectReply(req: RunRequest): string | undefined {
+  if (req.role === 'planner') {
+    const todo = DEMO_TASKS.filter((t) => !existsSync(join(req.cwd, t.file)));
+    return todo.length
+      ? JSON.stringify({ done: false, tasks: todo.map(({ title, spec }) => ({ title, spec })) })
+      : JSON.stringify({ done: true, reason: 'greet.js and its usage notes are in place.' });
+  }
+  if (req.role === 'reviewer') {
+    return JSON.stringify({
+      approve: true,
+      issues: [],
+      summary: 'Small, focused and matches the task.',
+    });
+  }
+  if (req.role === 'builder') return 'Made the change and checked it locally.';
+  return undefined;
+}
+
+async function projectAct(req: RunRequest): Promise<void> {
+  if (req.role !== 'builder') return;
+  // CONCLAVE_DEMO_SLOW keeps builders busy long enough to see a project mid-run.
+  if (process.env.CONCLAVE_DEMO_SLOW) await new Promise((r) => setTimeout(r, 2500));
+  const task = DEMO_TASKS.find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`));
+  if (task) writeFileSync(join(req.cwd, task.file), task.body);
+}
 
 /**
  * Demo providers for CONCLAVE_DEMO=1: the whole app works offline, costs
@@ -6,6 +58,8 @@ import { FakeAdapter, type Adapter, type RunRequest } from '@conclave/core';
  */
 export function demoAdapters(): Adapter[] {
   const answer = (name: string) => (req: RunRequest) => {
+    const work = projectReply(req);
+    if (work) return work;
     if (req.prompt.includes('You are the synthesizer')) {
       return [
         'Store settings as a JSON file in the app data folder [Claude, Codex].',
@@ -26,7 +80,7 @@ export function demoAdapters(): Adapter[] {
   const levels = ['low', 'medium', 'high', 'xhigh', 'max'];
   return [
     new FakeAdapter(
-      { reply: answer('Claude'), delayMs: 25 },
+      { reply: answer('Claude'), delayMs: 25, act: projectAct },
       {
         id: 'claude',
         displayName: 'Claude Code',
@@ -43,7 +97,11 @@ export function demoAdapters(): Adapter[] {
       },
     ),
     new FakeAdapter(
-      { reply: answer('Codex'), delayMs: 40 },
+      {
+        reply: answer('Codex'),
+        delayMs: 40,
+        act: projectAct,
+      },
       {
         id: 'codex',
         displayName: 'OpenAI Codex',

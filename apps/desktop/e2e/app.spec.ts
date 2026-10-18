@@ -44,13 +44,16 @@ test('runs with a locked-down renderer', async () => {
   expect(exposed.process).toBe('undefined');
   expect(exposed.bridge).toEqual([
     'accounts',
+    'approvals',
     'chat',
     'council',
     'onInstallLog',
     'openExternal',
     'platform',
+    'projects',
     'runs',
     'threads',
+    'usage',
   ]);
 });
 

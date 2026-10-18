@@ -25,6 +25,8 @@ export async function git(cwd: string, args: string[], allowFail = false): Promi
 
 const out = async (cwd: string, args: string[]) => (await git(cwd, args)).stdout.trim();
 
+const normalize = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
 export async function isRepo(path: string): Promise<boolean> {
   const r = await git(path, ['rev-parse', '--is-inside-work-tree'], true);
   return r.code === 0 && r.stdout.trim() === 'true';
@@ -158,6 +160,19 @@ export class Workspace {
       return { ok: false, conflict: (merge.stdout + merge.stderr).trim().slice(-2000) };
     }
     return { ok: true, commit: await headCommit(path) };
+  }
+
+  /** Remove every worktree this project made. Branches stay, so no work is lost. */
+  async dispose(): Promise<void> {
+    const listed = (await git(this.repo, ['worktree', 'list', '--porcelain'], true)).stdout;
+    const mine = listed
+      .split('\n')
+      .filter((l) => l.startsWith('worktree '))
+      .map((l) => l.slice('worktree '.length).trim())
+      .filter((p) => normalize(p).startsWith(normalize(this.root)));
+    for (const path of mine) await git(this.repo, ['worktree', 'remove', '--force', path], true);
+    rmSync(this.root, { recursive: true, force: true });
+    await git(this.repo, ['worktree', 'prune'], true);
   }
 
   /** Tracked files on the integration branch, for the planner. */

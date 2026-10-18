@@ -24,6 +24,8 @@ export interface BrainOptions {
   home: string;
   governor?: Governor;
   maxTasksPerPlan?: number;
+  /** Pause after this many tasks in a row fail with nothing merged in between. */
+  maxFailureStreak?: number;
   agentTimeoutMs?: number;
   testTimeoutMs?: number;
   onEvent?: (event: BrainEvent) => void;
@@ -157,6 +159,15 @@ export class Brain {
       }
       last = await this.round();
       if (last.kind === 'done' || last.kind === 'stopped' || last.kind === 'idle') return last;
+      if (last.kind === 'failed') {
+        const streak = this.failureStreak();
+        if (streak >= (this.opts.maxFailureStreak ?? 3)) {
+          const reason = `${streak} tasks in a row failed with nothing merged. Paused so it doesn't use up your plan; check the activity, adjust the goal or tests, then resume.`;
+          this.projects.setStatus(this.projectId, 'paused', reason);
+          this.log('stop', reason);
+          return { kind: 'idle', reason };
+        }
+      }
       if (last.kind === 'waiting') {
         const ms = last.until
           ? Math.min(maxSleep, Math.max(30_000, last.until - Date.now()))
@@ -186,6 +197,20 @@ export class Brain {
     }
     const reason = this.project().statusReason ?? 'Stopped';
     return { kind: 'stopped', reason };
+  }
+
+  /** Tasks that failed since the last merge, newest first. */
+  private failureStreak(): number {
+    const finished = this.projects
+      .listTasks(this.projectId)
+      .filter((t) => t.status === 'merged' || t.status === 'failed')
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    let n = 0;
+    for (const t of finished) {
+      if (t.status !== 'failed') break;
+      n++;
+    }
+    return n;
   }
 
   /* ── Planning ──────────────────────────────────────────────────────── */
@@ -238,7 +263,27 @@ export class Brain {
       this.log('plan', 'The planner found nothing left to do');
       return { kind: 'idle', reason: 'The planner found nothing left to do' };
     }
-    const added = this.projects.addTasks(this.projectId, plan.tasks);
+    // Never take on the same failed work again: that's how an unattended run burns a plan.
+    const failedTitles = new Set(
+      tasks.filter((t) => t.status === 'failed').map((t) => normalizeTitle(t.title)),
+    );
+    const fresh = plan.tasks.filter((t) => !failedTitles.has(normalizeTitle(t.title)));
+    const repeats = plan.tasks.length - fresh.length;
+    if (fresh.length === 0) {
+      const reason =
+        'The planner only proposed tasks that already failed. Adjust the goal or tests, then resume.';
+      this.projects.setStatus(this.projectId, 'paused', reason);
+      this.log('stop', reason, {
+        provider: pick.seat.provider,
+        data: { tasks: plan.tasks.map((t) => t.title) },
+      });
+      return { kind: 'idle', reason };
+    }
+    if (repeats)
+      this.log('plan', `Skipped ${repeats} task(s) that already failed`, {
+        provider: pick.seat.provider,
+      });
+    const added = this.projects.addTasks(this.projectId, fresh);
     this.log('plan', `Planned ${added.length} task(s)`, {
       provider: pick.seat.provider,
       data: { tasks: added.map((t) => t.title) },
@@ -524,6 +569,13 @@ export class Brain {
     this.governor.observe(seat.provider, result);
     return result;
   }
+}
+
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function failure(result: RunResult): string {

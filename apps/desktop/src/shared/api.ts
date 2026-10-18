@@ -1,6 +1,11 @@
-import type { ModelOption } from '@conclave/core';
+import type { AgentRun, DailyActivity, ModelOption, ProviderTotals } from '@conclave/core';
 import type {
   AgentEvent,
+  Approval,
+  BrainEvent,
+  Project,
+  Routing,
+  Task,
   Message,
   ProviderId,
   ProviderStatus,
@@ -63,6 +68,65 @@ export type RunUpdate =
     }
   | { requestId: string; kind: 'synthesis'; seat: Seat; event: AgentEvent };
 
+export interface ProjectCounts {
+  queued: number;
+  active: number;
+  merged: number;
+  failed: number;
+  total: number;
+}
+
+export interface ProjectSummary {
+  project: Project;
+  /** A brain is working on it right now (in this app or a terminal). */
+  running: boolean;
+  counts: ProjectCounts;
+  pendingApprovals: number;
+  lastEvent: BrainEvent | null;
+}
+
+export interface ProjectDetail {
+  project: Project;
+  running: boolean;
+  tasks: Task[];
+  events: BrainEvent[];
+  approvals: Approval[];
+}
+
+export interface RepoInfo {
+  path: string;
+  ok: boolean;
+  error?: string;
+  root?: string;
+  name?: string;
+  branch?: string;
+  /** A test command guessed from the repo (package.json, Cargo.toml, ...). */
+  suggestedTest?: string;
+}
+
+export interface NewProjectInput {
+  repoPath: string;
+  goal: string;
+  name?: string;
+  doneWhen?: string;
+  testCommand?: string;
+  routing?: Partial<Routing>;
+  maxAttempts?: number;
+}
+
+export interface ApprovalItem {
+  approval: Approval;
+  project: Project;
+}
+
+export interface UsageReport {
+  day: ProviderTotals[];
+  week: ProviderTotals[];
+  daily: DailyActivity[];
+  recent: AgentRun[];
+  quotas: QuotaInfo[];
+}
+
 export interface InstallLog {
   provider: ProviderId;
   text: string;
@@ -106,6 +170,27 @@ export interface ConclaveApi {
     cancel(requestId: string): Promise<void>;
     onUpdate(listener: (update: RunUpdate) => void): () => void;
   };
+  projects: {
+    list(): Promise<ProjectSummary[]>;
+    get(id: string): Promise<ProjectDetail | null>;
+    /** Native folder picker; resolves to null when cancelled. */
+    pickRepo(): Promise<string | null>;
+    inspectRepo(path: string): Promise<RepoInfo>;
+    create(input: NewProjectInput): Promise<Project>;
+    start(id: string): Promise<void>;
+    stop(id: string): Promise<void>;
+    remove(id: string): Promise<void>;
+    taskChanges(taskId: string): Promise<string>;
+    /** Every brain event, as it happens, for every project. */
+    onEvent(listener: (event: BrainEvent) => void): () => void;
+  };
+  approvals: {
+    list(): Promise<ApprovalItem[]>;
+    decide(id: string, decision: 'approved' | 'rejected'): Promise<{ ok: boolean; error?: string }>;
+  };
+  usage: {
+    report(): Promise<UsageReport>;
+  };
   onInstallLog(listener: (log: InstallLog) => void): () => void;
   openExternal(url: string): Promise<void>;
   platform: NodeJS.Platform;
@@ -127,4 +212,17 @@ export const IPC = {
   runUpdate: 'runs:update',
   installLog: 'accounts:install-log',
   openExternal: 'app:open-external',
+  projectsList: 'projects:list',
+  projectsGet: 'projects:get',
+  projectsPickRepo: 'projects:pick-repo',
+  projectsInspectRepo: 'projects:inspect-repo',
+  projectsCreate: 'projects:create',
+  projectsStart: 'projects:start',
+  projectsStop: 'projects:stop',
+  projectsRemove: 'projects:remove',
+  projectsTaskChanges: 'projects:task-changes',
+  projectsEvent: 'projects:event',
+  approvalsList: 'approvals:list',
+  approvalsDecide: 'approvals:decide',
+  usageReport: 'usage:report',
 } as const;

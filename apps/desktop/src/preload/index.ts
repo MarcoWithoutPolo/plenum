@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import type { BrainEvent } from '@conclave/shared';
 import { IPC, type ConclaveApi, type InstallLog, type RunUpdate } from '../shared/api.js';
 
 const invoke = <T>(channel: string, ...args: unknown[]) =>
@@ -33,6 +34,25 @@ const api: ConclaveApi = {
   runs: {
     cancel: (requestId) => invoke(IPC.runsCancel, requestId),
     onUpdate: (listener) => listen<RunUpdate>(IPC.runUpdate, listener),
+  },
+  projects: {
+    list: () => invoke(IPC.projectsList),
+    get: (id) => invoke(IPC.projectsGet, id),
+    pickRepo: () => invoke(IPC.projectsPickRepo),
+    inspectRepo: (path) => invoke(IPC.projectsInspectRepo, path),
+    create: (input) => invoke(IPC.projectsCreate, input),
+    start: (id) => invoke(IPC.projectsStart, id),
+    stop: (id) => invoke(IPC.projectsStop, id),
+    remove: (id) => invoke(IPC.projectsRemove, id),
+    taskChanges: (taskId) => invoke(IPC.projectsTaskChanges, taskId),
+    onEvent: (listener) => listen<BrainEvent>(IPC.projectsEvent, listener),
+  },
+  approvals: {
+    list: () => invoke(IPC.approvalsList),
+    decide: (id, decision) => invoke(IPC.approvalsDecide, id, decision),
+  },
+  usage: {
+    report: () => invoke(IPC.usageReport),
   },
   onInstallLog: (listener) => listen<InstallLog>(IPC.installLog, listener),
   openExternal: (url) => invoke(IPC.openExternal, url),
