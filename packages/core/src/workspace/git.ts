@@ -171,3 +171,73 @@ export class Workspace {
     return out(this.integrationPath, ['log', '--oneline', `-${limit}`]);
   }
 }
+
+export type BaseMerge = { ok: true; commit: string } | { ok: false; error: string };
+
+/**
+ * Take a project's integration branch into the user's base branch: the one
+ * step that changes the user's own branch, run only after they approve it.
+ * Refuses rather than risk their work: uncommitted changes or a conflict
+ * leave everything exactly as it was.
+ */
+export async function mergeIntoBase(
+  repo: string,
+  base: string,
+  branch: string,
+  message: string,
+  scratch: string,
+): Promise<BaseMerge> {
+  const checkedOut = (await currentBranch(repo)) === base;
+  let where = repo;
+  if (checkedOut) {
+    const dirty = await out(repo, ['status', '--porcelain', '--untracked-files=no']);
+    if (dirty) {
+      return {
+        ok: false,
+        error: `${base} has uncommitted changes in ${repo}. Commit or stash them, then approve again.`,
+      };
+    }
+  } else {
+    // The base branch isn't checked out here: merge in a temporary worktree.
+    rmSync(scratch, { recursive: true, force: true });
+    await git(repo, ['worktree', 'prune'], true);
+    const add = await git(repo, ['worktree', 'add', scratch, base], true);
+    if (add.code !== 0) {
+      return {
+        ok: false,
+        error: `Couldn't check out ${base}: ${(add.stderr || add.stdout).trim().split('\n').at(-1)}`,
+      };
+    }
+    where = scratch;
+  }
+  try {
+    const merge = await git(
+      where,
+      [...(await identity(where)), 'merge', '--no-ff', '-q', '-m', message, branch],
+      true,
+    );
+    if (merge.code !== 0) {
+      await git(where, ['merge', '--abort'], true);
+      return {
+        ok: false,
+        error: `Merging into ${base} conflicts with changes made there since. Resolve it with: git merge ${branch}`,
+      };
+    }
+    return { ok: true, commit: await headCommit(where) };
+  } finally {
+    if (!checkedOut) {
+      await git(repo, ['worktree', 'remove', '--force', scratch], true);
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
+}
+
+/** What a merge commit brought in (its diff against the first parent). */
+export async function mergeCommitDiff(
+  repo: string,
+  commit: string,
+  maxChars = 200_000,
+): Promise<string> {
+  const diff = (await git(repo, ['diff', '--no-color', `${commit}^1`, commit])).stdout;
+  return diff.slice(0, maxChars);
+}

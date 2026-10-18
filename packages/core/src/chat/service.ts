@@ -1,8 +1,9 @@
 import { homedir } from 'node:os';
-import type { AgentEvent, Message, ProviderId, Seat, Thread } from '@conclave/shared';
+import type { AgentEvent, Message, ProviderId, Role, Seat, Thread } from '@conclave/shared';
 import type { Adapter } from '../adapters/types.js';
 import { collect, type RunResult } from '../collect.js';
 import type { Store } from '../store/store.js';
+import type { RunSource } from '../store/usage.js';
 import { buildChatPrompt } from './transcript.js';
 
 export interface EngineContext {
@@ -90,7 +91,7 @@ export class ChatService {
       result = await run(false);
     }
 
-    recordQuotas(store, seat.provider, result);
+    recordUsage(store, { seat, role: 'chat', source: 'chat', refId: thread.id }, result);
     const reply = store.addMessage(thread.id, {
       role: 'assistant',
       provider: seat.provider,
@@ -129,6 +130,16 @@ function resolveSeat(thread: Thread, opts: SendOptions): Seat {
   const model = opts.model === undefined ? thread.model : opts.model;
   const effort = opts.effort === undefined ? thread.effort : opts.effort;
   return { provider: thread.provider, ...(model && { model }), ...(effort && { effort }) };
+}
+
+/** After every agent run: plan usage readings for the governor, and a usage-history row. */
+export function recordUsage(
+  store: Store,
+  run: { seat: Seat; role: Role; source: RunSource; refId?: string | null; taskId?: string | null },
+  result: RunResult,
+): void {
+  recordQuotas(store, run.seat.provider, result);
+  store.usage.record({ ...run, result });
 }
 
 export function recordQuotas(store: Store, provider: ProviderId, result: RunResult): void {

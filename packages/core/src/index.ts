@@ -11,6 +11,7 @@ export * from './process.js';
 export * from './store/db.js';
 export * from './store/store.js';
 export * from './store/projects.js';
+export * from './store/usage.js';
 export * from './chat/transcript.js';
 export * from './chat/service.js';
 export * from './council/council.js';
@@ -21,5 +22,7 @@ export * from './brain/json.js';
 export * from './brain/prompts.js';
 export * from './brain/brain.js';
 export * from './brain/projects.js';
+export * from './brain/lock.js';
+export * from './brain/manager.js';
 
 export const VERSION = '0.0.0';

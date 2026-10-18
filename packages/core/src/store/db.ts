@@ -131,6 +131,27 @@ const MIGRATIONS = [
   CREATE INDEX brain_events_project ON brain_events(project_id, id);
   CREATE INDEX approvals_project ON approvals(project_id, status);
   `,
+  `
+  CREATE TABLE agent_runs (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider       TEXT NOT NULL,
+    model          TEXT,
+    effort         TEXT,
+    role           TEXT NOT NULL,
+    source         TEXT NOT NULL CHECK (source IN ('chat', 'council', 'project')),
+    ref_id         TEXT,
+    task_id        TEXT,
+    ok             INTEGER NOT NULL,
+    rate_limited   INTEGER NOT NULL DEFAULT 0,
+    input_tokens   INTEGER NOT NULL DEFAULT 0,
+    cached_tokens  INTEGER NOT NULL DEFAULT 0,
+    output_tokens  INTEGER NOT NULL DEFAULT 0,
+    cost_usd       REAL,
+    duration_ms    INTEGER NOT NULL DEFAULT 0,
+    at             INTEGER NOT NULL
+  );
+  CREATE INDEX agent_runs_at ON agent_runs(at);
+  `,
 ];
 
 /** Current schema version (number of migrations). */

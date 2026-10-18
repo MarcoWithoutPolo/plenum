@@ -10,12 +10,13 @@ import type {
   Task,
 } from '@conclave/shared';
 import { collect, type RunResult } from '../collect.js';
-import { recordQuotas, type EngineContext } from '../chat/service.js';
+import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
 import { Governor } from '../governor/governor.js';
 import { runShell } from '../process.js';
 import { Workspace } from '../workspace/git.js';
 import { parsePlan, parseReview } from './json.js';
+import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
 
 export interface BrainOptions {
@@ -59,6 +60,8 @@ export class Brain {
   private readonly agentTimeout: number;
   private readonly testTimeout: number;
   private started = false;
+  /** Set while run() is going; aborting it interrupts the agent or test in flight. */
+  private signal: AbortSignal | undefined;
 
   constructor(
     private readonly ctx: EngineContext,
@@ -133,13 +136,24 @@ export class Brain {
 
   /** Keep doing rounds until the goal is met, the project is stopped, or `maxRounds` runs out. */
   async run(options: RunOptions = {}): Promise<RoundOutcome> {
+    const lock = acquireLock(join(this.workspace.root, 'run.lock'));
+    this.signal = options.signal;
+    try {
+      return await this.loop(options);
+    } finally {
+      this.signal = undefined;
+      lock.release();
+    }
+  }
+
+  private async loop(options: RunOptions): Promise<RoundOutcome> {
     const sleep = options.sleep ?? interruptibleSleep;
     const maxSleep = options.maxSleepMs ?? 30 * 60_000;
     let last: RoundOutcome = { kind: 'idle', reason: 'No rounds run' };
     for (let i = 0; i < (options.maxRounds ?? Infinity); i++) {
       if (options.signal?.aborted) {
-        this.stop('Stopped by you');
-        return { kind: 'stopped', reason: 'Stopped by you' };
+        if (this.project().status !== 'stopped') this.stop('Stopped by you');
+        return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
       }
       last = await this.round();
       if (last.kind === 'done' || last.kind === 'stopped' || last.kind === 'idle') return last;
@@ -158,6 +172,20 @@ export class Brain {
   stop(reason = 'Stopped'): void {
     this.projects.setStatus(this.projectId, 'stopped', reason);
     this.log('stop', reason);
+  }
+
+  private get interrupted(): boolean {
+    return this.signal?.aborted === true;
+  }
+
+  /** Stopped mid-step: the task goes back to the queue untouched, as if the step never ran. */
+  private async halt(task?: Task): Promise<RoundOutcome> {
+    if (task) {
+      this.projects.updateTask(task.id, { status: 'queued' });
+      await this.workspace.removeTaskTree(task.id);
+    }
+    const reason = this.project().statusReason ?? 'Stopped';
+    return { kind: 'stopped', reason };
   }
 
   /* ── Planning ──────────────────────────────────────────────────────── */
@@ -185,6 +213,7 @@ export class Brain {
       this.workspace.integrationPath,
       true,
     );
+    if (this.interrupted) return this.halt();
     if (result.rateLimited)
       return this.waiting('planner', this.governor.pick(project.routing.planner));
     if (!result.ok) {
@@ -265,6 +294,7 @@ export class Brain {
       false,
       task,
     );
+    if (this.interrupted) return this.halt(task);
     if (built.rateLimited) {
       // Not the task's fault: back to the queue for whoever has headroom.
       this.projects.updateTask(task.id, { status: 'queued' });
@@ -294,7 +324,12 @@ export class Brain {
     let tests = '(no test command; review only)';
     if (project.testCommand) {
       this.projects.updateTask(task.id, { status: 'verifying' });
-      const run = await runShell(project.testCommand, { cwd, timeoutMs: this.testTimeout });
+      const run = await runShell(project.testCommand, {
+        cwd,
+        timeoutMs: this.testTimeout,
+        ...(this.signal && { signal: this.signal }),
+      });
+      if (this.interrupted) return this.halt(task);
       const tail = run.output.trim().slice(-4000);
       if (run.code !== 0) {
         this.log('verify', run.timedOut ? 'Tests timed out' : `Tests failed (exit ${run.code})`, {
@@ -342,6 +377,7 @@ export class Brain {
       true,
       task,
     );
+    if (this.interrupted) return this.halt(task);
     if (result.rateLimited || !result.ok) {
       this.projects.updateTask(task.id, { status: 'queued' });
       await this.workspace.removeTaskTree(task.id);
@@ -451,6 +487,7 @@ export class Brain {
         role,
         readOnly,
         timeoutMs: this.agentTimeout,
+        ...(this.signal && { signal: this.signal }),
         ...(seat.model && { model: seat.model }),
         ...(seat.effort && { effort: seat.effort }),
       }),
@@ -479,7 +516,11 @@ export class Brain {
         }
       },
     );
-    recordQuotas(this.ctx.store, seat.provider, result);
+    recordUsage(
+      this.ctx.store,
+      { seat, role, source: 'project', refId: this.projectId, taskId: task?.id ?? null },
+      result,
+    );
     this.governor.observe(seat.provider, result);
     return result;
   }

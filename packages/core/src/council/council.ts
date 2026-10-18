@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import type { AgentEvent, Message, Seat, Thread } from '@conclave/shared';
 import { newId } from '../store/store.js';
 import { collect, type RunResult } from '../collect.js';
-import { recordQuotas, titleFrom, type EngineContext } from '../chat/service.js';
+import { recordUsage, titleFrom, type EngineContext } from '../chat/service.js';
 import { renderTranscript, seatLabels } from '../chat/transcript.js';
 
 export interface CouncilOptions {
@@ -85,7 +85,7 @@ export class Council {
 
     const answers: CouncilAnswer[] = opts.members.map((seat, i) => {
       const result = results[i]!;
-      recordQuotas(store, seat.provider, result);
+      recordUsage(store, { seat, role: 'chat', source: 'council', refId: thread.id }, result);
       const message = store.addMessage(thread.id, {
         role: 'assistant',
         kind: 'council_answer',
@@ -136,7 +136,11 @@ export class Council {
         opts,
         (event) => opts.onEvent?.({ phase: 'synthesis', label, seat: synthesizer, event }),
       );
-      recordQuotas(store, synthesizer.provider, result);
+      recordUsage(
+        store,
+        { seat: synthesizer, role: 'synthesizer', source: 'council', refId: thread.id },
+        result,
+      );
       merged = store.addMessage(thread.id, {
         role: 'assistant',
         kind: 'council_merged',
