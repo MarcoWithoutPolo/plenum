@@ -6,6 +6,7 @@ import { ProjectStore } from './projects.js';
 import { DecisionStore } from './decisions.js';
 import { UsageStore } from './usage.js';
 import { SettingsStore } from './settings.js';
+import { SteeringStore } from './steering.js';
 
 export { newId };
 
@@ -39,6 +40,7 @@ export class Store {
   readonly usage: UsageStore;
   readonly decisions: DecisionStore;
   readonly settings: SettingsStore;
+  readonly steering: SteeringStore;
 
   constructor(db: DatabaseSync | string = openDatabase()) {
     this.db = typeof db === 'string' ? openDatabase(db) : db;
@@ -46,6 +48,7 @@ export class Store {
     this.usage = new UsageStore(this.db);
     this.decisions = new DecisionStore(this.db);
     this.settings = new SettingsStore(this.db);
+    this.steering = new SteeringStore(this.db);
   }
 
   close(): void {

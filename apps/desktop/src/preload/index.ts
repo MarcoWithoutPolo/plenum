@@ -50,6 +50,13 @@ const api: ConclaveApi = {
     startDraft: (id, input) => invoke(IPC.projectsStartDraft, id, input),
     retry: (taskId, opts) => invoke(IPC.projectsRetry, taskId, opts),
     skip: (taskId) => invoke(IPC.projectsSkip, taskId),
+    moveTask: (taskId, direction) => invoke(IPC.projectsMoveTask, taskId, direction),
+    editTask: (taskId, patch) => invoke(IPC.projectsEditTask, taskId, patch),
+    addTask: (projectId, input) => invoke(IPC.projectsAddTask, projectId, input),
+    steering: (projectId) => invoke(IPC.projectsSteering, projectId),
+    steer: (projectId, text) => invoke(IPC.projectsSteer, projectId, text),
+    applySteering: (messageId, indexes) => invoke(IPC.projectsApplySteering, messageId, indexes),
+    dismissSteering: (messageId) => invoke(IPC.projectsDismissSteering, messageId),
     retryFailed: (projectId, filter, opts) =>
       invoke(IPC.projectsRetryFailed, projectId, filter, opts),
     permissionGaps: (permissions) => invoke(IPC.projectsPermissionGaps, permissions),

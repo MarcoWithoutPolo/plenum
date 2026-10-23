@@ -6,6 +6,7 @@ import type {
   FailureKind,
   Project,
   ProviderId,
+  SteeringMessage,
   Task,
 } from '@conclave/shared';
 import type { EngineContext } from '../chat/service.js';
@@ -17,6 +18,7 @@ import { GitHub } from '../github/gh.js';
 import { openPullRequest, publishRepo } from '../github/flows.js';
 import { lockHolder } from './lock.js';
 import { retryFailed, retryTask, skipTask, type RetryOptions } from './recovery.js';
+import { addTask, applySteering, dismissSteering, editTask, moveTask, steer } from './steering.js';
 
 export function projectRoot(home: string, projectId: string): string {
   return join(home, 'projects', projectId);
@@ -257,6 +259,44 @@ export class BrainManager {
 
   skip(taskId: string): Task {
     return this.notify(() => skipTask(this.ctx.store.projects, taskId));
+  }
+
+  /* ── Steering (C5) ─────────────────────────────────────────────────── */
+
+  moveTask(taskId: string, direction: 'up' | 'down'): Task {
+    return this.notify(() => moveTask(this.ctx.store.projects, taskId, direction));
+  }
+
+  editTask(taskId: string, patch: { title?: string; spec?: string }): Task {
+    return this.notify(() => editTask(this.ctx.store.projects, taskId, patch));
+  }
+
+  addTask(projectId: string, input: { title: string; spec: string; after?: string[] }): Task {
+    const task = this.notify(() => addTask(this.ctx.store.projects, projectId, input));
+    this.reopen(projectId);
+    return task;
+  }
+
+  steering(projectId: string): SteeringMessage[] {
+    return this.ctx.store.steering.list(projectId);
+  }
+
+  /** You write to the project; its planner replies with a proposal (nothing changes yet). */
+  async steer(projectId: string, text: string) {
+    const project = this.ctx.store.projects.get(projectId);
+    if (!project) throw new Error('No such project.');
+    const cwd = projectWorkspace(this.home, project).integrationPath;
+    return steer(this.ctx, project, cwd, text);
+  }
+
+  applySteering(messageId: string, indexes: number[]): SteeringMessage {
+    const message = this.notify(() => applySteering(this.ctx, messageId, indexes));
+    if (message.outcome?.some((o) => o.startsWith('Added '))) this.reopen(message.projectId);
+    return message;
+  }
+
+  dismissSteering(messageId: string): SteeringMessage {
+    return dismissSteering(this.ctx, messageId);
   }
 
   retryFailed(

@@ -18,6 +18,13 @@ import {
   calibration,
   changedLines,
   rankSeats,
+  moveTask,
+  placeTask,
+  editTask,
+  addTask,
+  parseSteering,
+  steer,
+  applySteering,
   quietUntil,
   withPriors,
   routingInsights,
@@ -1732,5 +1739,131 @@ describe('Shared limits', () => {
     store.projects.updateTask(tb!.id, { status: 'building', builtBy: 'codex' });
     expect(store.projects.countBuilding('codex')).toBe(2);
     expect(store.projects.countBuilding('claude')).toBe(0);
+  });
+});
+
+describe('Steering', () => {
+  function board() {
+    const store = new Store(':memory:');
+    const routing = { planner: [{ provider: 'claude' as ProviderId }], builder: [], reviewer: [] };
+    const project = store.projects.create({
+      name: 'p',
+      repoPath: tmpdir(),
+      goal: 'g',
+      baseBranch: 'main',
+      routing,
+    });
+    const tasks = store.projects.addTasks(project.id, [
+      { title: 'One', spec: '1' },
+      { title: 'Two', spec: '2' },
+      { title: 'Three', spec: '3' },
+    ]);
+    const titles = () =>
+      store.projects
+        .listTasks(project.id)
+        .filter((t) => ['queued', 'blocked'].includes(t.status))
+        .map((t) => t.title);
+    return { store, project, tasks, titles };
+  }
+
+  it('moves, places, edits and adds tasks on the board, and logs each', () => {
+    const { store, project, tasks, titles } = board();
+    moveTask(store.projects, tasks[2]!.id, 'up');
+    expect(titles()).toEqual(['One', 'Three', 'Two']);
+    // Three jumped Two, so it no longer waits for it.
+    expect(store.projects.getTask(tasks[2]!.id)!.after).toEqual([]);
+    placeTask(store.projects, tasks[0]!.id, null);
+    expect(titles()).toEqual(['Three', 'Two', 'One']);
+    placeTask(store.projects, tasks[0]!.id, tasks[2]!.id);
+    expect(titles()).toEqual(['One', 'Three', 'Two']);
+    editTask(store.projects, tasks[1]!.id, { title: 'Two, renamed', spec: 'new spec' });
+    expect(store.projects.getTask(tasks[1]!.id)).toMatchObject({
+      title: 'Two, renamed',
+      spec: 'new spec',
+    });
+    const added = addTask(store.projects, project.id, {
+      title: 'Four',
+      spec: '4',
+      after: [tasks[0]!.id, 'k_nope'],
+    });
+    expect(added.after).toEqual([tasks[0]!.id]);
+    expect(titles().at(-1)).toBe('Four');
+    store.projects.updateTask(tasks[0]!.id, { status: 'building' });
+    expect(() => moveTask(store.projects, tasks[0]!.id, 'down')).toThrow(/haven’t started/);
+    expect(editTask(store.projects, tasks[0]!.id, { spec: 'tweak' }).spec).toBe('tweak');
+    const log = store.projects.events(project.id).map((e) => e.message);
+    expect(log).toContain('You moved Three above Two');
+    expect(log).toContain('You edited One (applies from its next attempt)');
+    expect(log).toContain('You added Four');
+  });
+
+  it('keeps only valid actions from the planner', () => {
+    const parsed = parseSteering(
+      '```json\n' +
+        JSON.stringify({
+          reply: 'Done.',
+          actions: [
+            { type: 'add_task', title: 'Bigger buttons', spec: 'Make them 48px' },
+            { type: 'skip_task' },
+            { type: 'explode' },
+            { type: 'pause' },
+          ],
+        }) +
+        '\n```',
+    );
+    expect(parsed.reply).toBe('Done.');
+    expect(parsed.actions).toEqual([
+      { type: 'add_task', title: 'Bigger buttons', spec: 'Make them 48px', after: [] },
+      { type: 'pause' },
+    ]);
+    expect(parseSteering('Just text, no JSON')).toEqual({
+      reply: 'Just text, no JSON',
+      actions: [],
+    });
+  });
+
+  it('asks the planner, then applies only what you tick, saying what happened', async () => {
+    const { store, project, tasks } = board();
+    store.projects.updateTask(tasks[1]!.id, { status: 'building' });
+    const planner = new FakeAdapter(
+      {
+        reply: JSON.stringify({
+          reply: 'I’d drop the combo counter and make the buttons bigger.',
+          actions: [
+            { type: 'skip_task', id: tasks[0]!.id },
+            { type: 'skip_task', id: tasks[1]!.id },
+            { type: 'add_task', title: 'Bigger buttons', spec: '48px buttons', after: [] },
+            { type: 'decision', question: 'Combo counter?', answer: 'Drop it' },
+            { type: 'pause' },
+          ],
+        }),
+      },
+      { id: 'claude' },
+    );
+    const ctx = { store, adapters: adapterMap([planner]), cwd: tmpdir() };
+    const { you, planner: reply } = await steer(
+      ctx,
+      project,
+      tmpdir(),
+      'drop the combo counter, bigger buttons',
+    );
+    expect(you.text).toBe('drop the combo counter, bigger buttons');
+    expect(reply.actions).toHaveLength(5);
+    expect(planner.requests[0]).toMatchObject({ role: 'planner', readOnly: true });
+    expect(planner.requests[0]!.prompt).toContain(`- ${tasks[1]!.id} [building] Two`);
+
+    const applied = applySteering(ctx, reply.id, [0, 1, 2, 3]);
+    expect(applied.applied).toEqual([0, 1, 2, 3]);
+    expect(applied.outcome).toEqual([
+      'Skipped One',
+      'Not done: Only failed, queued or waiting tasks can be skipped (this one is building).',
+      'Added Bigger buttons',
+      'Decision: Drop it',
+    ]);
+    expect(store.decisions.list(project.id).map((d) => d.answer)).toEqual(['Drop it']);
+    // Not ticked: still running.
+    expect(store.projects.get(project.id)!.status).not.toBe('paused');
+    expect(() => applySteering(ctx, reply.id, [4])).toThrow(/already applied/);
+    expect(store.steering.list(project.id).map((m) => m.role)).toEqual(['you', 'planner']);
   });
 });

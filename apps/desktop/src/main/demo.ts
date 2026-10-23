@@ -95,6 +95,21 @@ function projectReply(req: RunRequest): string | undefined {
         : DEMO_QUESTION,
     );
   }
+  if (req.role === 'planner' && req.prompt.includes('THE USER SAYS')) {
+    // Steering from the Chat tab: one task to add and one decision to record.
+    return JSON.stringify({
+      reply: 'Sure. I’d add a farewell() helper next to greet(), and keep the docs short.',
+      actions: [
+        {
+          type: 'add_task',
+          title: 'Add a farewell() helper',
+          spec: 'Create farewell.js exporting farewell(name) that returns "Bye, <name>!".',
+          after: [],
+        },
+        { type: 'decision', question: 'How long should the docs be?', answer: 'Short and plain' },
+      ],
+    });
+  }
   if (req.role === 'planner') {
     const todo = DEMO_TASKS.filter((t) => !existsSync(join(req.cwd, t.file)));
     // CONCLAVE_DEMO_LANES=1: the tasks are independent and touch different files, so they run at once.

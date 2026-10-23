@@ -149,7 +149,7 @@ test('runs on its own and asks before merging', async () => {
 test('shows what a task changed', async () => {
   await page
     .getByRole('region', { name: 'Tasks' })
-    .getByRole('button', { name: /Add a greet\(\) helper/ })
+    .getByRole('button', { name: /^Add a greet\(\) helper/ })
     .click();
   const drawer = page.getByRole('dialog', { name: 'Add a greet() helper' });
   await expect(drawer).toContainText('Built by Codex');
@@ -177,6 +177,44 @@ test('keeps every answer as a decision, and a changed one can queue a task', asy
     'Apply: Where should the usage notes live?',
   );
   await page.getByRole('tab', { name: 'Activity' }).click();
+});
+
+test('steers from the board and the chat, changing nothing until you apply', async () => {
+  const board = page.getByRole('region', { name: 'Tasks' });
+  // Board: add a task by hand, then edit it.
+  await board.getByRole('button', { name: 'Add a task' }).click();
+  const add = page.getByRole('dialog', { name: 'Add a task' });
+  await add.getByRole('textbox', { name: 'Title' }).fill('Add a wave() helper');
+  await add.getByRole('button', { name: 'Add task' }).click();
+  await expect(board).toContainText('Add a wave() helper');
+  await board.getByRole('button', { name: 'Actions for Add a wave() helper' }).click();
+  await page.getByRole('button', { name: 'Edit…' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit task' });
+  await edit.getByRole('textbox', { name: 'Title' }).fill('Add a wave() helper with an emoji');
+  await edit.getByRole('button', { name: 'Save' }).click();
+  await expect(board).toContainText('Add a wave() helper with an emoji');
+
+  // Chat: the planner proposes; only what you tick is applied.
+  await page.getByRole('tab', { name: 'Chat' }).click();
+  await page
+    .getByRole('textbox', { name: 'Message to the project' })
+    .fill('add a goodbye helper, keep docs short');
+  await page.getByRole('button', { name: 'Send' }).click();
+  const proposal = page.getByRole('group', { name: 'Proposed changes' });
+  await expect(proposal).toContainText('Add “Add a farewell() helper”');
+  await expect(board).not.toContainText('Add a farewell() helper');
+  await proposal.getByRole('checkbox', { name: /Decision/ }).uncheck();
+  await proposal.getByRole('button', { name: 'Apply 1 change' }).click();
+  await expect(page.getByRole('region', { name: 'Chat' })).toContainText(
+    'Added Add a farewell() helper',
+  );
+  await expect(board).toContainText('Add a farewell() helper');
+  await page.getByRole('tab', { name: 'Activity' }).click();
+  // Leave the board as the next tests expect it: skip the two tasks added here.
+  for (const title of ['Add a wave() helper with an emoji', 'Add a farewell() helper']) {
+    await board.getByRole('button', { name: `Actions for ${title}` }).click();
+    await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  }
 });
 
 test('approving merges the work into the base branch', async () => {

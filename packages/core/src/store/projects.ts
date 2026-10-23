@@ -83,6 +83,8 @@ export type TaskPatch = Partial<
     | 'grants'
     | 'actualLines'
     | 'after'
+    | 'title'
+    | 'priority'
   >
 >;
 
@@ -313,12 +315,14 @@ export class ProjectStore {
     const next = { ...current, ...patch, updatedAt: Date.now() };
     this.db
       .prepare(
-        `UPDATE tasks SET status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
+        `UPDATE tasks SET title = ?, priority = ?, status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
            merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
            replaced_by = ?, blocked_by = ?, grants = ?, actual_lines = ?, after = ?,
            updated_at = ? WHERE id = ?`,
       )
       .run(
+        next.title,
+        next.priority,
         next.status,
         next.attempts,
         next.feedback,

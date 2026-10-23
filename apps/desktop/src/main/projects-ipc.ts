@@ -283,6 +283,44 @@ export function registerProjectIpc(
     manager.retry(id(taskId), retryOptions(opts)),
   );
   handle(IPC.projectsSkip, (taskId: string) => manager.skip(id(taskId)));
+  handle(IPC.projectsMoveTask, (taskId: string, direction: unknown) =>
+    manager.moveTask(id(taskId), direction === 'up' ? 'up' : 'down'),
+  );
+  handle(IPC.projectsEditTask, (taskId: string, patch: { title?: unknown; spec?: unknown }) =>
+    manager.editTask(id(taskId), {
+      ...(typeof patch?.title === 'string' && { title: text(patch.title, 200) }),
+      ...(typeof patch?.spec === 'string' && { spec: text(patch.spec) }),
+    }),
+  );
+  handle(
+    IPC.projectsAddTask,
+    (projectId: string, input: { title?: unknown; spec?: unknown; after?: unknown }) => {
+      const title = typeof input?.title === 'string' ? text(input.title, 200) : '';
+      if (!title) throw new Error('A task needs a title.');
+      return manager.addTask(mustGet(projectId).id, {
+        title,
+        spec: typeof input.spec === 'string' ? text(input.spec) : title,
+        after: Array.isArray(input.after)
+          ? input.after.filter((a): a is string => typeof a === 'string')
+          : [],
+      });
+    },
+  );
+  handle(IPC.projectsSteering, (projectId: string) => manager.steering(mustGet(projectId).id));
+  handle(IPC.projectsSteer, (projectId: string, message: unknown) => {
+    const body = typeof message === 'string' ? text(message, 4000) : '';
+    if (!body) throw new Error('Write a message first.');
+    return manager.steer(mustGet(projectId).id, body);
+  });
+  handle(IPC.projectsApplySteering, (messageId: string, indexes: unknown) =>
+    manager.applySteering(
+      id(messageId),
+      Array.isArray(indexes) ? indexes.filter((i): i is number => Number.isInteger(i)) : [],
+    ),
+  );
+  handle(IPC.projectsDismissSteering, (messageId: string) =>
+    manager.dismissSteering(id(messageId)),
+  );
   handle(
     IPC.projectsRetryFailed,
     (projectId: string, filter: { provider?: string; kind?: string }, opts?: unknown) =>

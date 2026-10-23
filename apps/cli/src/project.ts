@@ -8,6 +8,9 @@ import {
   retryTask,
   seatLabel,
   skipTask,
+  applySteering,
+  projectWorkspace,
+  steer,
   type Engine,
 } from '@conclave/core';
 import { taskProgress, type QuestionPayload } from '@conclave/shared';
@@ -24,6 +27,7 @@ export interface ProjectArgs {
   reviewer?: string;
   attempts?: string;
   parallel?: string;
+  apply?: boolean;
   rounds?: string;
   use?: string;
   effortUp?: boolean;
@@ -41,7 +45,9 @@ const USAGE = `Usage:
   conclave project skip <task>               leave a task out of the plan
   conclave project answer <question> "..."   answer an agent's question (or: yes / no for installs)
   conclave project decisions <id>            what's been decided and assumed
-  conclave project decide <id> "question" "answer"   add a decision`;
+  conclave project decide <id> "question" "answer"   add a decision
+  conclave project steer <id> "..." [--apply]      tell the project what to change; prints the
+                                             planner's proposal, --apply applies all of it`;
 
 export async function projectCommand(engine: Engine, args: ProjectArgs): Promise<number> {
   switch (args.sub) {
@@ -65,6 +71,8 @@ export async function projectCommand(engine: Engine, args: ProjectArgs): Promise
       return decisions(engine, args.rest[0]);
     case 'decide':
       return decide(engine, args.rest[0], args.rest[1], args.rest[2]);
+    case 'steer':
+      return steerProject(engine, args.rest[0], args.rest.slice(1).join(' '), args.apply ?? false);
     default:
       console.log(USAGE);
       return args.sub ? 1 : 0;
@@ -285,6 +293,44 @@ async function answer(engine: Engine, id: string | undefined, text: string): Pro
     return 1;
   }
   console.log(`Recorded. ${dim('The waiting task is back in the queue.')}`);
+  return 0;
+}
+
+async function steerProject(
+  engine: Engine,
+  id: string | undefined,
+  text: string,
+  apply: boolean,
+): Promise<number> {
+  const project = find(engine, id);
+  if (!project || !text.trim()) {
+    if (project) console.error(USAGE);
+    return 1;
+  }
+  const cwd = projectWorkspace(engine.home, project).integrationPath;
+  const { planner } = await steer(engine, project, cwd, text.trim());
+  console.log(planner.text);
+  if (!planner.actions.length) return 0;
+  const lines = planner.actions.map((a) =>
+    a.type === 'add_task'
+      ? `Add ${a.title}`
+      : a.type === 'decision'
+        ? `Decision: ${a.question} → ${a.answer}`
+        : a.type === 'pause'
+          ? 'Pause the project'
+          : `${a.type.replace('_task', '')} ${a.id}`,
+  );
+  for (const l of lines) console.log(`  ${dim('•')} ${l}`);
+  if (!apply) {
+    console.log(dim('\nNothing changed. Run again with --apply to apply all of it.'));
+    return 0;
+  }
+  const applied = applySteering(
+    engine,
+    planner.id,
+    planner.actions.map((_, i) => i),
+  );
+  for (const o of applied.outcome ?? []) console.log(`  ${o}`);
   return 0;
 }
 

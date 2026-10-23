@@ -59,7 +59,7 @@ test('a provider that keeps failing is called out, and Retry all hands the work 
     await expect(tasks).toContainText('Codex stopped with an error');
 
     // The drawer explains the failure and offers the fixes.
-    await tasks.getByRole('button', { name: /Add a greet\(\) helper/ }).click();
+    await tasks.getByRole('button', { name: /^Add a greet\(\) helper/ }).click();
     const drawer = page.getByRole('dialog', { name: 'Add a greet() helper' });
     await expect(drawer).toContainText('The AI tool stopped');
     await expect(drawer).toContainText('Attempt 1');
@@ -127,7 +127,7 @@ test('review issues are a checklist; an unticked one becomes a decision', async 
 
     const tasks = page.getByRole('region', { name: 'Tasks' });
     await expect(tasks).toContainText('Failed', { timeout: 60_000 });
-    await tasks.getByRole('button', { name: /Add a greet\(\) helper/ }).click();
+    await tasks.getByRole('button', { name: /^Add a greet\(\) helper/ }).click();
     const drawer = page.getByRole('dialog', { name: 'Add a greet() helper' });
     const keep = drawer.getByRole('checkbox', { name: 'Add a JSDoc comment to greet()' });
     const drop = drawer.getByRole('checkbox', { name: 'Rename the parameter to fullName' });

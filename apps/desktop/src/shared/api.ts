@@ -1,4 +1,4 @@
-import type { AppSettings } from '@conclave/shared';
+import type { AppSettings, SteeringMessage } from '@conclave/shared';
 import type {
   AgentRun,
   ClarifyResult,
@@ -274,6 +274,20 @@ export interface ConclaveApi {
     startDraft(id: string, input: DraftStart): Promise<Project>;
     retry(taskId: string, opts?: RetryOptions): Promise<Task>;
     skip(taskId: string): Promise<Task>;
+    moveTask(taskId: string, direction: 'up' | 'down'): Promise<Task>;
+    editTask(taskId: string, patch: { title?: string; spec?: string }): Promise<Task>;
+    addTask(
+      projectId: string,
+      input: { title: string; spec: string; after?: string[] },
+    ): Promise<Task>;
+    steering(projectId: string): Promise<SteeringMessage[]>;
+    /** Your message and the planner's reply with its proposal. */
+    steer(
+      projectId: string,
+      text: string,
+    ): Promise<{ you: SteeringMessage; planner: SteeringMessage }>;
+    applySteering(messageId: string, indexes: number[]): Promise<SteeringMessage>;
+    dismissSteering(messageId: string): Promise<SteeringMessage>;
     retryFailed(
       projectId: string,
       filter: { provider?: ProviderId; kind?: FailureKind },
@@ -374,6 +388,13 @@ export const IPC = {
   projectsRetryFailed: 'projects:retry-failed',
   projectsPermissionGaps: 'projects:permission-gaps',
   projectsTeamInsights: 'projects:team-insights',
+  projectsMoveTask: 'projects:move-task',
+  projectsEditTask: 'projects:edit-task',
+  projectsAddTask: 'projects:add-task',
+  projectsSteering: 'projects:steering',
+  projectsSteer: 'projects:steer',
+  projectsApplySteering: 'projects:apply-steering',
+  projectsDismissSteering: 'projects:dismiss-steering',
   decisionsAdd: 'decisions:add',
   decisionsKeep: 'decisions:keep',
   decisionsChange: 'decisions:change',

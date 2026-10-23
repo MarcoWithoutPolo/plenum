@@ -37,6 +37,7 @@ Commands:
   project answer <question> "..."   Answer an agent's question (yes / no for installs)
   project decisions <id> List what's been decided and assumed
   project decide <id> "question" "answer"   Add a decision
+  project steer <id> "..." [--apply]        Tell a project what to change
 
 Options:
   --json         Machine-readable output (doctor, ask)
@@ -68,6 +69,7 @@ export async function main(argv: string[]): Promise<number> {
       reviewer: { type: 'string' },
       attempts: { type: 'string' },
       parallel: { type: 'string' },
+      apply: { type: 'boolean' },
       rounds: { type: 'string' },
       'effort-up': { type: 'boolean' },
     },
@@ -121,6 +123,7 @@ export async function main(argv: string[]): Promise<number> {
           ...(values.reviewer && { reviewer: values.reviewer }),
           ...(values.attempts && { attempts: values.attempts }),
           ...(values.parallel && { parallel: values.parallel }),
+          ...(values.apply && { apply: true }),
           ...(values.rounds && { rounds: values.rounds }),
           ...(values.use && { use: values.use }),
           ...(values['effort-up'] && { effortUp: true }),

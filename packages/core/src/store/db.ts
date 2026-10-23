@@ -205,6 +205,21 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     value TEXT NOT NULL
   );
   `,
+  // v11: steering, the project's Chat tab.
+  `
+  CREATE TABLE IF NOT EXISTS steering_messages (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL CHECK (role IN ('you', 'planner')),
+    text       TEXT NOT NULL,
+    actions    TEXT NOT NULL DEFAULT '[]',
+    applied    TEXT,
+    outcome    TEXT,
+    provider   TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS steering_by_project ON steering_messages(project_id, created_at);
+  `,
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

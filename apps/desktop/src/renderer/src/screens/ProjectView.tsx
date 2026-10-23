@@ -25,6 +25,7 @@ import {
 import { ApprovalCard } from '@/components/ApprovalCard';
 import { Dialog } from '@/components/Dialog';
 import { Popover } from '@/components/Popover';
+import { AddTask, SteeringPanel, TaskMenu } from '@/components/Steering';
 import { Button, GitHubMark, ProviderDot } from '@/components/bits';
 import { ASK_POLICIES, LEVEL_NAMES } from '@/components/form';
 import {
@@ -116,7 +117,12 @@ export function ProjectView({ projectId }: { projectId: string }) {
           <PullRequestCard project={project} />
           <NowStrip project={project} running={running} tasks={tasks} events={events} />
           <div className="mt-6 grid grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)] items-start gap-5">
-            <TaskBoard tasks={tasks} onOpen={setSelected} selected={selected} />
+            <TaskBoard
+              projectId={project.id}
+              tasks={tasks}
+              onOpen={setSelected}
+              selected={selected}
+            />
             <SidePanel
               project={project}
               events={events}
@@ -574,10 +580,12 @@ const GROUPS: { title: string; match: (t: Task) => boolean; empty?: string }[] =
 ];
 
 function TaskBoard({
+  projectId,
   tasks,
   onOpen,
   selected,
 }: {
+  projectId: string;
   tasks: Task[];
   onOpen: (id: string) => void;
   selected: string | null;
@@ -620,8 +628,11 @@ function TaskBoard({
                 </h3>
                 <ul className="flex flex-col gap-1">
                   {items.map((t) => (
-                    <li key={t.id}>
+                    <li key={t.id} className="group flex items-start gap-1">
                       <TaskRow task={t} selected={selected === t.id} onOpen={() => onOpen(t.id)} />
+                      <span className="pt-2">
+                        <TaskMenu task={t} tasks={tasks} projectId={projectId} />
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -630,6 +641,9 @@ function TaskBoard({
           })}
         </div>
       )}
+      <div className="border-t border-line p-2">
+        <AddTask projectId={projectId} tasks={tasks} />
+      </div>
     </section>
   );
 }
@@ -704,14 +718,14 @@ function SidePanel({
   decisions: ProjectDecision[];
   onOpenTask: (id: string) => void;
 }) {
-  const [tab, setTab] = useState<'activity' | 'decisions'>('activity');
+  const [tab, setTab] = useState<'activity' | 'decisions' | 'chat'>('activity');
   const [steps, setSteps] = useState(false);
   const active = decisions.filter((d) => d.status === 'active').length;
   const tabClass = (on: boolean) =>
     `relative h-10 text-[13.5px] font-semibold transition ${on ? 'text-ink after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-accent' : 'text-faint hover:text-muted'}`;
   return (
     <section
-      aria-label={tab === 'activity' ? 'Activity' : 'Decisions'}
+      aria-label={tab === 'activity' ? 'Activity' : tab === 'decisions' ? 'Decisions' : 'Chat'}
       className="sticky top-4 flex max-h-[calc(100vh-140px)] flex-col rounded-2xl border border-line bg-panel shadow-card"
     >
       <header className="flex items-center gap-4 border-b border-line px-4">
@@ -735,6 +749,15 @@ function SidePanel({
             Decisions
             {active > 0 && <span className="ml-1 font-normal text-faint">{active}</span>}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'chat'}
+            onClick={() => setTab('chat')}
+            className={tabClass(tab === 'chat')}
+          >
+            Chat
+          </button>
         </div>
         {tab === 'activity' && (
           <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-muted select-none">
@@ -751,6 +774,8 @@ function SidePanel({
       </header>
       {tab === 'activity' ? (
         <Activity events={events} tasks={tasks} onOpenTask={onOpenTask} steps={steps} />
+      ) : tab === 'chat' ? (
+        <SteeringPanel project={project} tasks={tasks} />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <DecisionsPanel project={project} decisions={decisions} />

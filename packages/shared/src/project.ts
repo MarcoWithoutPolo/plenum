@@ -305,3 +305,44 @@ export const ProjectDecision = z.object({
   updatedAt: z.number(),
 });
 export type ProjectDecision = z.infer<typeof ProjectDecision>;
+
+/** One change the planner proposes from your message; nothing happens until you apply it. */
+export const SteeringAction = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('add_task'),
+    title: z.string().min(1).max(200),
+    spec: z.string().min(1).max(4000),
+    after: z.array(z.string()).default([]),
+  }),
+  z.object({
+    type: z.literal('edit_task'),
+    id: z.string(),
+    title: z.string().min(1).max(200).optional(),
+    spec: z.string().min(1).max(4000).optional(),
+  }),
+  z.object({ type: z.literal('skip_task'), id: z.string() }),
+  z.object({ type: z.literal('move_task'), id: z.string(), before: z.string().nullable() }),
+  z.object({
+    type: z.literal('decision'),
+    question: z.string().min(1).max(1000),
+    answer: z.string().min(1).max(2000),
+  }),
+  z.object({ type: z.literal('pause') }),
+]);
+export type SteeringAction = z.infer<typeof SteeringAction>;
+
+/** A message in a project's Chat tab: yours, or the planner's reply with its proposal. */
+export const SteeringMessage = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  role: z.enum(['you', 'planner']),
+  text: z.string(),
+  actions: z.array(SteeringAction),
+  /** Indexes of the actions you applied; null until you apply or dismiss. */
+  applied: z.array(z.number()).nullable(),
+  /** What happened to each applied action, in plain words. */
+  outcome: z.array(z.string()).nullable(),
+  provider: ProviderId.nullable(),
+  createdAt: z.number(),
+});
+export type SteeringMessage = z.infer<typeof SteeringMessage>;
