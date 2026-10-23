@@ -194,6 +194,10 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     addColumn(db, 'projects', 'max_parallel', 'INTEGER NOT NULL DEFAULT 1');
     addColumn(db, 'tasks', 'after', 'TEXT');
   },
+  // v9: you can keep your own team order instead of the measured one.
+  (db) => {
+    addColumn(db, 'projects', 'adaptive_team', 'INTEGER NOT NULL DEFAULT 1');
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

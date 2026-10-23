@@ -158,6 +158,8 @@ export interface NewProjectInput {
   maxAttempts?: number;
   /** Tasks that may build at once (lanes), 1 to 4. */
   maxParallel?: number;
+  /** Let the brain reorder the team from measured speed, reliability and quota. */
+  adaptiveTeam?: boolean;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -178,10 +180,15 @@ export interface ProjectSettings {
   maxAttempts?: number;
   /** Tasks that may build at once (lanes), 1 to 4. */
   maxParallel?: number;
+  /** Let the brain reorder the team from measured speed, reliability and quota. */
+  adaptiveTeam?: boolean;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
 }
+
+/** Per role: the reasons the brain would change the order (empty when it keeps yours). */
+export type TeamInsights = Record<'planner' | 'builder' | 'reviewer', { reasons: string[] }>;
 
 export interface DecideOptions {
   /** A reply to a question, or a note on an install/network request. */
@@ -272,6 +279,8 @@ export interface ConclaveApi {
       opts?: RetryOptions,
     ): Promise<Task[]>;
     permissionGaps(permissions: Permissions): Promise<PermissionGaps>;
+    /** Why the brain would reorder this team, from measured speed, reliability and quota. */
+    teamInsights(routing: Routing): Promise<TeamInsights>;
     start(id: string): Promise<void>;
     stop(id: string): Promise<void>;
     remove(id: string): Promise<void>;
@@ -351,6 +360,7 @@ export const IPC = {
   projectsSkip: 'projects:skip',
   projectsRetryFailed: 'projects:retry-failed',
   projectsPermissionGaps: 'projects:permission-gaps',
+  projectsTeamInsights: 'projects:team-insights',
   decisionsAdd: 'decisions:add',
   decisionsKeep: 'decisions:keep',
   decisionsChange: 'decisions:change',

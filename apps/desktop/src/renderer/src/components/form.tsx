@@ -9,7 +9,7 @@ import type {
   Routing,
   Seat,
 } from '@conclave/shared';
-import type { PermissionGaps, ProviderInfo } from '../../../shared/api';
+import type { PermissionGaps, ProviderInfo, TeamInsights } from '../../../shared/api';
 import { Popover } from './Popover';
 import { SeatPicker, modelLabel } from './SeatPicker';
 import { ProviderDot } from './bits';
@@ -482,6 +482,70 @@ export function PermissionPicker({
 }
 
 /** "Codex can't…" lines for builders that the chosen level rules out. */
+const ROLE_NOUN = { planner: 'Planning', builder: 'Building', reviewer: 'Reviews' } as const;
+
+/**
+ * "Adjust from measured data": the brain may reorder the team by measured speed,
+ * reliability and quota. Shows what it would change and why, so nothing happens silently.
+ */
+export function AdaptiveTeam({
+  routing,
+  value,
+  onChange,
+}: {
+  routing: Routing;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const [insights, setInsights] = useState<TeamInsights | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api()
+      .projects.teamInsights(routing)
+      .then((i) => live && setInsights(i))
+      .catch(() => live && setInsights(null));
+    return () => {
+      live = false;
+    };
+  }, [JSON.stringify(routing)]);
+  const notes = insights
+    ? (Object.keys(ROLE_NOUN) as (keyof typeof ROLE_NOUN)[]).flatMap((role) =>
+        insights[role].reasons.map((r) => ({ role, text: r })),
+      )
+    : [];
+  return (
+    <div className="mt-2 rounded-xl border border-line px-3 py-2.5">
+      <label className="flex items-start gap-2.5 text-[12.5px]">
+        <input
+          type="checkbox"
+          checked={value}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-label="Adjust the team from measured speed and limits"
+          className="mt-0.5 accent-[var(--color-accent)]"
+        />
+        <span>
+          <span className="font-medium">Adjust the order from measured speed and limits</span>
+          <span className="block text-[11.5px] text-faint">
+            Slow or unreliable AIs, and ones close to their limit, move back. Reviews always go to a
+            different AI than the builder.
+          </span>
+        </span>
+      </label>
+      {notes.length > 0 && (
+        <ul
+          className={`mt-2 flex flex-col gap-1 text-[12px] leading-relaxed ${value ? 'text-muted' : 'text-faint line-through'}`}
+        >
+          {notes.map((n) => (
+            <li key={n.role + n.text}>
+              <span className="font-medium">{ROLE_NOUN[n.role]}:</span> {n.text}.
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function GapNotes({ routing, gaps }: { routing: Routing; gaps: PermissionGaps }) {
   const hit = routing.builder.filter((s) => gaps[s.provider]);
   if (!hit.length) return null;

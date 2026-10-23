@@ -36,6 +36,7 @@ import {
   type Adapter,
   type RunPermissions,
 } from '@conclave/core';
+import type { ProviderId } from '@conclave/shared';
 
 silenceSqliteWarning();
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +44,10 @@ const { values } = parseArgs({
   options: {
     projects: { type: 'string', default: 'textkit,calc,inventory' },
     contenders: { type: 'string', default: 'claude,codex,antigravity,conclave' },
+    /** Force Conclave's team, e.g. "builder:antigravity,reviewer:claude+codex". */
+    team: { type: 'string' },
+    /** Conclave's permission level (Antigravity can only build at 2 or 5). */
+    level: { type: 'string', default: '3' },
     runs: { type: 'string', default: '1' },
     'timeout-min': { type: 'string', default: '40' },
     nudges: { type: 'string', default: '2' },
@@ -55,6 +60,19 @@ const runs = Number(values.runs);
 const timeoutMs = Number(values['timeout-min']) * 60_000;
 const maxNudges = Number(values.nudges);
 const parallel = Number(values.parallel);
+const team = values.team
+  ? Object.fromEntries(
+      values.team.split(',').map((part) => {
+        const [role, providers] = part.split(':') as [string, string];
+        return [
+          role,
+          providers.split('+').map((provider) => ({ provider: provider as ProviderId })),
+        ];
+      }),
+    )
+  : undefined;
+/** Names this run's Conclave variant in results, e.g. conclave-b=antigravity-r=claude-2l. */
+const variant = `${values.team ? `-${values.team.replace(/([a-z])[a-z]*:/g, '$1=').replace(/,/g, '-')}` : ''}${parallel > 1 ? `-${parallel}l` : ''}`;
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const out = join(here, 'results', stamp);
 mkdirSync(out, { recursive: true });
@@ -110,6 +128,8 @@ interface Usage {
   runs: number;
   inputTokens: number;
   outputTokens: number;
+  /** Time spent in this provider's agent runs in this role. */
+  ms: number;
 }
 
 interface Result {
@@ -192,6 +212,7 @@ async function runSingle(
     runs: 0,
     inputTokens: 0,
     outputTokens: 0,
+    ms: 0,
   };
   const notes = [spec.note];
   let sessionId: string | undefined;
@@ -215,6 +236,7 @@ async function runSingle(
     usage.runs++;
     usage.inputTokens += result.usage?.inputTokens ?? 0;
     usage.outputTokens += result.usage?.outputTokens ?? 0;
+    usage.ms += result.durationMs;
     sessionId = result.sessionId ?? sessionId;
     ok = result.ok;
     if (!result.ok)
@@ -245,13 +267,19 @@ async function runConclave(
     goal,
     askPolicy: 'decide',
     maxParallel: parallel,
-    permissions: { level: 3, network: 'never', installs: 'never', expiresAt: null },
+    ...(team && { routing: team }),
+    permissions: {
+      level: Number(values.level) as 1 | 2 | 3 | 4 | 5,
+      network: 'never',
+      installs: 'never',
+      expiresAt: null,
+    },
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const notes = [
     `team: plans ${projectRow.routing.planner.map((s) => s.provider).join('>')}, builds ${projectRow.routing.builder.map((s) => s.provider).join('>')}, reviews ${projectRow.routing.reviewer.map((s) => s.provider).join('>')}`,
-    `level 3, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)`,
+    `level ${values.level}, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)`,
   ];
   let ok = false;
   try {
@@ -270,10 +298,18 @@ async function runConclave(
   const db = engine.store.db;
   const rows = db
     .prepare(
-      `SELECT provider, role, COUNT(*) AS runs, SUM(input_tokens) AS inp, SUM(output_tokens) AS outp
+      `SELECT provider, role, COUNT(*) AS runs, SUM(input_tokens) AS inp, SUM(output_tokens) AS outp,
+         SUM(duration_ms) AS ms
        FROM agent_runs GROUP BY provider, role ORDER BY provider, role`,
     )
-    .all() as { provider: string; role: string; runs: number; inp: number; outp: number }[];
+    .all() as {
+    provider: string;
+    role: string;
+    runs: number;
+    inp: number;
+    outp: number;
+    ms: number;
+  }[];
   const questions = engine.store.projects
     .approvals(projectRow.id)
     .filter((a) => a.kind === 'question').length;
@@ -303,6 +339,7 @@ async function runConclave(
       runs: r.runs,
       inputTokens: r.inp ?? 0,
       outputTokens: r.outp ?? 0,
+      ms: r.ms ?? 0,
     })),
     notes,
     timeline,
@@ -341,7 +378,7 @@ for (const project of projects) {
       const codeDir = partial.codeDir ?? dir;
       const result: Result = {
         project,
-        contender,
+        contender: contender === 'conclave' ? `conclave${variant}` : contender,
         run,
         ok: partial.ok ?? false,
         wallMs,
@@ -355,7 +392,7 @@ for (const project of projects) {
       };
       results.push(result);
       writeFileSync(
-        join(out, `${project}-${contender}-${run}.json`),
+        join(out, `${project}-${result.contender}-${run}.json`),
         JSON.stringify(result, null, 2),
       );
       const tokens = result.usage.reduce((n, u) => n + u.inputTokens + u.outputTokens, 0);

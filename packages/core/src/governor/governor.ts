@@ -11,6 +11,10 @@ export interface GovernorOptions {
   now?: () => number;
 }
 
+/** Limits that need someone to act (raise a cap, add credits), not just time to pass. */
+export const HARD_CAP =
+  /spend(ing)? (cap|limit)|out of credits|credits? (are |have been )?(exhausted|used up|depleted)|billing|insufficient (quota|credit|balance)/i;
+
 export type Availability = { ok: true } | { ok: false; reason: string; until: number | null };
 
 /**
@@ -98,7 +102,10 @@ export class Governor {
     if (result.rateLimited) {
       const prev = this.cooldowns.get(provider);
       const strikes = (prev?.strikes ?? 0) + 1;
-      const backoff = Math.min(this.maxBackoff, this.base * 2 ** (strikes - 1));
+      // A spend cap or exhausted credits doesn't lift in minutes: don't keep knocking.
+      const backoff = HARD_CAP.test(result.rateLimited.message ?? '')
+        ? this.maxBackoff
+        : Math.min(this.maxBackoff, this.base * 2 ** (strikes - 1));
       const until = result.rateLimited.resetsAt ?? this.now() + backoff;
       this.cooldowns.set(provider, {
         until,

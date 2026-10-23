@@ -53,6 +53,7 @@ const api: ConclaveApi = {
     retryFailed: (projectId, filter, opts) =>
       invoke(IPC.projectsRetryFailed, projectId, filter, opts),
     permissionGaps: (permissions) => invoke(IPC.projectsPermissionGaps, permissions),
+    teamInsights: (routing) => invoke(IPC.projectsTeamInsights, routing),
     start: (id) => invoke(IPC.projectsStart, id),
     stop: (id) => invoke(IPC.projectsStop, id),
     remove: (id) => invoke(IPC.projectsRemove, id),

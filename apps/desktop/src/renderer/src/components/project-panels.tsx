@@ -30,6 +30,7 @@ import { Button, GitHubMark, ProviderDot, Thinking } from './bits';
 import {
   ASK_POLICIES,
   Field,
+  AdaptiveTeam,
   GapNotes,
   PermissionPicker,
   STRATEGIES,
@@ -583,6 +584,7 @@ export function ProjectSettingsDialog({
   const [routing, setRouting] = useState<Routing>(project.routing);
   const [attempts, setAttempts] = useState(project.maxAttempts);
   const [parallel, setParallel] = useState(project.maxParallel);
+  const [adaptive, setAdaptive] = useState(project.adaptiveTeam);
   const [strategy, setStrategy] = useState<RetryStrategy>(project.retryStrategy);
   const [askPolicy, setAskPolicy] = useState<AskPolicy>(project.askPolicy);
   const [permissions, setPermissions] = useState<Permissions>(project.permissions);
@@ -598,6 +600,7 @@ export function ProjectSettingsDialog({
     setRouting(project.routing);
     setAttempts(project.maxAttempts);
     setParallel(project.maxParallel);
+    setAdaptive(project.adaptiveTeam);
     setStrategy(project.retryStrategy);
     setAskPolicy(project.askPolicy);
     setPermissions(project.permissions);
@@ -615,6 +618,7 @@ export function ProjectSettingsDialog({
       routing,
       maxAttempts: attempts,
       maxParallel: parallel,
+      adaptiveTeam: adaptive,
       retryStrategy: strategy,
       askPolicy,
       permissions,
@@ -684,6 +688,7 @@ export function ProjectSettingsDialog({
         <Field label="Team" error={missing ? `Pick at least one AI for every job` : undefined}>
           <TeamEditor routing={routing} onChange={setRouting} gaps={gaps} />
           <GapNotes routing={routing} gaps={gaps} />
+          <AdaptiveTeam routing={routing} value={adaptive} onChange={setAdaptive} />
         </Field>
         <Field label="Permissions">
           <PermissionPicker

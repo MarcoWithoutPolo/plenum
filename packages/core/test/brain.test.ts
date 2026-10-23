@@ -18,6 +18,8 @@ import {
   calibration,
   changedLines,
   rankSeats,
+  withPriors,
+  routingInsights,
   seatStats,
   displayCommand,
   displayPath,
@@ -461,7 +463,9 @@ describe('Brain', () => {
       ]),
     );
     expect(slow.seats.map((s) => s.provider)).toEqual(['claude', 'codex', 'antigravity']);
-    expect(slow.reasons[0]).toMatch(/antigravity reviews take 3\.5× longer/);
+    expect(slow.reasons[0]).toBe(
+      'Antigravity reviews take about 1.2 min (Claude about 20 s) here, so faster reviewers go first',
+    );
 
     // Unreliable or nearly spent providers move back, the unreliable one furthest.
     const mixed = order(new Map([['claude', stat(10, 0.5, 20_000)]]), { antigravity: 0.8 });
@@ -478,6 +482,72 @@ describe('Brain', () => {
       () => null,
     );
     expect(builders.seats).toEqual(team);
+  });
+
+  it('starts from the benchmark priors, which fade as real runs come in', () => {
+    const team = (['claude', 'antigravity', 'codex'] as ProviderId[]).map((provider) => ({
+      provider,
+    }));
+    const rev = ['antigravity', 'claude', 'codex'].map((provider) => ({ provider })) as typeof team;
+    // A fresh install: Antigravity's slow reviews are known from the benchmark.
+    const fresh = rankSeats(rev, 'reviewer', withPriors('reviewer', new Map()), () => null);
+    expect(fresh.seats.map((s) => s.provider)).toEqual(['claude', 'codex', 'antigravity']);
+    expect(fresh.reasons[0]).toBe(
+      "Antigravity reviews take about 2.8 min (Claude about 18 s) in Conclave's benchmarks, so faster reviewers go first",
+    );
+    // Five fast Antigravity reviews here outweigh the prior.
+    const fast = new Map([['antigravity' as ProviderId, { runs: 5, okRate: 1, medianMs: 15_000 }]]);
+    expect(rankSeats(rev, 'reviewer', withPriors('reviewer', fast), () => null).seats).toEqual(rev);
+    // No priors for building: builders keep your order.
+    expect(rankSeats(team, 'builder', withPriors('builder', new Map()), () => null).seats).toEqual(
+      team,
+    );
+    // The team screen gets the same reasons.
+    const insights = routingInsights(
+      { planner: team, builder: team, reviewer: rev },
+      () => [],
+      () => null,
+    );
+    expect(insights.reviewer.reasons).toEqual(fresh.reasons);
+    expect(insights.builder.reasons).toEqual([]);
+  });
+
+  it('keeps your own order when the project turns adaptive ordering off', async () => {
+    const { store, brain, claude, project } = await setup();
+    store.projects.update(project.id, { adaptiveTeam: false });
+    for (let i = 0; i < 6; i++)
+      store.usage.record({
+        seat: { provider: 'claude' },
+        role: 'planner',
+        source: 'project',
+        result: { ok: false, durationMs: 1, usage: {} },
+      });
+    await brain.run({ maxRounds: 10 });
+    expect(claude.requests[0]!.role).toBe('planner');
+    expect(
+      store.projects.events(project.id).some((e) => e.message.includes('order adjusted')),
+    ).toBe(false);
+  });
+
+  it('keeps a provider at a spend cap out for the longest backoff straight away', () => {
+    let now = 0;
+    const g = new Governor(() => [], {
+      now: () => now,
+      baseBackoffMs: 5 * 60_000,
+      maxBackoffMs: 60 * 60_000,
+    });
+    g.observe('codex', {
+      ok: false,
+      rateLimited: { message: 'You hit your spend cap set by the owner of your workspace.' },
+    } as never);
+    now = 30 * 60_000;
+    expect(g.availability('codex').ok).toBe(false);
+    now = 61 * 60_000;
+    expect(g.availability('codex').ok).toBe(true);
+    // An ordinary limit with no reset time still starts short.
+    g.observe('claude', { ok: false, rateLimited: { message: 'rate limited' } } as never);
+    now += 6 * 60_000;
+    expect(g.availability('claude').ok).toBe(true);
   });
 
   it('counts recent runs per provider for ranking', () => {
@@ -509,7 +579,9 @@ describe('Brain', () => {
     await brain.run({ maxRounds: 10 });
     const notes = store.projects.events(project.id).map((e) => e.message);
     expect(notes).toContainEqual(
-      expect.stringMatching(/^Reviewer order adjusted: claude reviews take 10\.0× longer/),
+      expect.stringMatching(
+        /^Reviewer order adjusted: Claude reviews take about 1\.5 min \(Codex about 9 s\) here/,
+      ),
     );
     // Codex built, so it can't review its own work; Claude still reviews. Ranking never breaks the cross-AI rule.
     expect(claude.requests.map((r) => r.role)).toContain('reviewer');
@@ -1037,7 +1109,7 @@ describe('Questions and decisions', () => {
 });
 
 describe('Done means the tests pass', () => {
-  it('queues a fix instead of finishing while the proposed test command fails', async () => {
+  it('checks the proposed test command on the first task, before review', async () => {
     let builds = 0;
     const { store, brain, project } = await setup({
       noTests: true,
@@ -1056,16 +1128,13 @@ describe('Done means the tests pass', () => {
     });
     expect((await brain.run({ maxRounds: 12 })).kind).toBe('done');
     const titles = store.projects.listTasks(project.id).map((t) => [t.title, t.status]);
-    expect(titles).toEqual([
-      ['Add sum', 'merged'],
-      ['Make the test command pass: node check.js', 'merged'],
-    ]);
+    // The broken first build is sent back with the test output; no extra task, no wasted review.
+    expect(titles).toEqual([['Add sum', 'merged']]);
+    expect(builds).toBe(2);
     expect(store.projects.get(project.id)?.testCommand).toBe('node check.js');
-    expect(
-      store.projects
-        .events(project.id)
-        .some((e) => e.message.startsWith('Not done yet: node check.js fails')),
-    ).toBe(true);
+    const events = store.projects.events(project.id).map((e) => e.message);
+    expect(events).toContain('Tests failed (exit 1)');
+    expect(events.filter((e) => e.startsWith('Reviewing with'))).toHaveLength(1);
   });
 });
 

@@ -35,6 +35,7 @@ export interface NewProject {
   routing: Routing;
   maxAttempts?: number;
   maxParallel?: number;
+  adaptiveTeam?: boolean;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -53,6 +54,7 @@ type ProjectPatch = Partial<
     | 'routing'
     | 'maxAttempts'
     | 'maxParallel'
+    | 'adaptiveTeam'
     | 'name'
     | 'retryStrategy'
     | 'askPolicy'
@@ -102,6 +104,7 @@ export class ProjectStore {
       routing: input.routing,
       maxAttempts: input.maxAttempts ?? 3,
       maxParallel: clampParallel(input.maxParallel ?? 1),
+      adaptiveTeam: input.adaptiveTeam ?? true,
       retryStrategy: input.retryStrategy ?? 'escalate',
       askPolicy: input.askPolicy ?? 'ask',
       permissions: input.permissions ?? DEFAULT_PERMISSIONS,
@@ -117,8 +120,8 @@ export class ProjectStore {
       .prepare(
         `INSERT INTO projects (id, name, repo_path, goal, done_when, test_command, base_branch,
            integration_branch, routing, max_attempts, retry_strategy, ask_policy, permissions,
-           design_direction, github, status, max_parallel, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           design_direction, github, status, max_parallel, adaptive_team, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         project.id,
@@ -138,6 +141,7 @@ export class ProjectStore {
         project.github && JSON.stringify(project.github),
         project.status,
         project.maxParallel,
+        project.adaptiveTeam ? 1 : 0,
         now,
         now,
       );
@@ -180,7 +184,7 @@ export class ProjectStore {
         `UPDATE projects SET name = ?, goal = ?, done_when = ?, test_command = ?, routing = ?,
            max_attempts = ?, retry_strategy = ?, ask_policy = ?, permissions = ?,
            design_direction = ?, proposed_test_command = ?, github = ?, max_parallel = ?,
-           updated_at = ? WHERE id = ?`,
+           adaptive_team = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.name,
@@ -196,6 +200,7 @@ export class ProjectStore {
         next.proposedTestCommand,
         next.github && JSON.stringify(next.github),
         clampParallel(next.maxParallel),
+        next.adaptiveTeam ? 1 : 0,
         next.updatedAt,
         id,
       );
@@ -501,6 +506,7 @@ function toProject(r: Row): Project {
     routing: parse(r.routing) as Routing,
     maxAttempts: r.max_attempts as number,
     maxParallel: clampParallel((r.max_parallel as number | null) ?? 1),
+    adaptiveTeam: r.adaptive_team !== 0,
     retryStrategy: ((r.retry_strategy as string | null) ?? 'same') as RetryStrategy,
     askPolicy: ((r.ask_policy as string | null) ?? 'ask') as AskPolicy,
     permissions: {

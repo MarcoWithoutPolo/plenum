@@ -37,6 +37,8 @@ import {
   type GitHub,
   type RetryOptions,
   clampParallel,
+  Governor,
+  routingInsights,
 } from '@conclave/core';
 import {
   IPC,
@@ -44,6 +46,7 @@ import {
   type DecideOptions,
   type NewProjectInput,
   type PermissionGaps,
+  type TeamInsights,
   type ProjectDetail,
   type ProjectSettings,
   type ProjectSummary,
@@ -184,6 +187,7 @@ export function registerProjectIpc(
         maxAttempts: Math.max(1, Math.min(10, Number(input.maxAttempts))),
       }),
       ...(input.maxParallel && { maxParallel: clampParallel(Number(input.maxParallel)) }),
+      ...(input.adaptiveTeam !== undefined && { adaptiveTeam: Boolean(input.adaptiveTeam) }),
       ...(input.retryStrategy && { retryStrategy: RetryStrategy.parse(input.retryStrategy) }),
       ...(input.askPolicy && { askPolicy: AskPolicy.parse(input.askPolicy) }),
       ...(input.permissions && { permissions: checkPermissions(input.permissions) }),
@@ -228,6 +232,7 @@ export function registerProjectIpc(
         maxAttempts: Math.max(1, Math.min(10, Number(settings.maxAttempts))),
       }),
       ...(settings.maxParallel && { maxParallel: clampParallel(Number(settings.maxParallel)) }),
+      ...(settings.adaptiveTeam !== undefined && { adaptiveTeam: Boolean(settings.adaptiveTeam) }),
       ...(settings.retryStrategy && {
         retryStrategy: RetryStrategy.parse(settings.retryStrategy),
       }),
@@ -290,6 +295,20 @@ export function registerProjectIpc(
         retryOptions(opts),
       ),
   );
+  handle(IPC.projectsTeamInsights, (routing: unknown): TeamInsights => {
+    const governor = new Governor(() => engine.store.listQuotas());
+    const insights = routingInsights(
+      Routing.parse(routing),
+      (role) => engine.store.usage.roleRuns(role),
+      (p) => governor.utilization(p),
+    );
+    return {
+      planner: { reasons: insights.planner.reasons },
+      builder: { reasons: insights.builder.reasons },
+      reviewer: { reasons: insights.reviewer.reasons },
+    };
+  });
+
   handle(IPC.projectsPermissionGaps, (permissions: unknown): PermissionGaps => {
     const run = builderPermissions(checkPermissions(permissions));
     const gaps: PermissionGaps = {};

@@ -27,7 +27,7 @@ import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
 import { calibration, changedLines, shapePlan } from './shape.js';
 import type { PlannedTask } from './json.js';
-import { rankSeats, seatStats, type RankRole } from '../governor/rank.js';
+import { rankSeats, seatStats, withPriors, type RankRole } from '../governor/rank.js';
 import { QUESTION_KINDS } from './answers.js';
 import { isRunnableInstall, parseQuestion } from './questions.js';
 import { builderPlan, countsAsAttempt } from './recovery.js';
@@ -86,6 +86,11 @@ export const LANE_CAPS: Partial<Record<ProviderId, number>> = {
   antigravity: 1,
   gemini: 1,
 };
+
+/** The adopted test command, or until then the proposed one. */
+function testCommandOf(project: Project): string | null {
+  return project.testCommand ?? project.proposedTestCommand;
+}
 
 /** Do two path lists touch the same file or folder? */
 function overlaps(a: string[], b: string[]): boolean {
@@ -803,11 +808,13 @@ export class Brain {
       data: { commit, summary: built.text.slice(0, 1500) },
     });
 
-    // Verify.
+    // Verify. Before a test command is adopted, the proposed one is checked here too,
+    // so a first task never ships tests it couldn't run.
     let tests = '(no test command; review only)';
-    if (project.testCommand) {
+    const testCommand = testCommandOf(project);
+    if (testCommand) {
       this.projects.updateTask(task.id, { status: 'verifying' });
-      const run = await runShell(project.testCommand, {
+      const run = await runShell(testCommand, {
         cwd,
         timeoutMs: this.testTimeout,
         ...(this.signal && { signal: this.signal }),
@@ -826,10 +833,10 @@ export class Brain {
             tail,
             builder,
           ),
-          feedback: `${run.timedOut ? 'The test command timed out' : `The test command failed (exit ${run.code})`}: ${project.testCommand}\n\n${tail}`,
+          feedback: `${run.timedOut ? 'The test command timed out' : `The test command failed (exit ${run.code})`}: ${testCommand}\n\n${tail}`,
         });
       }
-      tests = `${project.testCommand} passed in ${(run.durationMs / 1000).toFixed(1)}s.\n${tail.slice(-1500)}`;
+      tests = `${testCommand} passed in ${(run.durationMs / 1000).toFixed(1)}s.\n${tail.slice(-1500)}`;
       this.log('verify', `Tests passed in ${(run.durationMs / 1000).toFixed(1)}s`, { task });
     }
 
@@ -939,7 +946,7 @@ export class Brain {
     const merged = await this.workspace.mergeTask(
       task.id,
       `conclave: merge "${task.title}"`,
-      project.testCommand ? (cwd) => this.runTests(project, cwd) : undefined,
+      testCommandOf(project) ? (cwd) => this.runTests(project, cwd) : undefined,
     );
     if (this.interrupted) return this.halt(task);
     if (!merged.ok && merged.kind === 'conflict') {
@@ -1011,8 +1018,12 @@ export class Brain {
 
   /** The team order for a role, adjusted by measured reliability, quota and (for reviews) speed. */
   private ranked(role: RankRole, seats: Seat[]): Seat[] {
-    const ranked = rankSeats(seats, role, seatStats(this.ctx.store.usage.roleRuns(role)), (p) =>
-      this.governor.utilization(p),
+    if (!this.project().adaptiveTeam) return seats;
+    const ranked = rankSeats(
+      seats,
+      role,
+      withPriors(role, seatStats(this.ctx.store.usage.roleRuns(role))),
+      (p) => this.governor.utilization(p),
     );
     const note = ranked.reasons.join('; ');
     if (note && this.rankNotes.get(role) !== note) {
@@ -1026,7 +1037,8 @@ export class Brain {
 
   /** The project's test command in `cwd`, for the merge queue's combined re-test. */
   private async runTests(project: Project, cwd: string): Promise<{ ok: boolean; output: string }> {
-    const run = await runShell(project.testCommand!, {
+    const command = testCommandOf(project)!;
+    const run = await runShell(command, {
       cwd,
       timeoutMs: this.testTimeout,
       ...(this.signal && { signal: this.signal }),
@@ -1034,7 +1046,7 @@ export class Brain {
     const tail = run.output.trim().slice(-4000);
     return {
       ok: run.code === 0,
-      output: `${run.timedOut ? 'The test command timed out' : `${project.testCommand} failed (exit ${run.code})`}:\n${tail}`,
+      output: `${run.timedOut ? 'The test command timed out' : `${command} failed (exit ${run.code})`}:\n${tail}`,
     };
   }
 
@@ -1138,7 +1150,7 @@ export class Brain {
     } catch {
       // not a Node project
     }
-    return checkCommands(project.testCommand, scripts);
+    return checkCommands(testCommandOf(project), scripts);
   }
 
   /* ── Questions ─────────────────────────────────────────────────────── */

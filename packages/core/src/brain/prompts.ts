@@ -140,7 +140,7 @@ ${
     : ''
 }
 ${extras.installed ? `\nTHE SYSTEM ALREADY RAN: ${extras.installed}\n` : ''}
-AFTER YOU FINISH the system runs: ${project.testCommand ?? '(no test command; a reviewer checks the diff)'}
+AFTER YOU FINISH the system runs: ${project.testCommand ?? project.proposedTestCommand ?? '(no test command; a reviewer checks the diff)'}
 
 Rules:
 - Change only what this task needs, inside this folder. Add or update tests for what you change.
@@ -165,7 +165,7 @@ export function reviewerPrompt(
   tests: string,
   extras: ReviewExtras = {},
 ): string {
-  return `You are reviewing one change for an autonomous coding project, as a careful senior engineer. You can read files in the working directory for context.
+  return `You are reviewing one change for an autonomous coding project, as a careful senior engineer. Review from the diff below: it is the whole change. Open a file in the working directory only to check something specific the diff depends on (a function it calls, a test it changes); don't read the rest of the project.
 
 PROJECT GOAL
 ${project.goal}
@@ -192,7 +192,7 @@ If the change hinges on a product decision only the user can make, add "question
 }
 
 function goalCheckSection(check: { merged: string[]; doneWhen: string | null }): string {
-  return `THIS IS THE LAST PLANNED TASK. Your working directory holds the whole project with this change applied. Also judge the PROJECT GOAL${check.doneWhen ? ' and DONE WHEN' : ''} as a whole: read the code, and set "goal_met" to true only if every requirement is implemented and tested. Otherwise list each gap in "goal_gaps".
+  return `THIS IS THE LAST PLANNED TASK. Your working directory holds the whole project with this change applied. Also judge the PROJECT GOAL${check.doneWhen ? ' and DONE WHEN' : ''} as a whole: read what you need of the project to check each requirement, and set "goal_met" to true only if every requirement is implemented and tested. Otherwise list each gap in "goal_gaps".
 ${check.doneWhen ? `\nDONE WHEN\n${check.doneWhen}\n` : ''}
 ALREADY MERGED
 ${check.merged.length ? check.merged.map((t) => `- ${t}`).join('\n') : '- none'}

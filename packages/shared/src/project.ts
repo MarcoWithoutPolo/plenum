@@ -84,6 +84,8 @@ export const Project = z.object({
   maxAttempts: z.number(),
   /** How many tasks may build at once (lanes). 1 is one task at a time. */
   maxParallel: z.number(),
+  /** Let the brain reorder the team from measured speed, reliability and quota. */
+  adaptiveTeam: z.boolean(),
   retryStrategy: RetryStrategy,
   askPolicy: AskPolicy,
   permissions: Permissions,

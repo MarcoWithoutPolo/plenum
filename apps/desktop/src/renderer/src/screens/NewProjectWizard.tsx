@@ -30,6 +30,7 @@ import { Button, GitHubMark, Thinking } from '@/components/bits';
 import {
   ASK_POLICIES,
   Field,
+  AdaptiveTeam,
   GapNotes,
   PermissionPicker,
   ROLES,
@@ -110,6 +111,7 @@ export function NewProjectWizard({
   const [routing, setRouting] = useState<Routing>({ planner: [], builder: [], reviewer: [] });
   const [attempts, setAttempts] = useState(3);
   const [parallel, setParallel] = useState(2);
+  const [adaptive, setAdaptive] = useState(true);
   const [askPolicy, setAskPolicy] = useState<AskPolicy>('ask');
   const [strategy, setStrategy] = useState<RetryStrategy>('escalate');
   const [permissions, setPermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
@@ -144,6 +146,7 @@ export function NewProjectWizard({
     setDoneWhen('');
     setAttempts(3);
     setParallel(2);
+    setAdaptive(true);
     setAskPolicy('ask');
     setStrategy('escalate');
     setPermissions(DEFAULT_PERMISSIONS);
@@ -287,6 +290,7 @@ export function NewProjectWizard({
           routing,
           maxAttempts: attempts,
           maxParallel: parallel,
+          adaptiveTeam: adaptive,
           askPolicy,
           retryStrategy: strategy,
           permissions,
@@ -313,6 +317,7 @@ export function NewProjectWizard({
           routing,
           maxAttempts: attempts,
           maxParallel: parallel,
+          adaptiveTeam: adaptive,
           askPolicy,
           retryStrategy: strategy,
           permissions,
@@ -747,6 +752,7 @@ export function NewProjectWizard({
           >
             <TeamEditor routing={routing} onChange={setRouting} gaps={gaps} />
             <GapNotes routing={routing} gaps={gaps} />
+            <AdaptiveTeam routing={routing} value={adaptive} onChange={setAdaptive} />
           </Field>
 
           <Field label="Permissions" hint="What builders may do. Planners and reviewers only read.">
