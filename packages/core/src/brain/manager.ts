@@ -162,11 +162,20 @@ export class BrainManager {
       .list()
       .filter((p) => (p.status === 'running' || p.status === 'waiting') && !this.isRunning(p.id));
     for (const p of orphans) {
+      // Work caught mid-step goes back to the queue now, so nothing looks in progress while paused.
+      const interrupted = this.ctx.store.projects.requeueInterrupted(p.id);
       this.ctx.store.projects.setStatus(
         p.id,
         'paused',
         'Conclave closed while this was running. Resume to continue.',
       );
+      if (interrupted.length) {
+        this.ctx.store.projects.log({
+          projectId: p.id,
+          kind: 'stop',
+          message: `Conclave closed mid-step; ${interrupted.length} interrupted task(s) back in the queue`,
+        });
+      }
     }
     return orphans;
   }

@@ -114,8 +114,12 @@ describe('BrainManager', () => {
   it('pauses projects a closed app left running', async () => {
     const { store, project, manager } = await setup();
     store.projects.setStatus(project.id, 'running');
+    const [task] = store.projects.addTasks(project.id, [{ title: 'Half built', spec: 'x' }]);
+    store.projects.updateTask(task!.id, { status: 'building', builtBy: 'codex' });
     expect(manager.recoverOrphans().map((p) => p.id)).toEqual([project.id]);
     expect(store.projects.get(project.id)?.status).toBe('paused');
+    // Nothing looks in progress while the project waits to be resumed.
+    expect(store.projects.getTask(task!.id)).toMatchObject({ status: 'queued', attempts: 0 });
   });
 
   it('records each agent run in the usage history', async () => {
