@@ -20,6 +20,7 @@ export * from './chat/service.js';
 export * from './council/council.js';
 export * from './engine.js';
 export * from './workspace/git.js';
+export * from './workspace/setup.js';
 export * from './governor/governor.js';
 export * from './brain/json.js';
 export * from './brain/prompts.js';
@@ -32,5 +33,7 @@ export * from './brain/similar.js';
 export * from './brain/questions.js';
 export * from './brain/answers.js';
 export * from './brain/clarify.js';
+export * from './github/gh.js';
+export * from './github/flows.js';
 
 export const VERSION = '0.0.0';

@@ -51,7 +51,7 @@ export async function headCommit(path: string): Promise<string> {
 }
 
 /** Commit identity args: the user's own if git knows it, else a Conclave fallback. */
-async function identity(cwd: string): Promise<string[]> {
+export async function commitIdentity(cwd: string): Promise<string[]> {
   const email = await git(cwd, ['config', 'user.email'], true);
   return email.code === 0 && email.stdout.trim() ? [] : IDENTITY;
 }
@@ -125,7 +125,14 @@ export class Workspace {
     await git(path, ['add', '-A']);
     const status = await out(path, ['status', '--porcelain']);
     if (!status) return null;
-    await git(path, [...(await identity(path)), 'commit', '--no-verify', '-q', '-m', message]);
+    await git(path, [
+      ...(await commitIdentity(path)),
+      'commit',
+      '--no-verify',
+      '-q',
+      '-m',
+      message,
+    ]);
     return headCommit(path);
   }
 
@@ -152,7 +159,15 @@ export class Workspace {
     const path = this.integrationPath;
     const merge = await git(
       path,
-      [...(await identity(path)), 'merge', '--no-ff', '-q', '-m', message, this.taskBranch(taskId)],
+      [
+        ...(await commitIdentity(path)),
+        'merge',
+        '--no-ff',
+        '-q',
+        '-m',
+        message,
+        this.taskBranch(taskId),
+      ],
       true,
     );
     if (merge.code !== 0) {
@@ -228,7 +243,7 @@ export async function mergeIntoBase(
   try {
     const merge = await git(
       where,
-      [...(await identity(where)), 'merge', '--no-ff', '-q', '-m', message, branch],
+      [...(await commitIdentity(where)), 'merge', '--no-ff', '-q', '-m', message, branch],
       true,
     );
     if (merge.code !== 0) {
@@ -255,4 +270,46 @@ export async function mergeCommitDiff(
 ): Promise<string> {
   const diff = (await git(repo, ['diff', '--no-color', `${commit}^1`, commit])).stdout;
   return diff.slice(0, maxChars);
+}
+
+export type PushResult = { ok: true; branch: string } | { ok: false; error: string };
+
+/**
+ * Push a local branch to its own remote branch. Never forces and never targets
+ * `protect` (the base branch). When the remote branch exists and has diverged, it tries
+ * `<name>-2`, `<name>-3`, … unless `exact` (updating an open pull request).
+ */
+export async function pushBranch(
+  repo: string,
+  local: string,
+  remoteBranch: string,
+  opts: { remote?: string; protect?: string; exact?: boolean } = {},
+): Promise<PushResult> {
+  const remote = opts.remote ?? 'origin';
+  if (!/^[\w./-]+$/.test(remoteBranch) || remoteBranch === opts.protect) {
+    return { ok: false, error: `Refusing to push to ${remoteBranch}.` };
+  }
+  for (let i = 1; i <= (opts.exact ? 1 : 5); i++) {
+    const name = i === 1 ? remoteBranch : `${remoteBranch}-${i}`;
+    const push = await git(
+      repo,
+      ['push', '--porcelain', remote, `refs/heads/${local}:refs/heads/${name}`],
+      true,
+    );
+    if (push.code === 0) return { ok: true, branch: name };
+    const text = `${push.stdout}\n${push.stderr}`;
+    if (!/rejected|non-fast-forward|fetch first|stale info/i.test(text)) {
+      return { ok: false, error: `git push failed: ${text.trim().split('\n').at(-1)}` };
+    }
+    if (opts.exact) {
+      return {
+        ok: false,
+        error: `${name} on ${remote} has changes Conclave doesn't have; it won't overwrite them.`,
+      };
+    }
+  }
+  return {
+    ok: false,
+    error: `Every candidate branch name for ${remoteBranch} is taken on ${remote}.`,
+  };
 }

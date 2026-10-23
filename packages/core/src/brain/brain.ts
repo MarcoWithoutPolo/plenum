@@ -406,10 +406,13 @@ export class Brain {
     this.projects.setStatus(this.projectId, 'done', reason);
     this.log('done', `Goal met: ${reason}`);
     if (merged.length) {
+      const prOpen = project.github?.prState === 'open';
       const approval = this.projects.requestApproval({
         projectId: this.projectId,
         kind: 'push',
-        summary: `Merge ${project.integrationBranch} into ${project.baseBranch} (${merged.length} task(s))`,
+        summary: prOpen
+          ? `Push the new work to the pull request (${merged.length} task(s))`
+          : `Merge ${project.integrationBranch} into ${project.baseBranch} (${merged.length} task(s))`,
         payload: {
           branch: project.integrationBranch,
           base: project.baseBranch,

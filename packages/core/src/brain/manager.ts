@@ -12,6 +12,8 @@ import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
 import { Brain, type RoundOutcome } from './brain.js';
 import { QUESTION_KINDS, answerQuestion, decidePermission } from './answers.js';
+import { GitHub } from '../github/gh.js';
+import { openPullRequest, publishRepo } from '../github/flows.js';
 import { lockHolder } from './lock.js';
 import { retryFailed, retryTask, skipTask, type RetryOptions } from './recovery.js';
 
@@ -29,7 +31,15 @@ export function isProjectRunning(home: string, projectId: string): boolean {
 }
 
 export type ApprovalOutcome =
-  { ok: true; approval: Approval; commit?: string } | { ok: false; error: string };
+  { ok: true; approval: Approval; commit?: string; url?: string } | { ok: false; error: string };
+
+export interface ApprovalOptions {
+  /** For a finished project's push: merge into your branch here (default) or open a pull request. */
+  via?: 'merge' | 'pr';
+  draft?: boolean;
+  /** Injected for tests. */
+  github?: GitHub;
+}
 
 /** Approve or reject an inbox item. Approving a `push` merges the work into the base branch. */
 export async function decideApproval(
@@ -38,6 +48,7 @@ export async function decideApproval(
   approvalId: string,
   decision: 'approved' | 'rejected',
   answer?: string,
+  opts: ApprovalOptions = {},
 ): Promise<ApprovalOutcome> {
   const projects = ctx.store.projects;
   const pending = projects.approvals(undefined, 'pending').find((a) => a.id === approvalId);
@@ -67,7 +78,21 @@ export async function decideApproval(
   }
 
   let commit: string | undefined;
-  if (pending.kind === 'push') {
+  let url: string | undefined;
+  if (pending.kind === 'create_repo') {
+    const published = await publishRepo(ctx, opts.github ?? new GitHub(), pending);
+    if (!published.ok) return published;
+    url = published.url;
+  } else if (pending.kind === 'push' && opts.via === 'pr') {
+    if (isProjectRunning(home, project.id)) {
+      return { ok: false, error: 'Stop the project before pushing its work.' };
+    }
+    const pr = await openPullRequest(ctx, opts.github ?? new GitHub(), project.id, {
+      ...(opts.draft && { draft: true }),
+    });
+    if (!pr.ok) return pr;
+    url = pr.url;
+  } else if (pending.kind === 'push') {
     if (isProjectRunning(home, project.id)) {
       return { ok: false, error: 'Stop the project before merging its work.' };
     }
@@ -87,8 +112,8 @@ export async function decideApproval(
       data: { commit: merged.commit },
     });
   }
-  const approval = projects.decide(approvalId, 'approved')!;
-  return { ok: true, approval, ...(commit && { commit }) };
+  const approval = projects.decide(approvalId, 'approved', url)!;
+  return { ok: true, approval, ...(commit && { commit }), ...(url && { url }) };
 }
 
 /** The changes a task made: its merge for merged tasks, its live worktree while in progress. */
@@ -191,11 +216,12 @@ export class BrainManager {
     approvalId: string,
     decision: 'approved' | 'rejected',
     answer?: string,
+    opts: ApprovalOptions = {},
   ): Promise<ApprovalOutcome> {
     const pending = this.ctx.store.projects.getApproval(approvalId);
     const before = pending && this.ctx.store.projects.get(pending.projectId);
     const outcome = await this.notifyAsync(() =>
-      decideApproval(this.ctx, this.home, approvalId, decision, answer),
+      decideApproval(this.ctx, this.home, approvalId, decision, answer, opts),
     );
     if (outcome.ok && before?.status === 'needs_you') {
       const after = this.ctx.store.projects.get(before.id);

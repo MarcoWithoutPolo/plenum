@@ -1,6 +1,7 @@
 import { basename, resolve } from 'node:path';
 import type {
   AskPolicy,
+  GitHubLink,
   Permissions,
   Project,
   ProviderId,
@@ -38,6 +39,7 @@ export interface CreateProjectInput {
   permissions?: Permissions;
   designDirection?: string;
   draft?: boolean;
+  github?: GitHubLink | null;
 }
 
 /** Validate the repo and register a project. The repo's own checkout is left alone. */
@@ -75,5 +77,6 @@ export async function createProject(
     ...(input.permissions && { permissions: input.permissions }),
     ...(input.designDirection?.trim() && { designDirection: input.designDirection.trim() }),
     ...(input.draft && { draft: true }),
+    ...(input.github && { github: input.github }),
   });
 }

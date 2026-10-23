@@ -56,6 +56,18 @@ export const DEFAULT_PERMISSIONS: Permissions = {
   expiresAt: null,
 };
 
+/** The project's GitHub side (M7). */
+export const GitHubLink = z.object({
+  /** owner/name */
+  repo: z.string(),
+  /** The branch pull requests come from, e.g. conclave/calculator. */
+  prBranch: z.string().nullable(),
+  prUrl: z.string().nullable(),
+  prState: z.enum(['open', 'merged', 'closed']).nullable(),
+  issue: z.object({ number: z.number(), title: z.string(), url: z.string() }).nullable(),
+});
+export type GitHubLink = z.infer<typeof GitHubLink>;
+
 export const Project = z.object({
   id: z.string(),
   name: z.string(),
@@ -77,6 +89,7 @@ export const Project = z.object({
   designDirection: z.string().nullable(),
   /** A test command the clarify step suggested, waiting for you to accept it. */
   proposedTestCommand: z.string().nullable(),
+  github: GitHubLink.nullable(),
   status: ProjectStatus,
   statusReason: z.string().nullable(),
   createdAt: z.number(),
@@ -221,7 +234,7 @@ export const Approval = z.object({
   id: z.string(),
   projectId: z.string(),
   taskId: z.string().nullable(),
-  kind: z.enum(['push', 'pull_request', 'install', 'network', 'question', 'other']),
+  kind: z.enum(['push', 'pull_request', 'create_repo', 'install', 'network', 'question', 'other']),
   summary: z.string(),
   payload: z.unknown().nullable(),
   status: ApprovalStatus,

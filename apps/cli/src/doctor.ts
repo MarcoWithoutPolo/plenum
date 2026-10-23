@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 import type { ProviderStatus } from '@conclave/shared';
-import { collect, createAdapters, type Adapter } from '@conclave/core';
+import { GitHub, collect, createAdapters, type Adapter } from '@conclave/core';
 
 /** Cheapest model per provider for the live check. */
 const LIVE_MODEL: Partial<Record<string, string>> = {
@@ -11,7 +11,11 @@ const LIVE_PROMPT = 'Reply with exactly the word: pong';
 
 export async function doctor(opts: { live?: boolean; json?: boolean } = {}): Promise<number> {
   const adapters = createAdapters();
-  const statuses = await Promise.all(adapters.map((a) => a.detect()));
+  const github = new GitHub();
+  const [statuses, gh] = await Promise.all([
+    Promise.all(adapters.map((a) => a.detect())),
+    github.detect(),
+  ]);
 
   const live = opts.live
     ? await Promise.all(
@@ -24,7 +28,7 @@ export async function doctor(opts: { live?: boolean; json?: boolean } = {}): Pro
   if (opts.json) {
     console.log(
       JSON.stringify(
-        statuses.map((s, i) => ({ ...s, live: live[i] })),
+        { providers: statuses.map((s, i) => ({ ...s, live: live[i] })), github: gh },
         null,
         2,
       ),
@@ -34,6 +38,13 @@ export async function doctor(opts: { live?: boolean; json?: boolean } = {}): Pro
     statuses.forEach((s, i) => console.log(formatRow(adapters[i]!, s, live[i])));
     const ready = statuses.filter((s) => s.auth === 'signed_in').length;
     console.log(`\n${ready} of ${statuses.length} providers ready.`);
+    const ghLogin = github.login();
+    const ghLine = gh.signedIn
+      ? `${gh.detail} (gh ${gh.version ?? '?'})`
+      : gh.installed
+        ? `${gh.detail}; run \`${[ghLogin.command, ...ghLogin.args].join(' ')}\``
+        : gh.detail;
+    console.log(`GitHub: ${ghLine}. Optional: cloning, issues and pull requests.`);
     const missing = statuses.filter((s) => s.auth !== 'signed_in');
     if (missing.length) {
       console.log('\nTo connect the others:');

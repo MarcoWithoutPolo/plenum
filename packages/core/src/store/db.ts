@@ -180,6 +180,7 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   ALTER TABLE projects ADD COLUMN proposed_test_command TEXT;
   ALTER TABLE projects ADD COLUMN permissions TEXT;
   ALTER TABLE projects ADD COLUMN retry_strategy TEXT NOT NULL DEFAULT 'same';
+  ALTER TABLE projects ADD COLUMN github TEXT;
   `,
   // One piece of work, one task: earlier failed attempts at the same work become "replaced".
   linkReplacedTasks,

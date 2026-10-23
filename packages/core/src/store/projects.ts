@@ -3,6 +3,7 @@ import {
   DEFAULT_PERMISSIONS,
   type Approval,
   type AskPolicy,
+  type GitHubLink,
   type Permissions,
   type RetryStrategy,
   type Seat,
@@ -36,6 +37,7 @@ export interface NewProject {
   askPolicy?: AskPolicy;
   permissions?: Permissions;
   designDirection?: string | null;
+  github?: GitHubLink | null;
   /** Created by the wizard before its clarify step; the brain won't run it yet. */
   draft?: boolean;
 }
@@ -54,6 +56,7 @@ type ProjectPatch = Partial<
     | 'permissions'
     | 'designDirection'
     | 'proposedTestCommand'
+    | 'github'
   >
 >;
 
@@ -98,6 +101,7 @@ export class ProjectStore {
       permissions: input.permissions ?? DEFAULT_PERMISSIONS,
       designDirection: input.designDirection ?? null,
       proposedTestCommand: null,
+      github: input.github ?? null,
       status: input.draft ? 'draft' : 'idle',
       statusReason: null,
       createdAt: now,
@@ -107,8 +111,8 @@ export class ProjectStore {
       .prepare(
         `INSERT INTO projects (id, name, repo_path, goal, done_when, test_command, base_branch,
            integration_branch, routing, max_attempts, retry_strategy, ask_policy, permissions,
-           design_direction, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           design_direction, github, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         project.id,
@@ -125,6 +129,7 @@ export class ProjectStore {
         project.askPolicy,
         JSON.stringify(project.permissions),
         project.designDirection,
+        project.github && JSON.stringify(project.github),
         project.status,
         now,
         now,
@@ -167,7 +172,7 @@ export class ProjectStore {
       .prepare(
         `UPDATE projects SET name = ?, goal = ?, done_when = ?, test_command = ?, routing = ?,
            max_attempts = ?, retry_strategy = ?, ask_policy = ?, permissions = ?,
-           design_direction = ?, proposed_test_command = ?, updated_at = ? WHERE id = ?`,
+           design_direction = ?, proposed_test_command = ?, github = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.name,
@@ -181,6 +186,7 @@ export class ProjectStore {
         JSON.stringify(next.permissions),
         next.designDirection,
         next.proposedTestCommand,
+        next.github && JSON.stringify(next.github),
         next.updatedAt,
         id,
       );
@@ -455,6 +461,7 @@ function toProject(r: Row): Project {
     },
     designDirection: (r.design_direction as string | null) ?? null,
     proposedTestCommand: (r.proposed_test_command as string | null) ?? null,
+    github: parse(r.github) as GitHubLink | null,
     status: r.status as ProjectStatus,
     statusReason: (r.status_reason as string | null) ?? null,
     createdAt: r.created_at as number,
