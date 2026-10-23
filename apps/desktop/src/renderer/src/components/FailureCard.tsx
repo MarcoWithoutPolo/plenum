@@ -11,12 +11,14 @@ import {
   RotateCcw,
   ScanEye,
   SkipForward,
+  Sparkles,
   TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import type { FailureKind, Project, Seat, Task } from '@conclave/shared';
 import { Dialog } from './Dialog';
-import { SeatPicker } from './SeatPicker';
+import { SeatPicker, modelLabel } from './SeatPicker';
+import { strongerModel } from '@/lib/models';
 import { Button, ProviderDot } from './bits';
 import { Field, textareaClass } from './form';
 import { useProjects } from '@/lib/projects';
@@ -81,6 +83,10 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
   const base: Seat = task.pinnedSeat ??
     project.routing.builder.find((s) => s.provider === (failure?.provider ?? task.builtBy)) ??
     project.routing.builder[0] ?? { provider: 'claude' };
+
+  const baseInfo = providers.find((p) => p.provider === base.provider);
+  const tried = failure?.provider === base.provider ? (failure.model ?? base.model) : base.model;
+  const stronger = strongerModel(baseInfo, tried ?? undefined);
 
   const summary = failure?.summary ?? task.feedback?.split('\n')[0] ?? 'The last attempt failed.';
   const detail = failure?.detail ?? task.feedback?.split('\n').slice(1).join('\n').trim();
@@ -181,6 +187,18 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
           >
             <TrendingUp className="size-3.5" /> More effort
           </Button>
+          {stronger && (
+            <Button
+              size="sm"
+              disabled={busy}
+              title={`${providerName(base.provider)}'s stronger model, for this task only`}
+              onClick={() =>
+                void run(() => retry(project.id, task.id, { seat: { ...base, model: stronger } }))
+              }
+            >
+              <Sparkles className="size-3.5" /> Retry with {modelLabel(baseInfo, stronger)}
+            </Button>
+          )}
           <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>
             <Pencil className="size-3.5" /> Edit and retry
           </Button>
