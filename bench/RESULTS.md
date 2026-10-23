@@ -59,3 +59,22 @@ fell back to Claude as designed.
 - **Scoring tweaks.** Record which hidden tests fail, and report cached and fresh input tokens separately.
 
 Re-run after v0.7 with `--runs 3` per cell to smooth out variance.
+
+## P0.5 step 1: right-sized tasks (2026-10-23, one run each)
+
+The planner now plans as few tasks as the work allows, and test setup rides along with the first task. Review stays
+required on every change. Codex was still at its spend cap, so Claude built in every run (marked "limited").
+
+| Project   | Conclave v0.6                   | Conclave, right-sized         | Change                         |
+| --------- | ------------------------------- | ----------------------------- | ------------------------------ |
+| textkit   | 7/7 · 10.1 min · 1.4M · 5 tasks | 7/7 · 4.6 min · 376k · 1 task | 2.2× faster, 3.7× fewer tokens |
+| calc      | 7/7 · 19.7 min · 2.6M · 7 tasks | 7/7 · 6.1 min · 331k · 1 task | 3.2× faster, 7.9× fewer tokens |
+| inventory | 7/7 · 12.6 min · 2.1M · 6 tasks | 7/7 · 3.4 min · 294k · 1 task | 3.7× faster, 7.0× fewer tokens |
+
+Same hidden-test score, a quarter to a third of the time, and about a sixth of the tokens. Against Claude alone it is
+now roughly 3–5× the time and about the same tokens, for a guaranteed cross-AI review.
+
+Since this run, the brain also checks the planner's size estimates (folds tiny neighbours, sends oversized tasks back
+to be split, calibrates against real diff sizes), lets the last task's reviewer confirm the whole goal (one fewer
+planner round), and ranks seats by measured reliability, quota and review speed. The next run includes a large
+multi-module project, where splitting should pay off.

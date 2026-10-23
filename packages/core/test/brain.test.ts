@@ -12,6 +12,13 @@ import {
   Store,
   adapterMap,
   createProject,
+  defaultRouting,
+  plannerPrompt,
+  shapePlan,
+  calibration,
+  changedLines,
+  rankSeats,
+  seatStats,
   displayCommand,
   displayPath,
   answerQuestion,
@@ -404,6 +411,109 @@ describe('Brain', () => {
     await expect(
       createProject(new Store(':memory:'), [{ provider: 'claude' }], { repoPath: dir, goal: 'x' }),
     ).rejects.toThrow(/not a git repository/);
+  });
+
+  it('sizes the plan to the goal and folds test setup into the first task', async () => {
+    const { project } = await setup();
+    const ctx = {
+      files: [],
+      totalFiles: 0,
+      history: '',
+      merged: [],
+      failed: [],
+      skipped: [],
+      queued: [],
+      maxTasks: 5,
+    };
+    const prompt = plannerPrompt({ ...project, testCommand: null, proposedTestCommand: null }, ctx);
+    expect(prompt).toMatch(/a small goal .* is ONE task/);
+    expect(prompt).toMatch(/sets them up along with its own change/);
+    expect(prompt).not.toMatch(/Make setting them up the first task/);
+  });
+
+  it('keeps the default team order until measured data says otherwise', () => {
+    const ready = (['antigravity', 'codex', 'claude'] as ProviderId[]).map((provider) => ({
+      provider,
+    }));
+    const team = defaultRouting(ready).reviewer;
+    expect(team.map((s) => s.provider)).toEqual(['claude', 'antigravity', 'codex']);
+    const order = (stats: Parameters<typeof rankSeats>[2], used: Record<string, number> = {}) =>
+      rankSeats(team, 'reviewer', stats, (p) => used[p] ?? null);
+    const stat = (runs: number, okRate: number, medianMs: number) => ({ runs, okRate, medianMs });
+
+    // No data, or too little: the team order stands.
+    expect(order(new Map()).seats).toEqual(team);
+    expect(
+      order(
+        new Map([
+          ['antigravity', stat(3, 1, 90_000)],
+          ['codex', stat(3, 1, 10_000)],
+        ]),
+      ).reasons,
+    ).toEqual([]);
+
+    // A reviewer at least 2x slower than the fastest moves behind it.
+    const slow = order(
+      new Map([
+        ['claude', stat(8, 1, 20_000)],
+        ['antigravity', stat(8, 1, 70_000)],
+        ['codex', stat(8, 1, 25_000)],
+      ]),
+    );
+    expect(slow.seats.map((s) => s.provider)).toEqual(['claude', 'codex', 'antigravity']);
+    expect(slow.reasons[0]).toMatch(/antigravity reviews take 3\.5× longer/);
+
+    // Unreliable or nearly spent providers move back, the unreliable one furthest.
+    const mixed = order(new Map([['claude', stat(10, 0.5, 20_000)]]), { antigravity: 0.8 });
+    expect(mixed.seats.map((s) => s.provider)).toEqual(['codex', 'antigravity', 'claude']);
+
+    // Builders keep their order for speed; only reliability and quota move them.
+    const builders = rankSeats(
+      team,
+      'builder',
+      new Map([
+        ['antigravity', stat(8, 1, 90_000)],
+        ['claude', stat(8, 1, 1_000)],
+      ]),
+      () => null,
+    );
+    expect(builders.seats).toEqual(team);
+  });
+
+  it('counts recent runs per provider for ranking', () => {
+    const runs = [
+      { provider: 'codex' as ProviderId, ok: true, durationMs: 30 },
+      { provider: 'codex' as ProviderId, ok: false, durationMs: 5 },
+      { provider: 'codex' as ProviderId, ok: true, durationMs: 10 },
+      { provider: 'claude' as ProviderId, ok: true, durationMs: 7 },
+    ];
+    expect(seatStats(runs).get('codex')).toEqual({ runs: 3, okRate: 2 / 3, medianMs: 20 });
+    expect(seatStats(runs, 1).get('codex')).toEqual({ runs: 1, okRate: 1, medianMs: 30 });
+  });
+
+  it('reviews with a faster reviewer once runs show the first choice is much slower', async () => {
+    const { store, brain, claude, codex, project } = await setup();
+    // Claude has been a slow reviewer lately; Codex a fast one.
+    for (let i = 0; i < 6; i++) {
+      for (const [provider, durationMs] of [
+        ['claude', 90_000],
+        ['codex', 9_000],
+      ] as const)
+        store.usage.record({
+          seat: { provider },
+          role: 'reviewer',
+          source: 'project',
+          result: { ok: true, durationMs, usage: {} },
+        });
+    }
+    await brain.run({ maxRounds: 10 });
+    const notes = store.projects.events(project.id).map((e) => e.message);
+    expect(notes).toContainEqual(
+      expect.stringMatching(/^Reviewer order adjusted: claude reviews take 10\.0× longer/),
+    );
+    // Codex built, so it can't review its own work; Claude still reviews. Ranking never breaks the cross-AI rule.
+    expect(claude.requests.map((r) => r.role)).toContain('reviewer');
+    expect(codex.requests.map((r) => r.role)).toEqual(['builder']);
   });
 
   it('keeps the merged result readable from the integration worktree', async () => {
@@ -1169,5 +1279,135 @@ describe('log formatting', () => {
     const cwd = join(tmpdir(), 'wt');
     expect(displayPath(join(cwd, 'src', 'a.js'), cwd)).toBe('src/a.js');
     expect(displayPath('b.js', cwd)).toBe('b.js');
+  });
+});
+
+describe('Right-sized plans', () => {
+  const est = (lines: number, risk: 'low' | 'medium' | 'high' = 'low', files = ['a.js']) => ({
+    files,
+    lines,
+    risk,
+  });
+  const merged = (estimate: number, actual: number, at: number) =>
+    ({
+      status: 'merged',
+      estimate: est(estimate),
+      actualLines: actual,
+      updatedAt: at,
+    }) as never;
+
+  it('folds small neighbours into one task, but never high-risk work or takeovers', () => {
+    const shaped = shapePlan([
+      { title: 'Add a', spec: 'a', estimate: est(40) },
+      { title: 'Add b', spec: 'b', estimate: est(50, 'medium', ['b.js']) },
+      { title: 'Migrate data', spec: 'm', estimate: est(30, 'high') },
+      { title: 'Redo c', spec: 'c', estimate: est(20), replaces: 'k_1' },
+      { title: 'Big feature', spec: 'f', estimate: est(300) },
+    ]);
+    expect(shaped.folded).toBe(1);
+    expect(shaped.tasks.map((t) => t.title)).toEqual([
+      'Add a; Add b',
+      'Migrate data',
+      'Redo c',
+      'Big feature',
+    ]);
+    expect(shaped.tasks[0]!.spec).toBe('1. Add a\na\n\n2. Add b\nb');
+    expect(shaped.tasks[0]!.estimate).toEqual({
+      files: ['a.js', 'b.js'],
+      lines: 90,
+      risk: 'medium',
+    });
+    expect(shaped.oversized).toEqual([]);
+  });
+
+  it('keeps a folded task reviewable and leaves tasks without estimates alone', () => {
+    const shaped = shapePlan([
+      { title: 'One', spec: '1', estimate: est(110) },
+      { title: 'Two', spec: '2', estimate: est(110) },
+      { title: 'Three', spec: '3', estimate: est(110) },
+      { title: 'Four', spec: '4', estimate: est(110) },
+      { title: 'Five', spec: '5' },
+    ]);
+    expect(shaped.tasks.map((t) => t.title)).toEqual(['One; Two; Three', 'Four', 'Five']);
+  });
+
+  it('flags tasks too big to review, scaled by how far off past estimates were', () => {
+    expect(shapePlan([{ title: 'Huge', spec: 'h', estimate: est(900) }]).oversized).toEqual([
+      { title: 'Huge', lines: 900 },
+    ]);
+    // This planner underestimates by 2x, so 500 really means ~1000.
+    const scale = calibration([merged(100, 200, 3), merged(50, 100, 2), merged(10, 20, 1)]);
+    expect(scale).toBe(2);
+    expect(shapePlan([{ title: 'Big', spec: 'b', estimate: est(500) }], scale).oversized).toEqual([
+      { title: 'Big', lines: 1000 },
+    ]);
+    expect(calibration([merged(100, 900, 1), merged(100, 900, 2), merged(100, 900, 3)])).toBe(3);
+    expect(calibration([merged(100, 200, 1)])).toBe(1);
+  });
+
+  it('reads changed lines from a diff stat', () => {
+    expect(
+      changedLines(' a.js | 3 ++-\n 2 files changed, 12 insertions(+), 4 deletions(-)\n'),
+    ).toBe(16);
+    expect(changedLines(' 1 file changed, 1 insertion(+)')).toBe(1);
+    expect(changedLines('')).toBe(0);
+  });
+
+  it('asks the planner once to split a task too big to review, then records the real size', async () => {
+    const huge = JSON.stringify({
+      done: false,
+      tasks: [{ title: 'Everything', spec: 'All of it', estimate: est(2000) }],
+    });
+    const split = JSON.stringify({
+      done: false,
+      tasks: [{ title: 'Add sum', spec: 'Create sum.js', estimate: est(5, 'low', ['sum.js']) }],
+    });
+    let plans = 0;
+    const { store, project, brain, claude } = await setup({
+      claude: {
+        reply: (req) => (req.role === 'planner' ? [huge, split, DONE][plans++]! : APPROVE),
+      },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    const planner = claude.requests.filter((r) => r.role === 'planner');
+    expect(planner[1]!.prompt).toContain('TOO BIG TO REVIEW WELL');
+    expect(planner[1]!.prompt).toContain('- Everything (~2000 lines)');
+    const [task] = store.projects.listTasks(project.id);
+    expect(task!.title).toBe('Add sum');
+    expect(task!.estimate).toEqual(est(5, 'low', ['sum.js']));
+    expect(task!.actualLines).toBe(1);
+  });
+
+  it('lets the last task’s reviewer confirm the goal, skipping the extra planner round', async () => {
+    const { brain, claude, store, project } = await setup({
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? PLAN
+            : '{"approve": true, "issues": [], "summary": "sum works", "goal_met": true, "goal_gaps": []}',
+      },
+    });
+    const outcome = await brain.run({ maxRounds: 10 });
+    expect(outcome).toMatchObject({ kind: 'done' });
+    expect(outcome.kind === 'done' && outcome.reason).toContain('checked the whole result');
+    expect(claude.requests.map((r) => r.role)).toEqual(['planner', 'reviewer']);
+    expect(claude.requests[1]!.prompt).toContain('THIS IS THE LAST PLANNED TASK');
+    expect(store.projects.approvals(project.id, 'pending')[0]?.kind).toBe('push');
+  });
+
+  it('hands the gaps a goal check finds to the next plan', async () => {
+    let plans = 0;
+    const { brain, claude } = await setup({
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? [PLAN, DONE][plans++]!
+            : '{"approve": true, "issues": [], "summary": "ok", "goal_met": false, "goal_gaps": ["sum has no tests"]}',
+      },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    const planner = claude.requests.filter((r) => r.role === 'planner');
+    expect(planner[1]!.prompt).toContain('THE LAST REVIEW FOUND THE GOAL NOT YET MET');
+    expect(planner[1]!.prompt).toContain('- sum has no tests');
   });
 });

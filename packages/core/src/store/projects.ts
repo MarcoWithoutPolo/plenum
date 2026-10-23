@@ -8,6 +8,7 @@ import {
   type RetryStrategy,
   type Seat,
   type TaskFailure,
+  type TaskEstimate,
   type TaskGrants,
   type BrainEvent,
   type BrainEventKind,
@@ -76,6 +77,7 @@ export type TaskPatch = Partial<
     | 'replacedBy'
     | 'blockedBy'
     | 'grants'
+    | 'actualLines'
   >
 >;
 
@@ -195,7 +197,10 @@ export class ProjectStore {
 
   /* ── Tasks ─────────────────────────────────────────────────────────── */
 
-  addTasks(projectId: string, tasks: { title: string; spec: string }[]): Task[] {
+  addTasks(
+    projectId: string,
+    tasks: { title: string; spec: string; estimate?: TaskEstimate }[],
+  ): Task[] {
     return transaction(this.db, () => {
       const { top } = this.db
         .prepare('SELECT COALESCE(MAX(priority), 0) AS top FROM tasks WHERE project_id = ?')
@@ -220,15 +225,27 @@ export class ProjectStore {
           replacedBy: null,
           blockedBy: null,
           grants: null,
+          estimate: t.estimate ?? null,
+          actualLines: null,
           createdAt: now,
           updatedAt: now,
         };
         this.db
           .prepare(
-            `INSERT INTO tasks (id, project_id, title, spec, status, priority, attempts, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+            `INSERT INTO tasks (id, project_id, title, spec, status, priority, attempts, estimate, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
           )
-          .run(task.id, projectId, task.title, task.spec, task.status, task.priority, now, now);
+          .run(
+            task.id,
+            projectId,
+            task.title,
+            task.spec,
+            task.status,
+            task.priority,
+            task.estimate && JSON.stringify(task.estimate),
+            now,
+            now,
+          );
         return task;
       });
     });
@@ -274,7 +291,7 @@ export class ProjectStore {
       .prepare(
         `UPDATE tasks SET status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
            merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
-           replaced_by = ?, blocked_by = ?, grants = ?, updated_at = ? WHERE id = ?`,
+           replaced_by = ?, blocked_by = ?, grants = ?, actual_lines = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.status,
@@ -290,6 +307,7 @@ export class ProjectStore {
         next.replacedBy,
         next.blockedBy,
         next.grants && JSON.stringify(next.grants),
+        next.actualLines,
         next.updatedAt,
         id,
       );
@@ -506,6 +524,8 @@ function toTask(r: Row): Task {
     replacedBy: (r.replaced_by as string | null) ?? null,
     blockedBy: (r.blocked_by as string | null) ?? null,
     grants: parse(r.grants) as TaskGrants | null,
+    estimate: parse(r.estimate) as TaskEstimate | null,
+    actualLines: (r.actual_lines as number | null) ?? null,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };

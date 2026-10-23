@@ -145,6 +145,15 @@ export const TaskGrants = z.object({
 });
 export type TaskGrants = z.infer<typeof TaskGrants>;
 
+/** The planner's guess at a task's size, checked by the brain and against the real diff. */
+export const TaskEstimate = z.object({
+  files: z.array(z.string()),
+  /** Changed lines (added + removed). */
+  lines: z.number(),
+  risk: z.enum(['low', 'medium', 'high']),
+});
+export type TaskEstimate = z.infer<typeof TaskEstimate>;
+
 export const Task = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -168,6 +177,9 @@ export const Task = z.object({
   blockedBy: z.string().nullable(),
   /** One-time permissions you granted for the next attempt. */
   grants: TaskGrants.nullable(),
+  estimate: TaskEstimate.nullable(),
+  /** Changed lines in the merged diff, to calibrate the planner's estimates. */
+  actualLines: z.number().nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

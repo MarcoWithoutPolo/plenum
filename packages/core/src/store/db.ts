@@ -184,7 +184,19 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   `,
   // One piece of work, one task: earlier failed attempts at the same work become "replaced".
   linkReplacedTasks,
+  // v7: planner size estimates and the real merged size, for right-sized plans.
+  (db) => {
+    addColumn(db, 'tasks', 'estimate', 'TEXT');
+    addColumn(db, 'tasks', 'actual_lines', 'INTEGER');
+  },
 ];
+
+/** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */
+function addColumn(db: DatabaseSync, table: string, column: string, type: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some((c) => c.name === column))
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
 
 /** Current schema version (number of migrations). */
 export const SCHEMA_VERSION = MIGRATIONS.length;

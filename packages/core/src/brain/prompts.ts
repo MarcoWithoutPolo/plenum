@@ -1,5 +1,6 @@
 import type { Project, Task } from '@conclave/shared';
 import { DECIDE_YOURSELF, PLANNER_QUESTION_RULE, QUESTION_RULE } from './questions.js';
+import { SIZE } from './shape.js';
 
 /** Optional context every agent prompt can carry. */
 export interface PromptExtras {
@@ -20,6 +21,10 @@ export interface PlanContext {
   skipped: Task[];
   queued: Task[];
   maxTasks: number;
+  /** Tasks from the previous reply that were too big to review well. */
+  resize?: { title: string; lines: number }[];
+  /** What the last review found still missing from the goal. */
+  gaps?: string[];
 }
 
 /** What builders are told about running commands, by permission level (C6c). */
@@ -81,19 +86,21 @@ ${list(ctx.skipped)}
 
 STILL QUEUED
 ${list(ctx.queued)}
-
+${ctx.gaps?.length ? `\nTHE LAST REVIEW FOUND THE GOAL NOT YET MET. Plan what closes these gaps:\n${ctx.gaps.map((g) => `- ${g}`).join('\n')}\n` : ''}${ctx.resize?.length ? `\nYOUR LAST PLAN HAD TASKS TOO BIG TO REVIEW WELL. Split each into parts under ~${SIZE.reviewable} changed lines:\n${ctx.resize.map((r) => `- ${r.title} (~${r.lines} lines)`).join('\n')}\n` : ''}
 You can read files in the working directory to understand the code. Then plan the next steps.
 
 Rules for tasks:
-- Small and independently verifiable: one focused change each, finishable in one sitting.
+- As few as the work allows. Every task costs a full build, test run and review, so never split work that one engineer would do in one sitting: a small goal (a module or two, a focused fix or refactor) is ONE task.
+- Split only where a task would otherwise be too big to review well (roughly ${SIZE.reviewable}+ changed lines) or where parts are truly independent.
+- Estimate each task honestly: the files it touches, the changed lines (added + removed, tests included), and the risk (high: security, data loss, migrations, public APIs).
 - Ordered: earlier tasks must not depend on later ones.
 - Each spec says exactly what to change and how the result is checked (tests to add or update).
-- Never plan pushing, deploying or publishing. Plan new dependencies only when the goal needs them; the builder asks the user first.${project.testCommand ? '' : '\n- There are no tests yet. Make setting them up the first task, and include the command in "test_command".'}
+- Never plan pushing, deploying or publishing. Plan new dependencies only when the goal needs them; the builder asks the user first.${project.testCommand ? '' : '\n- There are no tests yet. The first task sets them up along with its own change (not as a separate task), and you include the command in "test_command".'}
 
 ${extras.decideYourself ? DECIDE_YOURSELF : PLANNER_QUESTION_RULE}
 
 Otherwise reply with ONLY one JSON object and nothing else.
-To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified", "replaces": "id of the failed task this takes over, or omit"}]${project.testCommand ? '' : ', "test_command": "the command that runs the tests"'}} with at most ${ctx.maxTasks} tasks.
+To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified", "replaces": "id of the failed task this takes over, or omit", "estimate": {"files": ["paths it changes"], "lines": 120, "risk": "low|medium|high"}}]${project.testCommand ? '' : ', "test_command": "the command that runs the tests"'}} with at most ${ctx.maxTasks} tasks.
 If the goal is fully met: {"done": true, "reason": "one sentence on why"}.`;
 }
 
@@ -141,12 +148,17 @@ ${extras.decideYourself ? DECIDE_YOURSELF : QUESTION_RULE}
 When you are done, reply with a short summary of what you changed.`;
 }
 
+export interface ReviewExtras extends PromptExtras {
+  /** This is the last queued task: also judge whether the whole goal is met. */
+  goalCheck?: { merged: string[]; doneWhen: string | null };
+}
+
 export function reviewerPrompt(
   project: Project,
   task: Task,
   diff: { diff: string; stat: string; truncated: boolean },
   tests: string,
-  extras: PromptExtras = {},
+  extras: ReviewExtras = {},
 ): string {
   return `You are reviewing one change for an autonomous coding project, as a careful senior engineer. You can read files in the working directory for context.
 
@@ -169,7 +181,16 @@ ${diff.diff}
 
 Approve unless there is a real problem: a bug, a missed requirement from the task, broken or missing tests, a security issue, changes unrelated to the task, or a change that contradicts a decision above (cite the decision). Style nits alone are not a reason to reject.
 
-Reply with ONLY one JSON object and nothing else:
-{"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"}
+${extras.goalCheck ? goalCheckSection(extras.goalCheck) : ''}Reply with ONLY one JSON object and nothing else:
+{"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"${extras.goalCheck ? ', "goal_met": true or false, "goal_gaps": ["what is still missing from the goal"]' : ''}}
 If the change hinges on a product decision only the user can make, add "question": "...", "options": ["...", "..."], "recommended": "..." and set "approve": false.`;
+}
+
+function goalCheckSection(check: { merged: string[]; doneWhen: string | null }): string {
+  return `THIS IS THE LAST PLANNED TASK. Your working directory holds the whole project with this change applied. Also judge the PROJECT GOAL${check.doneWhen ? ' and DONE WHEN' : ''} as a whole: read the code, and set "goal_met" to true only if every requirement is implemented and tested. Otherwise list each gap in "goal_gaps".
+${check.doneWhen ? `\nDONE WHEN\n${check.doneWhen}\n` : ''}
+ALREADY MERGED
+${check.merged.length ? check.merged.map((t) => `- ${t}`).join('\n') : '- none'}
+
+`;
 }

@@ -1,3 +1,5 @@
+import type { TaskEstimate } from '@conclave/shared';
+
 /**
  * Pull the JSON object out of a model reply: a ```json fence, a bare object,
  * or an object surrounded by prose. Returns undefined when there isn't one.
@@ -22,11 +24,32 @@ export function extractJson(text: string): unknown {
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
+export interface PlannedTask {
+  title: string;
+  spec: string;
+  replaces?: string;
+  estimate?: TaskEstimate;
+}
+
+/** The planner's size guess, if it gave a usable one. */
+function parseEstimate(v: unknown): TaskEstimate | undefined {
+  if (!isObj(v)) return undefined;
+  const lines = typeof v.lines === 'number' ? v.lines : Number(v.lines);
+  if (!Number.isFinite(lines) || lines < 0) return undefined;
+  const files = Array.isArray(v.files)
+    ? v.files
+        .filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
+        .map((f) => f.trim())
+    : [];
+  const risk = v.risk === 'low' || v.risk === 'high' ? v.risk : 'medium';
+  return { files: files.slice(0, 50), lines: Math.round(lines), risk };
+}
+
 export type PlanReply =
   | { done: true; reason: string }
   | {
       done: false;
-      tasks: { title: string; spec: string; replaces?: string }[];
+      tasks: PlannedTask[];
       testCommand?: string;
     };
 
@@ -43,6 +66,7 @@ export function parsePlan(text: string, maxTasks: number): PlanReply | undefined
       title: typeof t.title === 'string' ? t.title.trim() : '',
       spec: typeof t.spec === 'string' ? t.spec.trim() : '',
       ...(typeof t.replaces === 'string' && t.replaces.trim() && { replaces: t.replaces.trim() }),
+      ...(parseEstimate(t.estimate) && { estimate: parseEstimate(t.estimate)! }),
     }))
     .filter((t) => t.title && t.spec)
     .slice(0, maxTasks);
@@ -54,6 +78,9 @@ export interface ReviewReply {
   approve: boolean;
   issues: string[];
   summary: string;
+  /** Only when asked for a goal check. */
+  goalMet?: boolean;
+  goalGaps?: string[];
 }
 
 export function parseReview(text: string): ReviewReply | undefined {
@@ -66,5 +93,11 @@ export function parseReview(text: string): ReviewReply | undefined {
     approve: json.approve,
     issues,
     summary: typeof json.summary === 'string' ? json.summary : '',
+    ...(typeof json.goal_met === 'boolean' && { goalMet: json.goal_met }),
+    ...(Array.isArray(json.goal_gaps) && {
+      goalGaps: json.goal_gaps.filter(
+        (g): g is string => typeof g === 'string' && g.trim().length > 0,
+      ),
+    }),
   };
 }

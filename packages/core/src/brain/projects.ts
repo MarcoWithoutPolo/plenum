@@ -15,6 +15,7 @@ import { currentBranch, isRepo, repoRoot } from '../workspace/git.js';
 /** Which provider does each job by default, best first. Only signed-in providers are kept. */
 const PREFERENCE: Record<keyof Routing, ProviderId[]> = {
   // Planning and review lean on judgment; building on fast, careful edits.
+  // The brain adjusts this order from measured reliability, quota and speed (governor/rank.ts).
   planner: ['claude', 'antigravity', 'codex', 'gemini'],
   builder: ['codex', 'claude', 'antigravity', 'gemini'],
   reviewer: ['claude', 'antigravity', 'codex', 'gemini'],

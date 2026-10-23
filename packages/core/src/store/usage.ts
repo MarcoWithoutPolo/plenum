@@ -126,6 +126,22 @@ export class UsageStore {
     return [...buckets.values()].sort((a, b) => a.day.localeCompare(b.day));
   }
 
+  /** Recent project runs in one role, newest first, for ranking seats (usage limits left out). */
+  roleRuns(role: Role, limit = 400): { provider: ProviderId; ok: boolean; durationMs: number }[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT provider, ok, duration_ms FROM agent_runs
+           WHERE role = ? AND source = 'project' AND rate_limited = 0 ORDER BY id DESC LIMIT ?`,
+        )
+        .all(role, limit) as Row[]
+    ).map((r) => ({
+      provider: r.provider as ProviderId,
+      ok: r.ok === 1,
+      durationMs: r.duration_ms as number,
+    }));
+  }
+
   /** When this provider last answered successfully (any chat, council or project run). */
   lastOk(provider: ProviderId): number | null {
     const row = this.db

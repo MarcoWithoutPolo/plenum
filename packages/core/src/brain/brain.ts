@@ -25,6 +25,8 @@ import { Workspace } from '../workspace/git.js';
 import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
+import { calibration, changedLines, shapePlan } from './shape.js';
+import { rankSeats, seatStats, type RankRole } from '../governor/rank.js';
 import { QUESTION_KINDS } from './answers.js';
 import { isRunnableInstall, parseQuestion } from './questions.js';
 import { builderPlan, countsAsAttempt } from './recovery.js';
@@ -81,6 +83,10 @@ export class Brain {
   private readonly agentTimeout: number;
   private readonly testTimeout: number;
   private started = false;
+  /** The last reorder reason logged per role, so a steady reorder is logged once. */
+  private readonly rankNotes = new Map<RankRole, string>();
+  /** What the last goal check found missing; the next plan closes these gaps. */
+  private gaps: string[] = [];
   /** Set while run() is going; aborting it interrupts the agent or test in flight. */
   private signal: AbortSignal | undefined;
 
@@ -285,8 +291,11 @@ export class Brain {
 
   /* ── Planning ──────────────────────────────────────────────────────── */
 
-  private async plan(project: Project): Promise<RoundOutcome> {
-    const pick = this.governor.pick(project.routing.planner);
+  private async plan(
+    project: Project,
+    resize?: { title: string; lines: number }[],
+  ): Promise<RoundOutcome> {
+    const pick = this.governor.pick(this.ranked('planner', project.routing.planner));
     if (!pick.seat) return this.waiting('planner', pick);
 
     const tasks = this.projects.listTasks(this.projectId);
@@ -302,6 +311,8 @@ export class Brain {
         skipped: tasks.filter((t) => t.status === 'skipped'),
         queued: tasks.filter((t) => t.status === 'queued' || t.status === 'blocked'),
         maxTasks: this.maxTasks,
+        ...(resize && { resize }),
+        ...(this.gaps.length && { gaps: this.gaps }),
       },
       { decisions: this.decisions(), decideYourself: this.mustDecide(null) },
     );
@@ -372,11 +383,26 @@ export class Brain {
       this.log('plan', `Skipped ${repeats} task(s) that already failed`, {
         provider: pick.seat.provider,
       });
-    const added = this.projects.addTasks(this.projectId, fresh);
+    // The planner proposes; the brain checks the sizes before anything is queued.
+    const shaped = shapePlan(fresh, calibration(tasks));
+    if (shaped.oversized.length && !resize) {
+      this.log(
+        'plan',
+        `Asking the planner to split ${shaped.oversized.length} task(s) too big to review well`,
+        { provider: pick.seat.provider, data: { oversized: shaped.oversized } },
+      );
+      return this.plan(project, shaped.oversized);
+    }
+    if (shaped.folded)
+      this.log('plan', `Folded ${shaped.folded} small task(s) into their neighbours`, {
+        provider: pick.seat.provider,
+      });
+    this.gaps = [];
+    const added = this.projects.addTasks(this.projectId, shaped.tasks);
     this.linkReplacements(
       tasks,
       added,
-      fresh.map((t) => t.replaces),
+      shaped.tasks.map((t) => t.replaces),
       pick.seat.provider,
     );
     this.log('plan', `Planned ${added.length} task(s)`, {
@@ -459,7 +485,8 @@ export class Brain {
       this.log('stop', reason, { task });
       return { kind: 'idle', reason };
     }
-    plan.seats = seats;
+    // Retries keep their escalation order; only a first, unpinned attempt is re-ranked.
+    plan.seats = task.attempts === 0 && !task.pinnedSeat ? this.ranked('builder', seats) : seats;
     const pick = this.governor.pick(plan.seats);
     if (!pick.seat) return this.waiting('builder', pick);
     const builder = pick.seat;
@@ -614,8 +641,13 @@ export class Brain {
     let reviewer: Seat;
     let result: RunResult;
     let verdict: ReturnType<typeof parseReview>;
+    let lines = 0;
+    const goalCheck = this.goalCheck(project, task);
     for (;;) {
-      const seats = project.routing.reviewer.filter((s) => !tried.includes(s.provider));
+      const seats = this.ranked(
+        'reviewer',
+        project.routing.reviewer.filter((s) => !tried.includes(s.provider)),
+      );
       const pick = this.governor.pick(seats, avoid);
       if (!pick.seat) {
         if (problem) {
@@ -644,10 +676,14 @@ export class Brain {
         { task, provider: reviewer.provider },
       );
       const diff = await this.workspace.taskDiff(task.id);
+      lines = changedLines(diff.stat);
       result = await this.agent(
         'reviewer',
         reviewer,
-        reviewerPrompt(project, task, diff, tests, { decisions: this.decisions() }),
+        reviewerPrompt(project, task, diff, tests, {
+          decisions: this.decisions(),
+          ...(goalCheck && { goalCheck }),
+        }),
         this.workspace.taskPath(task.id),
         true,
         task,
@@ -718,6 +754,7 @@ export class Brain {
       mergeCommit: merged.commit,
       feedback: null,
       grants: null,
+      actualLines: lines,
     });
     await this.workspace.removeTaskTree(task.id);
     this.log('merge', `Merged into ${project.integrationBranch} (${merged.commit.slice(0, 8)})`, {
@@ -725,7 +762,58 @@ export class Brain {
       data: { commit: merged.commit },
     });
     await this.adoptProposedTests();
+    if (goalCheck && verdict.goalMet === true) {
+      // The reviewer read the whole result against the goal: no separate planner check needed.
+      const blocker = await this.testsBlockDone(
+        this.project(),
+        this.projects.listTasks(this.projectId),
+      );
+      if (blocker) return blocker;
+      const reason = `${seatLabel(reviewer)} checked the whole result against the goal: ${verdict.summary || 'every requirement is met'}`;
+      this.finish(reason);
+      return { kind: 'done', reason };
+    }
+    if (goalCheck && verdict.goalMet === false && verdict.goalGaps?.length) {
+      this.gaps = verdict.goalGaps.slice(0, 10);
+      this.log('review', `The goal isn't met yet: ${this.gaps.length} gap(s) for the next plan`, {
+        task: done,
+        provider: reviewer.provider,
+        data: { gaps: this.gaps },
+      });
+    }
     return { kind: 'merged', task: done };
+  }
+
+  /** The team order for a role, adjusted by measured reliability, quota and (for reviews) speed. */
+  private ranked(role: RankRole, seats: Seat[]): Seat[] {
+    const ranked = rankSeats(seats, role, seatStats(this.ctx.store.usage.roleRuns(role)), (p) =>
+      this.governor.utilization(p),
+    );
+    const note = ranked.reasons.join('; ');
+    if (note && this.rankNotes.get(role) !== note) {
+      this.log('plan', `${role[0]!.toUpperCase()}${role.slice(1)} order adjusted: ${note}`, {
+        data: { role, order: ranked.seats.map((s) => s.provider) },
+      });
+    }
+    this.rankNotes.set(role, note);
+    return ranked.seats;
+  }
+
+  /**
+   * The last queued task's reviewer also checks the whole goal, which saves a planner round.
+   * Not when anything else is open: failed work, questions or other queued tasks.
+   */
+  private goalCheck(
+    project: Project,
+    task: Task,
+  ): { merged: string[]; doneWhen: string | null } | undefined {
+    const tasks = this.projects.listTasks(this.projectId).filter((t) => t.id !== task.id);
+    const open = tasks.some((t) => ['queued', 'blocked', 'failed'].includes(t.status));
+    if (open || this.openQuestions().length) return undefined;
+    return {
+      merged: tasks.filter((t) => t.status === 'merged').map((t) => t.title),
+      doneWhen: project.doneWhen,
+    };
   }
 
   /**

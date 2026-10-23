@@ -61,6 +61,18 @@ export class Governor {
     return { ok: true };
   }
 
+  /** How full the provider's fullest current usage window is (0 to 1), if it reports one. */
+  utilization(provider: ProviderId): number | null {
+    const now = this.now();
+    let max: number | null = null;
+    for (const q of this.readings()) {
+      if (q.provider !== provider || q.utilization === null || q.window === 'limit') continue;
+      if (q.resetsAt !== null && q.resetsAt <= now) continue;
+      max = Math.max(max ?? 0, q.utilization);
+    }
+    return max;
+  }
+
   /** The first seat in `seats` whose provider has headroom, skipping `avoid` when possible. */
   pick(
     seats: Seat[],
