@@ -33,7 +33,10 @@ const DEMO_TASKS = [
   },
 ];
 
-/** CONCLAVE_DEMO_ASK=1: the second task's builder asks a question before it builds. */
+/**
+ * CONCLAVE_DEMO_ASK=1: the second task's builder asks a question before it builds;
+ * CONCLAVE_DEMO_ASK=install: it asks to install a package instead.
+ */
 const DEMO_QUESTION = {
   question: 'Which tone should the usage notes use?',
   why: 'It sets how all the docs read.',
@@ -43,7 +46,7 @@ const DEMO_QUESTION = {
 
 function asksFirst(req: RunRequest): boolean {
   return (
-    process.env.CONCLAVE_DEMO_ASK === '1' &&
+    (process.env.CONCLAVE_DEMO_ASK === '1' || process.env.CONCLAVE_DEMO_ASK === 'install') &&
     req.role === 'builder' &&
     req.prompt.includes(`YOUR TASK: ${DEMO_TASKS[1]!.title}`) &&
     !/The user answered|Assumption made|Settled by/.test(req.prompt)
@@ -72,7 +75,22 @@ function projectReply(req: RunRequest): string | undefined {
       test_command: null,
     });
   }
-  if (asksFirst(req)) return JSON.stringify(DEMO_QUESTION);
+  if (asksFirst(req)) {
+    return JSON.stringify(
+      process.env.CONCLAVE_DEMO_ASK === 'install'
+        ? {
+            question:
+              'May I run `npm install marked` to render the usage notes from Markdown? I have no shell here and the rules do not let me reach the network.',
+            why: 'The task asks for formatted usage notes, and marked turns Markdown into HTML.',
+            permission: {
+              kind: 'install',
+              command: 'npm install marked',
+              alternative: 'write the notes as plain HTML by hand, without a Markdown renderer',
+            },
+          }
+        : DEMO_QUESTION,
+    );
+  }
   if (req.role === 'planner') {
     const todo = DEMO_TASKS.filter((t) => !existsSync(join(req.cwd, t.file)));
     return todo.length

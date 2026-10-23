@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { Globe, MessageCircleQuestion, Package, Star } from 'lucide-react';
+import { ChevronDown, Globe, MessageCircleQuestion, Package, Star } from 'lucide-react';
 import type { Approval, QuestionPayload } from '@conclave/shared';
 import { Button, ProviderDot } from './bits';
 import { inputClass } from './form';
@@ -10,6 +10,20 @@ import { providerName } from '@/lib/store';
 /** Install commands Conclave runs itself once approved (mirrors the engine's allow-list). */
 const RUNNABLE =
   /^(npm|pnpm|yarn|bun) (add|install|i)\b|^(pip|pip3|python -m pip) install\b|^uv add\b|^cargo add\b|^go get\b|^dotnet add package\b/i;
+
+/** "npm install -D howler vitest" → "howler, vitest". */
+function packagesOf(command: string | undefined): string | undefined {
+  if (!command) return undefined;
+  const words = command
+    .trim()
+    .replace(
+      /^(python -m pip|npm|pnpm|yarn|bun|pip3?|uv|cargo|go|dotnet)\s+(add package|install|add|get|i)\s*/i,
+      '',
+    )
+    .split(/\s+/)
+    .filter((w) => w && !w.startsWith('-'));
+  return words.length ? words.join(', ') : undefined;
+}
 
 /**
  * An agent's question or permission request, answerable in place: option chips (the
@@ -49,6 +63,14 @@ export function QuestionCard({
         ? Globe
         : MessageCircleQuestion;
   const command = q.permission?.command;
+  const permission = approval.kind !== 'question';
+  const packages = packagesOf(command);
+  // Permission requests get a short title of our own; the agent's wording goes under "Why".
+  const title = !permission
+    ? q.question
+    : approval.kind === 'install'
+      ? `Install ${packages ?? 'a package'}?`
+      : 'Allow network access?';
 
   return (
     <article
@@ -76,8 +98,10 @@ export function QuestionCard({
             {taskTitle && <span className="truncate">· {taskTitle}</span>}
             <span className="ml-auto shrink-0">{relative(approval.createdAt, 'past')}</span>
           </div>
-          <h3 className="selectable mt-1 text-[14.5px] leading-snug font-semibold">{q.question}</h3>
-          {q.why && <p className="selectable mt-0.5 text-[12.5px] text-muted">{q.why}</p>}
+          <h3 className="selectable mt-1 text-[14.5px] leading-snug font-semibold">{title}</h3>
+          {!permission && q.why && (
+            <p className="selectable mt-0.5 text-[12.5px] text-muted">{q.why}</p>
+          )}
 
           {approval.kind === 'question' ? (
             <>
@@ -170,41 +194,60 @@ export function QuestionCard({
             </>
           ) : (
             <>
-              {command && (
-                <div className="mt-3 rounded-xl bg-sunken px-3 py-2">
-                  <code className="selectable font-mono text-[12.5px]">{command}</code>
-                  <p className="mt-1 text-[11.5px] text-faint">
-                    {approval.kind === 'install'
-                      ? RUNNABLE.test(command.trim())
-                        ? 'If you allow it, Conclave runs exactly this before the next attempt.'
-                        : "Conclave can't run this for you. Install it yourself, then allow."
-                      : null}
-                  </p>
-                </div>
-              )}
-              {approval.kind === 'network' && (
-                <p className="mt-2 text-[12.5px] text-muted">
-                  Allowing gives the builder network access for one attempt of this task.
-                </p>
-              )}
-              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+              <p className="mt-1 text-[12.5px] text-muted">
+                {approval.kind === 'network' ? (
+                  'Gives the builder network access for one attempt of this task.'
+                ) : command && RUNNABLE.test(command.trim()) ? (
+                  <>
+                    Conclave runs{' '}
+                    <code className="selectable rounded bg-sunken px-1.5 py-0.5 font-mono text-[12px] text-ink">
+                      {command}
+                    </code>{' '}
+                    itself, then the task continues.
+                  </>
+                ) : (
+                  <>
+                    Conclave can't run{' '}
+                    <code className="selectable rounded bg-sunken px-1.5 py-0.5 font-mono text-[12px] text-ink">
+                      {command ?? 'this'}
+                    </code>{' '}
+                    for you. Install it yourself, then allow.
+                  </>
+                )}
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <details className="group min-w-0 flex-1 text-[12px] text-faint">
+                  <summary className="inline-flex cursor-pointer list-none items-center gap-1 font-medium hover:text-ink">
+                    <ChevronDown className="size-3.5 -rotate-90 transition group-open:rotate-0" />
+                    Why it's asking
+                  </summary>
+                  <div className="selectable mt-1.5 space-y-1 text-[12.5px] leading-relaxed text-muted">
+                    <p>{q.question}</p>
+                    {q.why && <p>{q.why}</p>}
+                    {q.permission?.alternative && (
+                      <p>
+                        <span className="font-medium text-ink">If you decline:</span>{' '}
+                        {q.permission.alternative}
+                      </p>
+                    )}
+                  </div>
+                </details>
                 <Button
                   size="sm"
                   disabled={busy}
+                  className="self-start"
                   onClick={() => void send('rejected', q.permission?.alternative)}
-                  title={q.permission?.alternative}
                 >
-                  {q.permission?.alternative
-                    ? `No, ${q.permission.alternative.replace(/^./, (c) => c.toLowerCase())}`
-                    : 'Decline'}
+                  Decline
                 </Button>
                 <Button
                   size="sm"
                   variant="primary"
                   disabled={busy}
+                  className="self-start"
                   onClick={() => void send('approved')}
                 >
-                  {approval.kind === 'install' ? 'Allow install' : 'Allow for one attempt'}
+                  {approval.kind === 'install' ? 'Allow install' : 'Allow once'}
                 </Button>
               </div>
             </>
