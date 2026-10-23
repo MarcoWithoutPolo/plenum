@@ -126,6 +126,14 @@ export class UsageStore {
     return [...buckets.values()].sort((a, b) => a.day.localeCompare(b.day));
   }
 
+  /** When this provider last answered successfully (any chat, council or project run). */
+  lastOk(provider: ProviderId): number | null {
+    const row = this.db
+      .prepare('SELECT MAX(at) AS at FROM agent_runs WHERE provider = ? AND ok = 1')
+      .get(provider) as { at: number | null };
+    return row.at ?? null;
+  }
+
   recent(limit = 50): AgentRun[] {
     return (
       this.db.prepare('SELECT * FROM agent_runs ORDER BY id DESC LIMIT ?').all(limit) as Row[]

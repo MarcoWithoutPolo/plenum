@@ -13,6 +13,7 @@ import {
   type Project,
 } from '@conclave/shared';
 import {
+  activeLimits,
   builderPermissions,
   clarify,
   createProject,
@@ -135,6 +136,11 @@ export function registerProjectIpc(
         summary: p.summary,
         taskIds: p.tasks.map((t) => t.id),
       })),
+      limits: activeLimits(engine.store, project.id).filter((l) =>
+        [...project.routing.planner, ...project.routing.builder, ...project.routing.reviewer].some(
+          (s) => s.provider === l.provider,
+        ),
+      ),
     };
   });
 

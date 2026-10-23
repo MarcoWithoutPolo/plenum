@@ -30,6 +30,7 @@ import { ASK_POLICIES, LEVEL_NAMES } from '@/components/form';
 import {
   DecisionsPanel,
   DraftBanner,
+  LimitBanner,
   NeedsYou,
   ProblemBanner,
   ProjectSettingsDialog,
@@ -80,7 +81,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   if (!detail) {
     return <div className="grid flex-1 place-items-center text-muted">Loading…</div>;
   }
-  const { project, tasks, events, approvals, running, decisions, problems } = detail;
+  const { project, tasks, events, approvals, running, decisions, problems, limits } = detail;
   const pending = approvals.find((a) => a.status === 'pending' && !QUESTION_KINDS.has(a.kind));
   const questions = approvals
     .filter((a) => a.status === 'pending' && QUESTION_KINDS.has(a.kind))
@@ -106,6 +107,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
           {pending && (
             <ApprovalCard approval={pending} project={project} running={running} variant="banner" />
           )}
+          <LimitBanner project={project} limits={limits} />
           <ProblemBanner
             project={project}
             problems={problems}

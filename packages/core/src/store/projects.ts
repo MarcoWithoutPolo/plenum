@@ -296,6 +296,24 @@ export class ProjectStore {
     return next;
   }
 
+  /** The newest usage-limit failure per provider, across all projects or one. */
+  latestLimits(projectId?: string): TaskFailure[] {
+    const rows = this.db
+      .prepare(
+        `SELECT last_failure FROM tasks WHERE last_failure LIKE '%"kind":"limit"%'
+         AND (? IS NULL OR project_id = ?)`,
+      )
+      .all(projectId ?? null, projectId ?? null) as Row[];
+    const newest = new Map<string, TaskFailure>();
+    for (const r of rows) {
+      const f = parse(r.last_failure) as TaskFailure | null;
+      if (!f?.provider || f.kind !== 'limit') continue;
+      const seen = newest.get(f.provider);
+      if (!seen || seen.at < f.at) newest.set(f.provider, f);
+    }
+    return [...newest.values()];
+  }
+
   /** After a crash, tasks caught mid-step go back to the queue (the attempt doesn't count). */
   requeueInterrupted(projectId: string): Task[] {
     const stuck = this.listTasks(projectId).filter((t) =>

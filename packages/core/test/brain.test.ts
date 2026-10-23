@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ProviderId, RunRequest } from '../src/index.js';
 import {
   Brain,
+  activeLimits,
   FakeAdapter,
   Governor,
   Store,
@@ -317,6 +318,17 @@ describe('Brain', () => {
     expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
     const [task] = store.projects.listTasks(project.id);
     expect(task).toMatchObject({ status: 'merged', builtBy: 'claude', attempts: 0 });
+    // Nothing failed, so the banner comes from the limit itself, until Codex works again.
+    expect(activeLimits(store, project.id)).toEqual([
+      expect.objectContaining({ provider: 'codex', message: expect.stringContaining('spend cap') }),
+    ]);
+    store.usage.record({
+      seat: { provider: 'codex' },
+      role: 'chat',
+      source: 'chat',
+      result: { ok: true, usage: {}, durationMs: 1 },
+    });
+    expect(activeLimits(store, project.id)).toEqual([]);
   });
 
   it('waits until the earliest reset when every provider is out of headroom', async () => {

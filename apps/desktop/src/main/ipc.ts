@@ -1,6 +1,6 @@
 import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import type { ProviderId, Seat } from '@conclave/shared';
-import { INSTALL_PACKAGES, streamProcess, type Engine } from '@conclave/core';
+import { INSTALL_PACKAGES, activeLimits, streamProcess, type Engine } from '@conclave/core';
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
 
@@ -35,6 +35,7 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
 
   handle(IPC.accountsList, async (): Promise<ProviderInfo[]> => {
     const statuses = await engine.detectAll();
+    const limits = activeLimits(engine.store);
     return Promise.all(
       statuses.map(async (status) => {
         const a = engine.adapters.get(status.provider)!;
@@ -51,6 +52,9 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
           ...(listed?.defaultModel && { defaultModel: listed.defaultModel }),
           ...(listed?.defaultEffort && { defaultEffort: listed.defaultEffort }),
           ...(pkg && { installPackage: pkg }),
+          ...((l) => (l ? { limit: { message: l.message, at: l.at } } : {}))(
+            limits.find((x) => x.provider === status.provider),
+          ),
           loginHint: a.login().hint,
         };
       }),

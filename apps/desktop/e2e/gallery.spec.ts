@@ -286,6 +286,66 @@ for (const scheme of ['light', 'dark'] as const) {
   });
 }
 
+for (const scheme of ['light', 'dark'] as const) {
+  test(`gallery usage limit ${scheme}`, async () => {
+    test.setTimeout(120_000);
+    mkdirSync(out, { recursive: true });
+    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
+    const git = (...a: string[]) =>
+      execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
+        cwd: repo,
+      });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(join(repo, 'README.md'), '# greeter');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'init');
+    const app = await electron.launch({
+      args: [join(here, '../out/main/index.js')],
+      env: {
+        ...process.env,
+        CONCLAVE_DEMO: '1',
+        CONCLAVE_DEMO_LIMIT: '1',
+        CONCLAVE_HOME: home,
+        CONCLAVE_E2E_REPO: repo,
+      },
+      colorScheme: scheme,
+    });
+    try {
+      const page = await app.firstWindow();
+      await page.setViewportSize({ width: 1320, height: 860 });
+      await page
+        .getByRole('complementary')
+        .getByRole('button', { name: /^Projects/ })
+        .click();
+      await page.getByRole('button', { name: 'New project' }).click();
+      const dialog = page.getByRole('dialog', { name: 'New project' });
+      await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+      await dialog.getByRole('button', { name: 'Next' }).click();
+      await dialog
+        .getByRole('textbox', { name: 'Goal' })
+        .fill('Add a greet() helper and document it.');
+      await dialog.getByRole('button', { name: 'Next' }).click();
+      await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+      const banner = page.getByRole('region', { name: 'Codex is out of usage' });
+      await expect(banner).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByRole('region', { name: 'Tasks' })).toContainText('2 of 2 merged', {
+        timeout: 60_000,
+      });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(out, `${scheme}-usage-limit.png`) });
+      await page.getByRole('button', { name: /^Accounts/ }).click();
+      await expect(page.getByText(/Out of usage since/)).toBeVisible({ timeout: 30_000 });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(out, `${scheme}-accounts-limit.png`) });
+    } finally {
+      await app.close();
+      rmSync(home, { recursive: true, force: true });
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+}
+
 async function pickOption(page: Page, name: string) {
   await page
     .getByRole('dialog', { name: 'Choose model' })

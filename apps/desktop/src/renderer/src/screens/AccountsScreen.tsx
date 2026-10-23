@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Download, ExternalLink, LogIn, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Download, ExternalLink, Hourglass, LogIn, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { GitHubStatus } from '@conclave/core';
 import type { ProviderInfo, QuotaInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
 import { useApp } from '@/lib/store';
 import { Badge, Button, GitHubMark, ProviderDot } from '@/components/bits';
-import { PlanUsage } from '@/components/PlanUsage';
+import { PlanUsage, relative } from '@/components/PlanUsage';
 
 export function AccountsScreen() {
   const providers = useApp((s) => s.providers);
@@ -21,6 +21,8 @@ export function AccountsScreen() {
       .catch(() => setGithub({ installed: false, signedIn: false, detail: 'gh did not start' }));
   useEffect(() => {
     void checkGithub();
+    // Fresh status every visit: sign-ins and usage limits change while the app is open.
+    void refresh();
   }, []);
 
   const recheck = async () => {
@@ -157,6 +159,14 @@ function ProviderCard({
                 : `Install the official CLI to use ${info.displayName}.`)}
           </p>
           {note && <p className="mt-2 text-[12.5px] text-accent-ink">{note}</p>}
+          {signedIn && info.limit && (
+            <p className="mt-2 flex items-start gap-1.5 text-[12.5px] text-warn">
+              <Hourglass className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <span className="selectable">
+                Out of usage since {relative(info.limit.at, 'past')}: {info.limit.message}
+              </span>
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!info.installed && info.installPackage && (

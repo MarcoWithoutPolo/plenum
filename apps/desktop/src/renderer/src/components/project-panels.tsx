@@ -23,7 +23,7 @@ import type {
   Task,
 } from '@conclave/shared';
 import type { PullRequestStatus } from '@conclave/core';
-import type { PermissionGaps, ProviderProblem } from '../../../shared/api';
+import type { LimitNotice, PermissionGaps, ProviderProblem } from '../../../shared/api';
 import { Dialog } from './Dialog';
 import { QuestionCard } from './QuestionCard';
 import { Button, GitHubMark, ProviderDot, Thinking } from './bits';
@@ -133,6 +133,78 @@ export function ProblemBanner({
                 type="button"
                 aria-label="Dismiss"
                 onClick={() => setDismissed((d) => [...d, `${p.provider}:${p.kind}`])}
+                className="grid size-7 place-items-center rounded-lg text-muted hover:bg-panel hover:text-ink"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+/* ── An AI out of usage ──────────────────────────────────────────────── */
+
+/**
+ * A limit never fails a task (the work moves to the next AI), so this banner is how you learn
+ * one of the team is out, and can take it off the team until its plan resets.
+ */
+export function LimitBanner({ project, limits }: { project: Project; limits: LimitNotice[] }) {
+  const update = useProjects((s) => s.update);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const shown = limits.filter((l) => !dismissed.includes(`${l.provider}:${l.at}`));
+  if (!shown.length) return null;
+  return (
+    <>
+      {shown.map((l) => {
+        const others = (role: keyof Routing) =>
+          project.routing[role].filter((s) => s.provider !== l.provider);
+        const next = others('builder')[0];
+        const canRemove = (['planner', 'builder', 'reviewer'] as const).every(
+          (r) => others(r).length > 0,
+        );
+        return (
+          <section
+            key={`${l.provider}:${l.at}`}
+            aria-label={`${providerName(l.provider)} is out of usage`}
+            className="mt-5 flex items-start gap-3.5 rounded-2xl border border-warn/35 bg-warn-soft/50 px-5 py-3.5"
+          >
+            <Hourglass className="mt-0.5 size-4.5 shrink-0 text-warn" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[13.5px] font-semibold">
+                {providerName(l.provider)} is out of usage
+                <span className="font-normal text-faint"> · since {relative(l.at, 'past')}</span>
+              </h2>
+              <p className="mt-0.5 text-[12.5px] text-muted">
+                {next
+                  ? `Its work goes to ${providerName(next.provider)}; no attempts are used.`
+                  : 'Its work waits until it has usage again; no attempts are used.'}
+              </p>
+              <p className="selectable mt-1 text-[12px] text-faint">“{l.message}”</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {canRemove && (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    void update(project.id, {
+                      routing: {
+                        planner: others('planner'),
+                        builder: others('builder'),
+                        reviewer: others('reviewer'),
+                      },
+                    })
+                  }
+                >
+                  Remove {providerName(l.provider)} from the team
+                </Button>
+              )}
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setDismissed((d) => [...d, `${l.provider}:${l.at}`])}
                 className="grid size-7 place-items-center rounded-lg text-muted hover:bg-panel hover:text-ink"
               >
                 <X className="size-3.5" />

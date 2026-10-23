@@ -245,6 +245,14 @@ export function demoAdapters(): Adapter[] {
         reply: answer('Codex'),
         delayMs: 40,
         act: projectAct,
+        // CONCLAVE_DEMO_LIMIT=1: Codex is at its workspace spend cap, to show limit handling.
+        limitWhen: () =>
+          process.env.CONCLAVE_DEMO_LIMIT === '1'
+            ? {
+                message:
+                  'You hit your spend cap set by the owner of your workspace. Ask an owner to increase your spend cap to continue.',
+              }
+            : undefined,
         // CONCLAVE_DEMO_BREAK=1: Codex's builds crash, to show failure recovery.
         failWhen: (req) =>
           process.env.CONCLAVE_DEMO_BREAK === '1' && req.role === 'builder'

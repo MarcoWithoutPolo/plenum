@@ -44,6 +44,8 @@ export interface ProviderInfo extends ProviderStatus {
   /** What "Default" resolves to: the model the CLI is configured with, when known. */
   defaultModel?: string;
   defaultEffort?: string;
+  /** Set while the provider is out of usage: its last limit message and when. */
+  limit?: { message: string; at: number };
   /** npm package of the official CLI, for one-click install. */
   installPackage?: string;
   loginHint: string;
@@ -115,6 +117,14 @@ export interface ProjectDetail {
   decisions: ProjectDecision[];
   /** One AI causing repeated failures: drives the "Retry all with…" banner. */
   problems: ProviderProblem[];
+  /** AIs on this team that are out of usage right now (limits never fail tasks). */
+  limits: LimitNotice[];
+}
+
+export interface LimitNotice {
+  provider: ProviderId;
+  message: string;
+  at: number;
 }
 
 export interface ProviderProblem {

@@ -206,6 +206,31 @@ export function failedTasks(
     );
 }
 
+export interface ActiveLimit {
+  provider: ProviderId;
+  /** The CLI's own words, e.g. "You hit your spend cap set by the owner of your workspace." */
+  message: string;
+  at: number;
+}
+
+/**
+ * Providers that hit a usage limit and haven't answered successfully since. Limits never fail
+ * tasks (the work moves on), so this is what tells you one of your AIs is out.
+ */
+export function activeLimits(
+  store: { projects: ProjectStore; usage: { lastOk(provider: ProviderId): number | null } },
+  projectId?: string,
+): ActiveLimit[] {
+  return store.projects
+    .latestLimits(projectId)
+    .filter((f) => f.at > (store.usage.lastOk(f.provider!) ?? 0))
+    .map((f) => ({
+      provider: f.provider!,
+      message: f.detail.split('\n')[0]!.slice(0, 300) || f.summary,
+      at: f.at,
+    }));
+}
+
 /**
  * A provider causing repeated trouble on a project: 2+ failed tasks that share
  * the provider and kind. Drives the "Retry all with…" banner.
