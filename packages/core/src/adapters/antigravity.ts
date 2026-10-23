@@ -181,6 +181,9 @@ export function antigravityPermissionGap(permissions: RunPermissions): string | 
 export const NO_SHELL_NOTE =
   'IMPORTANT: This session has no shell. Running any command (git, npm, node, tests, anything) is denied and ends your turn with no answer. Use only your file tools to read, search and edit files. The system runs the tests itself.';
 
+const NO_SHELL_REMINDER =
+  'Reminder: do not run any command, not even the tests; the system runs them after you finish.';
+
 export function antigravityArgs(request: RunRequest): { args: string[]; cleanup: () => void } {
   assertSafeModel(request.model);
   assertSafeEffort(request.effort);
@@ -197,7 +200,7 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     extra.push('--add-dir', dir);
     cleanup = () => rmSync(dir, { recursive: true, force: true });
   }
-  if (!fullAccess && !chat) prompt = `${NO_SHELL_NOTE}\n\n${prompt}`;
+  if (!fullAccess && !chat) prompt = `${NO_SHELL_NOTE}\n\n${prompt}\n\n${NO_SHELL_REMINDER}`;
   // Slash-command expansion stays on (turning it off makes agy ignore --mode), so a prompt
   // must never start with "/".
   if (prompt.trimStart().startsWith('/')) prompt = `Request: ${prompt}`;
@@ -254,10 +257,15 @@ export class AntigravityParser implements LineParser {
     }
     if (step.step_type === 'tool') {
       const index = num(step.step_index);
-      if (step.state === 'ERROR' && step.tool_name === 'run_command') {
+      if (step.state === 'ERROR') {
+        // Denials read "permission check failed for unsandboxed "<command>": user denied ...".
         const info = isRecord(step.tool_info) ? step.tool_info : {};
         const params = isRecord(info.parameters) ? info.parameters : {};
-        this.denied = str(params.CommandLine) ?? 'a command';
+        const error = isRecord(info.error) ? (str(info.error.message) ?? '') : '';
+        const quoted = /permission check failed for \w+ "([^"]+)"/.exec(error)?.[1];
+        if (quoted || /denied/i.test(error) || step.tool_name === 'run_command') {
+          this.denied = quoted ?? str(params.CommandLine) ?? this.denied;
+        }
       }
       // Each tool step arrives twice (ACTIVE, then DONE or ERROR); report it once.
       if (index === undefined || this.announced.has(index)) return out;

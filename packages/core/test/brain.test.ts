@@ -911,6 +911,39 @@ describe('Questions and decisions', () => {
   });
 });
 
+describe('Done means the tests pass', () => {
+  it('queues a fix instead of finishing while the proposed test command fails', async () => {
+    let builds = 0;
+    const { store, brain, project } = await setup({
+      noTests: true,
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? req.prompt.includes('ALREADY MERGED\n- none')
+              ? JSON.stringify({ ...JSON.parse(PLAN), test_command: 'node check.js' })
+              : DONE
+            : APPROVE,
+      },
+      codex: {
+        reply: 'done',
+        act: (req) => writeSum(builds++ === 0 ? 'a - b' : 'a + b')(req),
+      },
+    });
+    expect((await brain.run({ maxRounds: 12 })).kind).toBe('done');
+    const titles = store.projects.listTasks(project.id).map((t) => [t.title, t.status]);
+    expect(titles).toEqual([
+      ['Add sum', 'merged'],
+      ['Make the test command pass: node check.js', 'merged'],
+    ]);
+    expect(store.projects.get(project.id)?.testCommand).toBe('node check.js');
+    expect(
+      store.projects
+        .events(project.id)
+        .some((e) => e.message.startsWith('Not done yet: node check.js fails')),
+    ).toBe(true);
+  });
+});
+
 describe('Clarify first', () => {
   it('drops malformed questions and keeps the draft plan', () => {
     const parsed = parseClarify(

@@ -326,8 +326,14 @@ export class Brain {
       return { kind: 'idle', reason: 'The planner reply had no task list' };
     }
     if (plan.done) {
-      this.finish(plan.reason);
-      return { kind: 'done', reason: plan.reason };
+      // "Done" while the project's own test command fails isn't done.
+      const blocker = await this.testsBlockDone(project, tasks);
+      if (blocker) return blocker;
+      const reason = this.project().proposedTestCommand
+        ? `${plan.reason} Note: the proposed test command ${this.project().proposedTestCommand} still fails.`
+        : plan.reason;
+      this.finish(reason);
+      return { kind: 'done', reason };
     }
     if (plan.testCommand && !project.testCommand && !project.proposedTestCommand) {
       this.projects.update(this.projectId, { proposedTestCommand: plan.testCommand });
@@ -711,6 +717,41 @@ export class Brain {
     });
     await this.adoptProposedTests();
     return { kind: 'merged', task: done };
+  }
+
+  /**
+   * Before a project without a test command is called done, its proposed command must pass.
+   * If it fails, one task to make it pass is queued (only once; after that, done carries a note).
+   */
+  private async testsBlockDone(project: Project, tasks: Task[]): Promise<RoundOutcome | undefined> {
+    const command = project.proposedTestCommand;
+    if (project.testCommand || !command) return undefined;
+    await this.adoptProposedTests();
+    const after = this.project();
+    if (after.testCommand) return undefined;
+    const title = `Make the test command pass: ${command}`.slice(0, 200);
+    if (tasks.some((t) => t.title === title)) return undefined;
+    const run = await runShell(command, {
+      cwd: this.workspace.integrationPath,
+      timeoutMs: this.testTimeout,
+      ...(this.signal && { signal: this.signal }),
+    });
+    const tail = run.output.trim().slice(-3000);
+    const [task] = this.projects.addTasks(this.projectId, [
+      {
+        title,
+        spec: `The planner considers the goal met, but the project's test command \`${command}\` fails on the merged code, so the tests have never run. Make \`${command}\` run every test and pass (fix the test script or the tests; don't delete tests). Its current output:\n\n${tail}`,
+      },
+    ]);
+    this.log(
+      'plan',
+      `Not done yet: ${command} fails on the merged code, so a task to fix it is queued`,
+      {
+        task: task!,
+        data: { output: tail },
+      },
+    );
+    return { kind: 'planned', tasks: [task!] };
   }
 
   /** A project without tests adopts the planner's proposed command once it passes (C5). */
