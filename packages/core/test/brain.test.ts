@@ -38,7 +38,8 @@ import { taskProgress } from '@conclave/shared';
 
 const cleanup: string[] = [];
 afterEach(() => {
-  for (const d of cleanup.splice(0)) rmSync(d, { recursive: true, force: true });
+  for (const d of cleanup.splice(0))
+    rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 const git = (cwd: string, ...args: string[]) =>

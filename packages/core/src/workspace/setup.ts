@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { commitIdentity, currentBranch, git, isRepo, repoRoot } from './git.js';
@@ -53,9 +61,18 @@ export function countFiles(dir: string, limit = LARGE_FOLDER + 1): number {
   return n;
 }
 
-const same = (a: string, b: string) =>
-  resolve(a).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() ===
-  resolve(b).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+/** Same folder? Real paths, so symlinks (macOS /var) and 8.3 short names (Windows) match. */
+const same = (a: string, b: string) => {
+  const real = (p: string) => {
+    try {
+      return realpathSync.native(p);
+    } catch {
+      return resolve(p);
+    }
+  };
+  const norm = (p: string) => real(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  return norm(a) === norm(b);
+};
 
 export async function inspectFolder(path: string): Promise<FolderState> {
   if (!path || !existsSync(path) || !statSync(path).isDirectory()) return { kind: 'missing', path };
