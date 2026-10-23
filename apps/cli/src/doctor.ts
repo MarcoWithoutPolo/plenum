@@ -3,7 +3,10 @@ import type { ProviderStatus } from '@conclave/shared';
 import { collect, createAdapters, type Adapter } from '@conclave/core';
 
 /** Cheapest model per provider for the live check. */
-const LIVE_MODEL: Partial<Record<string, string>> = { claude: 'haiku' };
+const LIVE_MODEL: Partial<Record<string, string>> = {
+  claude: 'haiku',
+  antigravity: 'gemini-3.8-flash-low',
+};
 const LIVE_PROMPT = 'Reply with exactly the word: pong';
 
 export async function doctor(opts: { live?: boolean; json?: boolean } = {}): Promise<number> {

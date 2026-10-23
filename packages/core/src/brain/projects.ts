@@ -6,9 +6,9 @@ import { currentBranch, isRepo, repoRoot } from '../workspace/git.js';
 /** Which provider does each job by default, best first. Only signed-in providers are kept. */
 const PREFERENCE: Record<keyof Routing, ProviderId[]> = {
   // Planning and review lean on judgment; building on fast, careful edits.
-  planner: ['claude', 'codex', 'gemini'],
-  builder: ['codex', 'claude', 'gemini'],
-  reviewer: ['claude', 'codex', 'gemini'],
+  planner: ['claude', 'antigravity', 'codex', 'gemini'],
+  builder: ['codex', 'claude', 'antigravity', 'gemini'],
+  reviewer: ['claude', 'antigravity', 'codex', 'gemini'],
 };
 
 export function defaultRouting(ready: Seat[]): Routing {

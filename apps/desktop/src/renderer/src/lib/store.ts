@@ -299,6 +299,7 @@ function applyUpdate(u: RunUpdate, set: (fn: (s: State) => Partial<State>) => vo
 const SHORT: Record<ProviderId, string> = {
   claude: 'Claude',
   codex: 'Codex',
+  antigravity: 'Antigravity',
   gemini: 'Gemini',
   fake: 'Fake',
 };

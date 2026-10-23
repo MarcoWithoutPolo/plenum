@@ -4,7 +4,7 @@ import { INSTALL_PACKAGES, streamProcess, type Engine } from '@conclave/core';
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
 
-const PROVIDERS = new Set<ProviderId>(['claude', 'codex', 'gemini']);
+const PROVIDERS = new Set<ProviderId>(['claude', 'codex', 'antigravity', 'gemini']);
 
 export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | null): void {
   const running = new Map<string, AbortController>();

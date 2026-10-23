@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 
 /** Council citations like [Claude] or [Claude, Codex] become small chips. */
 const CITATION =
-  /\[((?:Claude|Codex|Gemini|Synthesizer)(?: \([^)\]]*\))?(?:, (?:Claude|Codex|Gemini|Synthesizer)(?: \([^)\]]*\))?)*)\]/g;
+  /\[((?:Claude|Codex|Antigravity|Gemini|Synthesizer)(?: \([^)\]]*\))?(?:, (?:Claude|Codex|Antigravity|Gemini|Synthesizer)(?: \([^)\]]*\))?)*)\]/g;
 
 function cite(children: ReactNode): ReactNode {
   return Children.map(children, (child) => {

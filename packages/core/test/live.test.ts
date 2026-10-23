@@ -1,6 +1,12 @@
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { ClaudeAdapter, CodexAdapter, collect, type Adapter } from '../src/index.js';
+import {
+  AntigravityAdapter,
+  ClaudeAdapter,
+  CodexAdapter,
+  collect,
+  type Adapter,
+} from '../src/index.js';
 
 // Spends real subscription usage, so it only runs when asked: CONCLAVE_LIVE=1 npm test
 const enabled = process.env.CONCLAVE_LIVE === '1';
@@ -8,6 +14,7 @@ const enabled = process.env.CONCLAVE_LIVE === '1';
 const cases: [Adapter, string | undefined][] = [
   [new ClaudeAdapter(), 'haiku'],
   [new CodexAdapter(), undefined],
+  [new AntigravityAdapter(), 'gemini-3.8-flash-low'],
 ];
 
 describe.skipIf(!enabled)('live CLIs', () => {

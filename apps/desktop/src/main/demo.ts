@@ -141,15 +141,19 @@ export function demoAdapters(): Adapter[] {
       },
     ),
     new FakeAdapter(
-      { reply: '', fail: 'Gemini is not connected in demo mode' },
+      { reply: answer('Antigravity'), delayMs: 30, act: projectAct },
       {
-        id: 'gemini',
-        displayName: 'Gemini',
-        status: {
-          auth: 'unknown',
-          version: '0.64.0',
-          detail:
-            'Google sign-in for individuals no longer works with this CLI; set GEMINI_API_KEY to use it',
+        id: 'antigravity',
+        displayName: 'Antigravity',
+        resume: true,
+        efforts: levels,
+        status: { version: '1.4.6', detail: 'Google account · 6 models' },
+        models: {
+          models: [
+            { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)' },
+            { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },
+            { id: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)' },
+          ],
         },
       },
     ),

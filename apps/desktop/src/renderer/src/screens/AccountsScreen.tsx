@@ -161,16 +161,19 @@ function ProviderCard({
       </div>
       {signedIn && <Facts info={info} />}
       {signedIn && quotas.length > 0 && <PlanUsage quotas={quotas} />}
-      {info.provider === 'gemini' && !signedIn && info.installed && (
+      {info.provider === 'antigravity' && !info.installed && (
         <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-muted">
-          Google no longer accepts personal sign-ins from the Gemini CLI. Set{' '}
-          <code>GEMINI_API_KEY</code> in your environment and restart Conclave.
+          Install it from PowerShell with{' '}
+          <code className="selectable rounded bg-sunken px-1 font-mono text-[12px]">
+            irm https://antigravity.google/cli/install.ps1 | iex
+          </code>
+          , then press Sign in. Antigravity replaced the Gemini CLI for Google accounts.
           <button
             type="button"
-            onClick={() => void api().openExternal('https://aistudio.google.com/apikey')}
+            onClick={() => void api().openExternal('https://antigravity.google/docs/install/')}
             className="ml-1 inline-flex items-center gap-1 text-accent-ink hover:underline"
           >
-            Get a key <ExternalLink className="size-3" />
+            Install guide <ExternalLink className="size-3" />
           </button>
         </p>
       )}

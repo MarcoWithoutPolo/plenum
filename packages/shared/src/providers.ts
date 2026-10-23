@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ProviderId = z.enum(['claude', 'codex', 'gemini', 'fake']);
+export const ProviderId = z.enum(['claude', 'codex', 'antigravity', 'gemini', 'fake']);
 export type ProviderId = z.infer<typeof ProviderId>;
 
 export const AuthState = z.enum(['signed_in', 'signed_out', 'unknown']);

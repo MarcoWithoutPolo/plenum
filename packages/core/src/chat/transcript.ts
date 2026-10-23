@@ -3,6 +3,7 @@ import type { Message, ProviderId, Seat } from '@conclave/shared';
 const SHORT_NAMES: Record<ProviderId, string> = {
   claude: 'Claude',
   codex: 'Codex',
+  antigravity: 'Antigravity',
   gemini: 'Gemini',
   fake: 'Fake',
 };

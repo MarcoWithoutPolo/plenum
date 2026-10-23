@@ -230,7 +230,7 @@ function Logo() {
     <svg viewBox="0 0 24 24" className="size-5" aria-hidden>
       <circle cx="12" cy="6.5" r="3.2" fill="var(--claude)" />
       <circle cx="6.5" cy="16" r="3.2" fill="var(--codex)" />
-      <circle cx="17.5" cy="16" r="3.2" fill="var(--gemini)" />
+      <circle cx="17.5" cy="16" r="3.2" fill="var(--antigravity)" />
       <circle cx="12" cy="13" r="2.2" fill="var(--accent)" />
     </svg>
   );

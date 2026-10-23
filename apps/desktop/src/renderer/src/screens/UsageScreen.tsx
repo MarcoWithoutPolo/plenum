@@ -11,7 +11,7 @@ import { useProjects } from '@/lib/projects';
 import { providerName, useApp } from '@/lib/store';
 
 /** Fixed series order, so a provider always keeps its color and place. */
-const ORDER: ProviderId[] = ['claude', 'codex', 'gemini'];
+const ORDER: ProviderId[] = ['claude', 'codex', 'antigravity', 'gemini'];
 
 export function UsageScreen() {
   const usage = useProjects((s) => s.usage);

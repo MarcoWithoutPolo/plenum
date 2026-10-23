@@ -11,9 +11,9 @@ import { useProjects } from '@/lib/projects';
 import { providerName, readyProviders, useApp } from '@/lib/store';
 
 const PREFERENCE: Record<keyof Routing, ProviderId[]> = {
-  planner: ['claude', 'codex', 'gemini'],
-  builder: ['codex', 'claude', 'gemini'],
-  reviewer: ['claude', 'codex', 'gemini'],
+  planner: ['claude', 'antigravity', 'codex', 'gemini'],
+  builder: ['codex', 'claude', 'antigravity', 'gemini'],
+  reviewer: ['claude', 'antigravity', 'codex', 'gemini'],
 };
 
 const ROLES: { key: keyof Routing; label: string; hint: string }[] = [
