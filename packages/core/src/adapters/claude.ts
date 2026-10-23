@@ -129,6 +129,7 @@ export function claudeArgs(request: RunRequest): string[] {
 }
 
 const NETWORK_TOOLS = ['WebFetch', 'WebSearch'];
+const SHELL_TOOLS = ['Bash', 'PowerShell'];
 
 function toolArgs(role: Role, readOnly: boolean, permissions?: RunPermissions): string[] {
   // Pure conversation needs no tools, which also keeps each prompt cheap.
@@ -141,9 +142,14 @@ function toolArgs(role: Role, readOnly: boolean, permissions?: RunPermissions): 
   const network = permissions?.network ?? false;
   const denied = network ? [] : [...NETWORK_TOOLS];
   const allowed: string[] = [];
-  if (level === 2) denied.push('Bash');
-  if (level === 3) allowed.push(...safeCommands(permissions?.commands).map((c) => `Bash(${c})`));
-  if (level === 4) allowed.push('Bash');
+  // Claude Code runs commands with Bash, or with PowerShell on Windows: rules cover both.
+  if (level === 2) denied.push(...SHELL_TOOLS);
+  if (level === 3) {
+    for (const c of safeCommands(permissions?.commands)) {
+      allowed.push(...SHELL_TOOLS.map((tool) => `${tool}(${c})`));
+    }
+  }
+  if (level === 4) allowed.push(...SHELL_TOOLS);
   return [
     '--permission-mode',
     'acceptEdits',
@@ -214,7 +220,12 @@ export class ClaudeParser implements LineParser {
         out.push({ type: 'message.delta', text: str(block.text)! });
       } else if (block.type === 'tool_use' && str(block.name)) {
         const tool = str(block.name)!;
-        out.push({ type: 'tool.call', tool, input: block.input });
+        // Commands show up as one "shell" tool, whichever shell Claude Code used.
+        out.push({
+          type: 'tool.call',
+          tool: SHELL_TOOLS.includes(tool) ? 'shell' : tool,
+          input: block.input,
+        });
         const path = isRecord(block.input)
           ? (str(block.input.file_path) ?? str(block.input.notebook_path))
           : undefined;

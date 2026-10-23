@@ -26,7 +26,7 @@ describe('permission levels map onto each CLI', () => {
     );
     const two = claudeArgs(builder({ level: 2, network: false }));
     expect(two).toEqual(expect.arrayContaining(['--permission-mode', 'acceptEdits']));
-    expect(two[two.indexOf('--disallowedTools') + 1]).toBe('WebFetch,WebSearch,Bash');
+    expect(two[two.indexOf('--disallowedTools') + 1]).toBe('WebFetch,WebSearch,Bash,PowerShell');
     const three = claudeArgs(
       builder({
         level: 3,
@@ -34,10 +34,12 @@ describe('permission levels map onto each CLI', () => {
         commands: ['npm test', 'npm run lint', 'rm -rf / && x'],
       }),
     );
-    expect(three[three.indexOf('--allowedTools') + 1]).toBe('Bash(npm test),Bash(npm run lint)');
+    expect(three[three.indexOf('--allowedTools') + 1]).toBe(
+      'Bash(npm test),PowerShell(npm test),Bash(npm run lint),PowerShell(npm run lint)',
+    );
     expect(three[three.indexOf('--disallowedTools') + 1]).toBe('WebFetch,WebSearch');
     const four = claudeArgs(builder({ level: 4, network: true }));
-    expect(four[four.indexOf('--allowedTools') + 1]).toBe('Bash');
+    expect(four[four.indexOf('--allowedTools') + 1]).toBe('Bash,PowerShell');
     expect(four).not.toContain('--disallowedTools');
     expect(claudeArgs(builder({ level: 5, network: true }))).toEqual(
       expect.arrayContaining(['--permission-mode', 'bypassPermissions']),

@@ -468,11 +468,11 @@ export class Brain {
     task = this.projects.updateTask(task.id, { status: 'building', builtBy: builder.provider });
     this.log(
       'task',
-      `${task.attempts ? `Attempt ${task.attempts + 1}` : 'Building'}: ${task.title} with ${seatLabel(builder)}${note}`,
+      `${task.attempts ? `Attempt ${task.attempts + 1}` : 'Building'}: ${task.title} with ${seatLabel(builder)}${note}${levelNote(permissions)}`,
       {
         task,
         provider: builder.provider,
-        data: { attempt: task.attempts + 1, seat: builder },
+        data: { attempt: task.attempts + 1, seat: builder, permissions },
       },
     );
 
@@ -1126,6 +1126,22 @@ export class Brain {
     this.governor.observe(seat.provider, result);
     return result;
   }
+}
+
+/** Level 2 is the default and goes unsaid; anything else is spelled out in the log. */
+function levelNote(p: RunPermissions): string {
+  if (p.level === 2 && !p.network) return '';
+  const what =
+    p.level === 3
+      ? `may run ${p.commands?.length ? p.commands.join(', ') : 'no commands'}`
+      : p.level === 4
+        ? 'may run any command in the worktree'
+        : p.level === 5
+          ? 'full access'
+          : p.level === 1
+            ? 'read only'
+            : 'edit files';
+  return ` · level ${p.level}: ${what}${p.network && p.level < 5 ? ', with network' : ''}`;
 }
 
 /** Package folders by installer; added to .gitignore after Conclave runs an install. */
