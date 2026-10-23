@@ -240,7 +240,18 @@ export function registerProjectIpc(
     return next;
   });
 
-  handle(IPC.projectsClarify, (projectId: string) => clarify(engine, mustGet(projectId).id));
+  handle(
+    IPC.projectsClarify,
+    (projectId: string, answers?: { question: string; answer: string }[]) =>
+      clarify(engine, mustGet(projectId).id, {
+        ...(Array.isArray(answers) && {
+          answers: answers.slice(0, 20).map((a) => ({
+            question: text(a?.question, 1000),
+            answer: text(a?.answer, 2000),
+          })),
+        }),
+      }),
+  );
   handle(IPC.projectsStartDraft, (projectId: string, input: DraftStart) => {
     const project = mustGet(projectId);
     const since = lastEventId(project.id);

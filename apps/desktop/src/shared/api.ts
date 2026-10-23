@@ -257,7 +257,8 @@ export interface ConclaveApi {
     create(input: NewProjectInput): Promise<Project>;
     update(id: string, settings: ProjectSettings): Promise<Project>;
     /** One read-only planner pass: questions, a draft plan, a test command. */
-    clarify(id: string): Promise<ClarifyResult>;
+    /** With answers: "Re-plan with my answers", the draft plan redone around them. */
+    clarify(id: string, answers?: { question: string; answer: string }[]): Promise<ClarifyResult>;
     startDraft(id: string, input: DraftStart): Promise<Project>;
     retry(taskId: string, opts?: RetryOptions): Promise<Task>;
     skip(taskId: string): Promise<Task>;

@@ -17,6 +17,7 @@ import {
   answerQuestion,
   builderPlan,
   clarify,
+  clarifyPrompt,
   countsAsAttempt,
   decidePermission,
   isRunnableInstall,
@@ -997,6 +998,16 @@ describe('Installs', () => {
 });
 
 describe('Clarify first', () => {
+  it('re-plans around your answers without asking them again', () => {
+    const project = { goal: 'Ship sum', testCommand: 'node check.js' } as never;
+    const fresh = clarifyPrompt(project, [], 0);
+    expect(fresh).not.toContain('THE USER HAS ANSWERED');
+    const replan = clarifyPrompt(project, [], 0, [{ question: 'Theme?', answer: 'Dark' }]);
+    expect(replan).toContain('THE USER HAS ANSWERED');
+    expect(replan).toContain('- Theme?: Dark');
+    expect(replan).toContain('return "questions": [] unless something new must be decided');
+  });
+
   it('drops malformed questions and keeps the draft plan', () => {
     const parsed = parseClarify(
       JSON.stringify({

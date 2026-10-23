@@ -105,6 +105,11 @@ test('creates a project in three steps, with the test command guessed', async ()
     'true',
   );
   await dialog.getByRole('radio', { name: 'The README' }).click();
+  // A changed answer offers to redo the draft plan around it.
+  await dialog.getByRole('button', { name: 'Re-plan with my answers' }).click();
+  await expect(dialog.getByRole('button', { name: 'Re-plan with my answers' })).toBeHidden({
+    timeout: 20_000,
+  });
   await expect(dialog.getByRole('textbox', { name: 'Task 1 title' })).toHaveValue(
     'Add a greet() helper',
   );

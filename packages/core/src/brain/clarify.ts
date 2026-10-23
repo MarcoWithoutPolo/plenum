@@ -24,7 +24,13 @@ export interface ClarifyResult {
   seat: Seat;
 }
 
-export function clarifyPrompt(project: Project, files: string[], total: number): string {
+export function clarifyPrompt(
+  project: Project,
+  files: string[],
+  total: number,
+  answers: { question: string; answer: string }[] = [],
+): string {
+  const answered = answers.filter((a) => a.question.trim() && a.answer.trim());
   return `You are about to plan an autonomous coding project. Before any work starts, find out what only the user can decide, and draft the first tasks.
 
 GOAL
@@ -35,12 +41,16 @@ ${project.testCommand ?? '(none yet)'}
 
 REPOSITORY (${total} tracked files${total > files.length ? `, first ${files.length} shown` : ''})
 ${files.join('\n') || '(empty repository)'}
-
+${
+  answered.length
+    ? `\nTHE USER HAS ANSWERED (these are decided; plan around them and don't ask about them again)\n${answered.map((a) => `- ${a.question}: ${a.answer}`).join('\n')}\n`
+    : ''
+}
 You can read files in the working directory. Do not change anything.
 
 Rules for questions:
 - Ask only questions whose answer changes what gets built. Never ask what the repository already answers.
-- At most 4 questions, each with 2 to 4 short options; "recommended" must be one of them.
+- At most 4 questions, each with 2 to 4 short options; "recommended" must be one of them.${answered.length ? '\n- The user already answered the questions above: return "questions": [] unless something new must be decided.' : ''}
 
 Rules for tasks: small, ordered, independently verifiable; each spec says what to change and how it's checked.${project.testCommand ? '' : '\nThere are no tests yet: make setting them up the first task and give the command in "test_command".'}
 
@@ -92,7 +102,13 @@ export function parseClarify(text: string): Omit<ClarifyResult, 'seat'> | undefi
 export async function clarify(
   ctx: EngineContext,
   projectId: string,
-  opts: { governor?: Governor; signal?: AbortSignal; timeoutMs?: number } = {},
+  opts: {
+    governor?: Governor;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    /** "Re-plan with my answers": the draft plan is redone around these. */
+    answers?: { question: string; answer: string }[];
+  } = {},
 ): Promise<ClarifyResult> {
   const project = ctx.store.projects.get(projectId);
   if (!project) throw new Error(`No such project: ${projectId}`);
@@ -110,7 +126,7 @@ export async function clarify(
   const all = stdout.split('\n').filter(Boolean);
   const result = await collect(
     adapter.run({
-      prompt: clarifyPrompt(project, all.slice(0, 300), all.length),
+      prompt: clarifyPrompt(project, all.slice(0, 300), all.length, opts.answers),
       cwd: project.repoPath,
       role: 'planner',
       readOnly: true,

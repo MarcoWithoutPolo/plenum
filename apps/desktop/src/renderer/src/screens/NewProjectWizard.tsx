@@ -122,6 +122,8 @@ export function NewProjectWizard({
   const [plan, setPlan] = useState<Draft[]>([]);
   const [useTest, setUseTest] = useState(true);
   const [skipped, setSkipped] = useState(false);
+  /** The answers the current draft plan was made with. */
+  const [plannedWith, setPlannedWith] = useState('');
   const skippedNow = useRef(false);
 
   const reset = () => {
@@ -331,17 +333,47 @@ export function NewProjectWizard({
       if (skippedNow.current) return;
       setClarify(result);
       setPlan(result.tasks.map((t) => ({ ...t })));
-      setAnswers(
-        Object.fromEntries(
-          result.questions.flatMap((q) =>
-            q.recommended ? [[q.id, { answer: q.recommended }]] : [],
-          ),
-        ),
+      const initial: Record<string, Answer> = Object.fromEntries(
+        result.questions.flatMap((q) => (q.recommended ? [[q.id, { answer: q.recommended }]] : [])),
       );
+      setAnswers(initial);
+      setPlannedWith(answerKey(result.questions, initial));
     } catch (err) {
       setClarifyError(errorText(err));
     }
   };
+
+  /** The answers as the planner would read them. */
+  const answerList = (questions: ClarifyResult['questions'], given: Record<string, Answer>) =>
+    questions.flatMap((q) => {
+      const a = given[q.id]?.answer.trim();
+      return a ? [{ question: q.question, answer: a }] : [];
+    });
+  const answerKey = (questions: ClarifyResult['questions'], given: Record<string, Answer>) =>
+    JSON.stringify(answerList(questions, given));
+
+  /** "Re-plan with my answers": the draft plan redone around what you picked. */
+  const replan = async () => {
+    if (!projectId || !clarify) return;
+    setBusy('replan');
+    try {
+      const result = await api().projects.clarify(
+        projectId,
+        answerList(clarify.questions, answers),
+      );
+      setPlan(result.tasks.map((t) => ({ ...t })));
+      setPlannedWith(answerKey(clarify.questions, answers));
+      if (result.testCommand) setClarify({ ...clarify, testCommand: result.testCommand });
+    } catch (err) {
+      toast('error', errorText(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const answersChanged =
+    clarify !== null &&
+    clarify.questions.length > 0 &&
+    answerKey(clarify.questions, answers) !== plannedWith;
 
   /* ── Start ── */
 
@@ -830,7 +862,27 @@ export function NewProjectWizard({
                   ))}
                 </div>
               )}
-              {(clarify || skipped) && <PlanEditor tasks={plan} onChange={setPlan} />}
+              {answersChanged && (
+                <div
+                  role="status"
+                  className="flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft/50 px-3.5 py-2.5 text-[12.5px]"
+                >
+                  <span className="min-w-0 flex-1 text-muted">
+                    Your answers changed since this plan was drafted.
+                  </span>
+                  <Button size="sm" onClick={() => void replan()} disabled={busy !== null}>
+                    {busy === 'replan' ? 'Re-planning…' : 'Re-plan with my answers'}
+                  </Button>
+                </div>
+              )}
+              {(clarify || skipped) && (
+                <div
+                  aria-busy={busy === 'replan'}
+                  className={busy === 'replan' ? 'opacity-50' : ''}
+                >
+                  <PlanEditor tasks={plan} onChange={setPlan} />
+                </div>
+              )}
               {clarify?.testCommand && !test.trim() && (
                 <div className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-3">
                   <Sparkles className="size-4 shrink-0 text-accent" aria-hidden />
