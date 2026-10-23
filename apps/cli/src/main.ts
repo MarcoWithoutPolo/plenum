@@ -34,6 +34,9 @@ Commands:
   project list | stop <id>
   project retry <task>   Requeue a failed task (--use claude:opus@high, --effort-up)
   project skip <task>    Leave a task out
+  project answer <question> "..."   Answer an agent's question (yes / no for installs)
+  project decisions <id> List what's been decided and assumed
+  project decide <id> "question" "answer"   Add a decision
 
 Options:
   --json         Machine-readable output (doctor, ask)
