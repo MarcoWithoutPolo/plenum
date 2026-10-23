@@ -18,6 +18,7 @@ import {
   calibration,
   changedLines,
   rankSeats,
+  quietUntil,
   withPriors,
   routingInsights,
   seatStats,
@@ -43,7 +44,7 @@ import {
   sameWork,
   skipTask,
 } from '../src/index.js';
-import { taskProgress } from '@conclave/shared';
+import { taskProgress, type LimitSettings } from '@conclave/shared';
 
 const cleanup: string[] = [];
 afterEach(() => {
@@ -1636,5 +1637,100 @@ describe('Lanes', () => {
     expect(rebuilt.attempts).toBe(0);
     expect(rebuilt.lastFailure?.kind).toBe('combined_tests');
     expect(git(repo, 'show', 'conclave/integration:glue.js')).toContain('1');
+  });
+});
+
+describe('Shared limits', () => {
+  const day = (iso: string) => new Date(iso);
+  const limits = (patch: Partial<LimitSettings> = {}): LimitSettings => ({
+    providers: {},
+    quietHours: [],
+    pauseAll: false,
+    ...patch,
+  });
+
+  it('knows when quiet hours end, including windows past midnight', () => {
+    const workdays = {
+      days: [1, 2, 3, 4, 5],
+      from: '09:00',
+      to: '17:00',
+      providers: ['claude' as ProviderId],
+    };
+    const nights = { days: [0, 1, 2, 3, 4, 5, 6], from: '23:00', to: '07:00', providers: null };
+    // Wednesday 10:30: Claude is quiet until 17:00, Codex isn't.
+    const wed = day('2026-10-21T10:30:00');
+    expect(new Date(quietUntil([workdays], 'claude', wed)!).getHours()).toBe(17);
+    expect(quietUntil([workdays], 'codex', wed)).toBeNull();
+    // Saturday 10:30: not a workday.
+    expect(quietUntil([workdays], 'claude', day('2026-10-24T10:30:00'))).toBeNull();
+    // 23:30 and 02:00: the night rule, ending at 07:00 the next morning.
+    const late = new Date(quietUntil([nights], 'codex', day('2026-10-21T23:30:00'))!);
+    expect([late.getDate(), late.getHours()]).toEqual([22, 7]);
+    const early = new Date(quietUntil([nights], 'codex', day('2026-10-22T02:00:00'))!);
+    expect([early.getDate(), early.getHours()]).toEqual([22, 7]);
+    expect(quietUntil([nights], 'codex', day('2026-10-22T08:00:00'))).toBeNull();
+  });
+
+  it('turns pause-all, daily caps and the reserve into plain waits', () => {
+    let runs = 0;
+    let settings = limits();
+    const now = day('2026-10-21T10:00:00').getTime();
+    const policy = { limits: () => settings, runsToday: () => runs };
+    const g = new Governor(
+      () =>
+        [
+          {
+            provider: 'claude',
+            window: 'five_hour',
+            utilization: 0.91,
+            resetsAt: now + 3_600_000,
+            at: now,
+          },
+        ] as never,
+      { now: () => now, policy },
+    );
+    expect(g.availability('claude')).toMatchObject({
+      ok: false,
+      reason: 'leaving 10% for you, 5-hour window at 91%',
+    });
+    settings = limits({ providers: { claude: { leaveForMe: 0, dailyCap: null } } });
+    expect(g.availability('claude').ok).toBe(true);
+    settings = limits({ providers: { codex: { leaveForMe: 0.1, dailyCap: 3 } } });
+    runs = 3;
+    expect(g.availability('codex')).toMatchObject({
+      ok: false,
+      reason: 'daily cap reached (3 runs), resumes at midnight',
+    });
+    settings = limits({ pauseAll: true });
+    expect(g.availability('codex')).toEqual({
+      ok: false,
+      reason: 'you paused everything',
+      until: null,
+    });
+  });
+
+  it('counts lanes across every project', () => {
+    const store = new Store(':memory:');
+    const routing = { planner: [], builder: [], reviewer: [] };
+    const a = store.projects.create({
+      name: 'a',
+      repoPath: '/a',
+      goal: 'g',
+      baseBranch: 'main',
+      routing,
+    });
+    const b = store.projects.create({
+      name: 'b',
+      repoPath: '/b',
+      goal: 'g',
+      baseBranch: 'main',
+      routing,
+    });
+    const [ta] = store.projects.addTasks(a.id, [{ title: 'x', spec: 'x' }]);
+    const [tb] = store.projects.addTasks(b.id, [{ title: 'y', spec: 'y' }]);
+    store.projects.updateTask(ta!.id, { status: 'building', builtBy: 'codex' });
+    store.projects.updateTask(tb!.id, { status: 'building', builtBy: 'codex' });
+    expect(store.projects.countBuilding('codex')).toBe(2);
+    expect(store.projects.countBuilding('claude')).toBe(0);
   });
 });

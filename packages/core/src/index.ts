@@ -27,6 +27,7 @@ export * from './brain/json.js';
 export * from './brain/prompts.js';
 export * from './brain/shape.js';
 export * from './governor/rank.js';
+export * from './governor/policy.js';
 export * from './brain/brain.js';
 export * from './brain/projects.js';
 export * from './brain/lock.js';

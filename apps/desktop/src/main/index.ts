@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
-import { NotificationSettings, type AppSettings } from '@conclave/shared';
+import type { AppSettings } from '@conclave/shared';
 import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
 import { demoAdapters, demoGitHub } from './demo.js';
 import { registerIpc } from './ipc.js';
@@ -65,11 +65,17 @@ function createWindow(): BrowserWindow {
 
 function registerSettings(engine: Engine): void {
   ipcMain.handle(IPC.settingsGet, (): AppSettings => engine.store.settings.get());
+  // The store merges each section and validates the whole result, so a patch only
+  // changes the keys it names (and a bad value throws instead of being saved).
   ipcMain.handle(IPC.settingsUpdate, (_e, patch: SettingsPatch): AppSettings => {
-    const notifications = patch?.notifications
-      ? NotificationSettings.partial().parse(patch.notifications)
-      : undefined;
-    return engine.store.settings.update({ ...(notifications && { notifications }) });
+    const section = (v: unknown) =>
+      v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+    const notifications = section(patch?.notifications);
+    const limits = section(patch?.limits);
+    return engine.store.settings.update({
+      ...(notifications && { notifications }),
+      ...(limits && { limits }),
+    } as SettingsPatch);
   });
 }
 

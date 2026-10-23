@@ -290,6 +290,14 @@ export class ProjectStore {
     ).map(toTask);
   }
 
+  /** Tasks building on this provider right now, across every project (shared lane caps). */
+  countBuilding(provider: ProviderId): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'building' AND built_by = ?")
+      .get(provider) as { n: number };
+    return row.n;
+  }
+
   nextQueued(projectId: string): Task | undefined {
     const row = this.db
       .prepare(

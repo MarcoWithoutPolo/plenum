@@ -142,6 +142,14 @@ export class UsageStore {
     }));
   }
 
+  /** Runs this provider made since `since` (any role or source). */
+  runsSince(provider: ProviderId, since: number): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM agent_runs WHERE provider = ? AND at >= ?')
+      .get(provider, since) as { n: number };
+    return row.n;
+  }
+
   /** When this provider last answered successfully (any chat, council or project run). */
   lastOk(provider: ProviderId): number | null {
     const row = this.db

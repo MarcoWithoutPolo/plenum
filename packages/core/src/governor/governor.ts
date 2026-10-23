@@ -1,6 +1,7 @@
 import type { ProviderId, Seat } from '@conclave/shared';
 import type { RunResult } from '../collect.js';
 import type { QuotaReading } from '../store/store.js';
+import { ceilingFor, policyBlock, type GovernorPolicy } from './policy.js';
 
 export interface GovernorOptions {
   /** Stop handing a provider work once any of its windows is this full (0 to 1). */
@@ -9,6 +10,8 @@ export interface GovernorOptions {
   baseBackoffMs?: number;
   maxBackoffMs?: number;
   now?: () => number;
+  /** Your rules from Settings: pause all, quiet hours, daily caps, what to leave for you. */
+  policy?: GovernorPolicy;
 }
 
 /** Limits that need someone to act (raise a cap, add credits), not just time to pass. */
@@ -27,6 +30,7 @@ export class Governor {
   private readonly base: number;
   private readonly maxBackoff: number;
   private readonly now: () => number;
+  private readonly policy: GovernorPolicy | undefined;
   private readonly cooldowns = new Map<
     ProviderId,
     { until: number; strikes: number; reason: string }
@@ -40,24 +44,33 @@ export class Governor {
     this.base = opts.baseBackoffMs ?? 5 * 60_000;
     this.maxBackoff = opts.maxBackoffMs ?? 60 * 60_000;
     this.now = opts.now ?? Date.now;
+    this.policy = opts.policy;
   }
 
   availability(provider: ProviderId): Availability {
     const now = this.now();
+    const block = this.policy && policyBlock(this.policy, provider, new Date(now));
+    if (block) return { ok: false, ...block };
     const cool = this.cooldowns.get(provider);
     if (cool && cool.until > now) return { ok: false, reason: cool.reason, until: cool.until };
 
+    const ceiling = ceilingFor(this.policy, provider, this.ceiling);
     for (const q of this.readings()) {
       if (q.provider !== provider || q.utilization === null) continue;
       // A reading only counts until its window resets.
       if (q.resetsAt !== null && q.resetsAt <= now) continue;
       if (q.window === 'limit' && q.resetsAt === null && now - q.at > this.base) continue;
-      if (q.utilization >= this.ceiling) {
+      if (q.utilization >= ceiling) {
         const pct = Math.round(q.utilization * 100);
+        const left = Math.round((1 - ceiling) * 100);
         return {
           ok: false,
           reason:
-            q.window === 'limit' ? 'usage limit reached' : `${windowName(q.window)} at ${pct}%`,
+            q.window === 'limit'
+              ? 'usage limit reached'
+              : this.policy && left > 0
+                ? `leaving ${left}% for you, ${windowName(q.window)} at ${pct}%`
+                : `${windowName(q.window)} at ${pct}%`,
           until: q.resetsAt,
         };
       }

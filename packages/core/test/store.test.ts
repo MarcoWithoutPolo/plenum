@@ -254,3 +254,30 @@ describe('Settings', () => {
     expect(store.settings.get().notifications.done).toBe(true);
   });
 });
+
+describe('Settings patches', () => {
+  it('only change the keys they name, and reject bad values', () => {
+    const store = new Store(':memory:');
+    store.settings.update({ notifications: { done: false } });
+    store.settings.update({ notifications: { limit: false } });
+    expect(store.settings.get().notifications).toMatchObject({
+      done: false,
+      limit: false,
+      needsYou: true,
+    });
+    store.settings.update({
+      limits: { providers: { codex: { lanes: 3, leaveForMe: 0.1, dailyCap: null } } },
+    });
+    store.settings.update({ limits: { pauseAll: true } });
+    expect(store.settings.get().limits).toMatchObject({
+      pauseAll: true,
+      providers: { codex: { lanes: 3 } },
+    });
+    expect(() =>
+      store.settings.update({
+        limits: { quietHours: [{ days: [], from: '25:00', to: 'x' }] },
+      } as never),
+    ).toThrow();
+    expect(store.settings.get().limits.quietHours).toEqual([]);
+  });
+});

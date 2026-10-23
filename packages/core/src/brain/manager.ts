@@ -10,7 +10,8 @@ import type {
 } from '@conclave/shared';
 import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
-import { Brain, type RoundOutcome } from './brain.js';
+import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
+import type { Governor } from '../governor/governor.js';
 import { QUESTION_KINDS, answerQuestion, decidePermission } from './answers.js';
 import { GitHub } from '../github/gh.js';
 import { openPullRequest, publishRepo } from '../github/flows.js';
@@ -142,10 +143,15 @@ export class BrainManager {
   >();
   private readonly listeners = new Set<(event: BrainEvent) => void>();
 
+  /** One governor for every project, so they share each AI's limits and cooldowns (C4). */
+  private readonly governor: Governor;
+
   constructor(
     private readonly ctx: EngineContext,
     private readonly home: string,
-  ) {}
+  ) {
+    this.governor = storeGovernor(ctx.store);
+  }
 
   onEvent(listener: (event: BrainEvent) => void): () => void {
     this.listeners.add(listener);
@@ -188,6 +194,7 @@ export class BrainManager {
     const controller = new AbortController();
     const brain = new Brain(this.ctx, projectId, {
       home: this.home,
+      governor: this.governor,
       onEvent: (event) => {
         for (const l of this.listeners) l(event);
       },

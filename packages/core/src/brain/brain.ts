@@ -79,7 +79,21 @@ export interface RunOptions {
  * plan when the queue is empty, otherwise build → test → review → merge one task.
  * Every stage is recorded, so a restarted brain picks up where it left off.
  */
-/** How many tasks one AI may build at once in a project, by default (lanes). */
+/** One governor reading this store: quota readings plus your rules from Settings. */
+export function storeGovernor(store: EngineContext['store']): Governor {
+  return new Governor(() => store.listQuotas(), {
+    policy: {
+      limits: () => store.settings.get().limits,
+      runsToday: (provider) => {
+        const midnight = new Date();
+        midnight.setHours(0, 0, 0, 0);
+        return store.usage.runsSince(provider, midnight.getTime());
+      },
+    },
+  });
+}
+
+/** How many tasks one AI may build at once across projects, by default (lanes). */
 export const LANE_CAPS: Partial<Record<ProviderId, number>> = {
   claude: 2,
   codex: 2,
@@ -127,7 +141,7 @@ export class Brain {
       join(opts.home, 'projects', projectId),
       project.integrationBranch,
     );
-    this.governor = opts.governor ?? new Governor(() => ctx.store.listQuotas());
+    this.governor = opts.governor ?? storeGovernor(ctx.store);
     this.maxTasks = opts.maxTasksPerPlan ?? 5;
     this.agentTimeout = opts.agentTimeoutMs ?? 30 * 60_000;
     this.testTimeout = opts.testTimeoutMs ?? 15 * 60_000;
@@ -402,11 +416,14 @@ export class Brain {
   }
 
   /** Whether `provider` has a free builder lane in this project. */
+  /** Whether `provider` has a free builder lane, counting every project (Settings or LANE_CAPS). */
   private builderRoom(provider: ProviderId): boolean {
-    const busy = this.projects
-      .listTasks(this.projectId)
-      .filter((t) => t.status === 'building' && t.builtBy === provider).length;
-    return busy < (this.opts.laneCaps?.[provider] ?? LANE_CAPS[provider] ?? 1);
+    const cap =
+      this.opts.laneCaps?.[provider] ??
+      this.ctx.store.settings.get().limits.providers[provider]?.lanes ??
+      LANE_CAPS[provider] ??
+      1;
+    return this.projects.countBuilding(provider) < cap;
   }
 
   /**
@@ -689,12 +706,16 @@ export class Brain {
     }
     // Retries keep their escalation order; only a first, unpinned attempt is re-ranked.
     plan.seats = task.attempts === 0 && !task.pinnedSeat ? this.ranked('builder', seats) : seats;
-    if (project.maxParallel > 1) {
-      // Lanes: never more builders on one AI than its lane cap.
-      const free = plan.seats.filter((s) => this.builderRoom(s.provider));
-      if (free.length === 0) return { kind: 'retry', task, reason: 'Every builder lane is busy' };
-      plan.seats = free;
+    // Never more builders on one AI than its lane cap, counting every project.
+    const free = plan.seats.filter((s) => this.builderRoom(s.provider));
+    if (free.length === 0) {
+      const reason = 'Every builder on the team is busy in other lanes';
+      // Lanes park the task; one lane waits a little and looks again.
+      return project.maxParallel > 1
+        ? { kind: 'retry', task, reason }
+        : { kind: 'waiting', until: Date.now() + 30_000, reason };
     }
+    plan.seats = free;
     const pick = this.governor.pick(plan.seats);
     if (!pick.seat) return this.waiting('builder', pick);
     const builder = pick.seat;

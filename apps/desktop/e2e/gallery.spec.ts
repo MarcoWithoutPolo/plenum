@@ -425,3 +425,46 @@ for (const scheme of ['light', 'dark'] as const) {
     }
   });
 }
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`gallery settings ${scheme}`, async () => {
+    test.setTimeout(60_000);
+    mkdirSync(out, { recursive: true });
+    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const app = await electron.launch({
+      args: [join(here, '../out/main/index.js')],
+      env: { ...process.env, CONCLAVE_DEMO: '1', CONCLAVE_HOME: home },
+      colorScheme: scheme,
+    });
+    try {
+      const page = await app.firstWindow();
+      await page.setViewportSize({ width: 1320, height: 860 });
+      await page.getByRole('button', { name: /^Settings/ }).click();
+      await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Add quiet hours' }).click();
+      await page
+        .getByRole('group', { name: 'Quiet hours 1' })
+        .getByRole('button', { name: 'Claude' })
+        .click();
+      await page
+        .getByRole('radiogroup', { name: 'Codex lanes' })
+        .getByRole('radio', { name: '3' })
+        .click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(out, `${scheme}-settings.png`) });
+      await page.getByRole('switch', { name: 'Pause everything' }).check({ force: true });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(out, `${scheme}-settings-paused.png`) });
+      // Settings persist across a reload.
+      await page.reload();
+      await page.getByRole('button', { name: /^Settings/ }).click();
+      await expect(page.getByRole('switch', { name: 'Pause everything' })).toBeChecked();
+      await expect(
+        page.getByRole('radiogroup', { name: 'Codex lanes' }).getByRole('radio', { name: '3' }),
+      ).toHaveAttribute('aria-checked', 'true');
+    } finally {
+      await app.close();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+}
