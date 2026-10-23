@@ -246,13 +246,13 @@ export function applySteering(
     try {
       switch (a.type) {
         case 'add_task':
-          return `Added ${addTask(store.projects, projectId, a).title}`;
+          return `Added “${addTask(store.projects, projectId, a).title}”`;
         case 'edit_task':
-          return `Edited ${editTask(store.projects, a.id, a).title}`;
+          return `Edited “${editTask(store.projects, a.id, a).title}”`;
         case 'skip_task':
-          return `Skipped ${skipTask(store.projects, a.id).title}`;
+          return `Skipped “${skipTask(store.projects, a.id).title}”`;
         case 'move_task':
-          return `Moved ${placeTask(store.projects, a.id, a.before).title}`;
+          return `Moved “${placeTask(store.projects, a.id, a.before).title}”`;
         case 'decision':
           store.decisions.add({
             projectId,

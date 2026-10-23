@@ -217,7 +217,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await shot('project-failed');
       await page
         .getByRole('region', { name: 'Tasks' })
-        .getByRole('button', { name: /greet\(\) helper/ })
+        .getByRole('button', { name: /^Add a greet\(\) helper/ })
         .click();
       await page.waitForTimeout(300);
       await shot('failure-card');
@@ -418,6 +418,28 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('article', { name: /Ready to merge/ })).toBeVisible({
         timeout: 60_000,
       });
+      // Steering: the task menu, then a chat proposal before and after applying it.
+      await page.getByRole('tab', { name: 'Chat' }).click();
+      await shot('project-chat-empty');
+      await page
+        .getByRole('textbox', { name: 'Message to the project' })
+        .fill('Add a goodbye helper too, and keep the docs short.');
+      await page.getByRole('button', { name: 'Send' }).click();
+      await expect(page.getByRole('group', { name: 'Proposed changes' })).toBeVisible();
+      await shot('project-chat-proposal');
+      await page.getByRole('button', { name: 'Apply 2 changes' }).click();
+      await expect(page.getByRole('region', { name: 'Chat' })).toContainText(
+        'Added “Add a farewell() helper”',
+      );
+      await shot('project-chat-applied');
+      const row = page
+        .getByRole('region', { name: 'Tasks' })
+        .getByRole('listitem')
+        .filter({ hasText: 'farewell' });
+      await row.hover();
+      await row.getByRole('button', { name: /^Actions for/ }).click();
+      await shot('task-menu');
+      await page.keyboard.press('Escape');
     } finally {
       await app.close();
       rmSync(home, { recursive: true, force: true });

@@ -206,7 +206,7 @@ test('steers from the board and the chat, changing nothing until you apply', asy
   await proposal.getByRole('checkbox', { name: /Decision/ }).uncheck();
   await proposal.getByRole('button', { name: 'Apply 1 change' }).click();
   await expect(page.getByRole('region', { name: 'Chat' })).toContainText(
-    'Added Add a farewell() helper',
+    'Added “Add a farewell() helper”',
   );
   await expect(board).toContainText('Add a farewell() helper');
   await page.getByRole('tab', { name: 'Activity' }).click();

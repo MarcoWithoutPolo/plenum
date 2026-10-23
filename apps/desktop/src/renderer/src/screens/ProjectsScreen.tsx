@@ -123,7 +123,7 @@ function ProjectCard({ summary, onOpen }: { summary: ProjectSummary; onOpen: () 
     >
       <div className="flex items-center gap-2">
         <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{project.name}</h3>
-        <StatusPill status={project.status} running={running} />
+        <StatusPill status={project.status} running={running} reason={project.statusReason} />
       </div>
       <p className="mt-1.5 line-clamp-2 min-h-[2.6em] text-[13px] leading-snug text-muted">
         {project.goal}

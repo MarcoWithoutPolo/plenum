@@ -1855,9 +1855,9 @@ describe('Steering', () => {
     const applied = applySteering(ctx, reply.id, [0, 1, 2, 3]);
     expect(applied.applied).toEqual([0, 1, 2, 3]);
     expect(applied.outcome).toEqual([
-      'Skipped One',
+      'Skipped “One”',
       'Not done: Only failed, queued or waiting tasks can be skipped (this one is building).',
-      'Added Bigger buttons',
+      'Added “Bigger buttons”',
       'Decision: Drop it',
     ]);
     expect(store.decisions.list(project.id).map((d) => d.answer)).toEqual(['Drop it']);

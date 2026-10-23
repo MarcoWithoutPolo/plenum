@@ -36,9 +36,19 @@ const STATUS: Record<Project['status'], { label: string; tone: string; dot: stri
   done: { label: 'Goal met', tone: 'bg-accent-soft text-accent-ink', dot: 'var(--accent)' },
 };
 
-export function StatusPill({ status, running }: { status: Project['status']; running: boolean }) {
+export function StatusPill({
+  status,
+  running,
+  reason,
+}: {
+  status: Project['status'];
+  running: boolean;
+  /** An idle project with a reason has run before and has new work: it can resume. */
+  reason?: string | null;
+}) {
   // The brain may still be finishing a step after a stop; trust the lock while it holds.
-  const s = STATUS[running && status !== 'waiting' ? 'running' : status];
+  const base = STATUS[running && status !== 'waiting' ? 'running' : status];
+  const s = !running && status === 'idle' && reason ? { ...base, label: 'Ready to resume' } : base;
   return (
     <span
       className={`inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium ${s.tone}`}

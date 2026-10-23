@@ -176,7 +176,7 @@ function Header({
         <h1 className="min-w-0 truncate text-[24px] font-semibold tracking-tight">
           {project.name}
         </h1>
-        <StatusPill status={project.status} running={running} />
+        <StatusPill status={project.status} running={running} reason={project.statusReason} />
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {running ? (
             <Button onClick={() => void stop(project.id)} disabled={busy}>
@@ -268,7 +268,7 @@ function Header({
         </div>
       </div>
 
-      {project.statusReason && project.status !== 'running' && project.status !== 'needs_you' && (
+      {project.statusReason && !['running', 'needs_you', 'idle'].includes(project.status) && (
         <p className="mt-1 text-[12.5px] text-muted">
           <span className="font-medium text-ink">
             {project.status === 'done'
