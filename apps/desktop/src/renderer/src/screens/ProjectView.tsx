@@ -315,6 +315,10 @@ function Header({
                 <span className="font-sans text-faint">review only</span>
               ))}
           </dd>
+          <dt className="text-faint">Lanes</dt>
+          <dd>
+            {project.maxParallel === 1 ? 'One task at a time' : `${project.maxParallel} at once`}
+          </dd>
           <dt className="text-faint">Attempts</dt>
           <dd>
             {project.maxAttempts} per task
@@ -419,6 +423,10 @@ function NowStrip({
   const now = useNow(running);
   const active = tasks.find((t) => ACTIVE.includes(t.status));
   const last = events.at(-1);
+  const inFlight = tasks.filter((t) => ACTIVE.includes(t.status));
+  if (running && project.maxParallel > 1 && project.status !== 'waiting' && inFlight.length > 0) {
+    return <LanesStrip lanes={project.maxParallel} tasks={inFlight} events={events} now={now} />;
+  }
 
   let line: React.ReactNode = null;
   let icon: React.ReactNode = null;
@@ -439,34 +447,7 @@ function NowStrip({
       </>
     );
   } else if (running && active) {
-    const who =
-      active.status === 'reviewing'
-        ? (active.reviewedBy ?? lastProvider(events, active.id))
-        : active.builtBy;
-    since = [...events]
-      .reverse()
-      .find((e) => e.taskId === active.id && ['task', 'verify', 'review'].includes(e.kind))?.at;
-    icon = who ? (
-      <ProviderDot provider={who} size={9} />
-    ) : (
-      <FlaskConical className="size-4 text-accent" aria-hidden />
-    );
-    const verb =
-      active.status === 'verifying'
-        ? 'Running tests for'
-        : active.status === 'reviewing'
-          ? 'reviewing'
-          : 'building';
-    line = (
-      <>
-        <span className="font-medium">
-          {active.status === 'verifying'
-            ? verb
-            : `${who ? providerName(who) : 'An agent'} is ${verb}`}
-        </span>{' '}
-        <span className="text-muted">“{active.title}”</span>
-      </>
-    );
+    ({ icon, line, since } = laneLine(active, events));
   } else if (running) {
     icon = <span className="live-dot size-2 rounded-full bg-ok" aria-hidden />;
     since = last?.at;
@@ -489,6 +470,91 @@ function NowStrip({
         <span className="shrink-0 text-[12px] text-faint tabular-nums">{elapsed(now - since)}</span>
       )}
     </div>
+  );
+}
+
+/** Who is doing what on one task in flight, and since when. */
+function laneLine(task: Task, events: BrainEvent[]) {
+  const who =
+    task.status === 'reviewing' ? (task.reviewedBy ?? lastProvider(events, task.id)) : task.builtBy;
+  const since = [...events]
+    .reverse()
+    .find((e) => e.taskId === task.id && ['task', 'verify', 'review'].includes(e.kind))?.at;
+  const icon = who ? (
+    <ProviderDot provider={who} size={9} />
+  ) : (
+    <FlaskConical className="size-4 text-accent" aria-hidden />
+  );
+  const verb =
+    task.status === 'verifying'
+      ? 'Running tests for'
+      : task.status === 'reviewing'
+        ? 'reviewing'
+        : 'building';
+  const line = (
+    <>
+      <span className="font-medium">
+        {task.status === 'verifying' ? verb : `${who ? providerName(who) : 'An agent'} is ${verb}`}
+      </span>{' '}
+      <span className="text-muted">“{task.title}”</span>
+    </>
+  );
+  return { icon, line, since };
+}
+
+/** Lanes: one live card per task in flight, and a dashed slot for each free lane. */
+function LanesStrip({
+  lanes,
+  tasks,
+  events,
+  now,
+}: {
+  lanes: number;
+  tasks: Task[];
+  events: BrainEvent[];
+  now: number;
+}) {
+  const free = Math.max(0, lanes - tasks.length);
+  return (
+    <section aria-label={`Lanes: ${tasks.length} of ${lanes} busy`} className="mt-5">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h2 className="text-[12px] font-medium tracking-wide text-faint uppercase">Lanes</h2>
+        <span className="text-[12px] text-faint tabular-nums">
+          {tasks.length} of {lanes} busy
+        </span>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {tasks.map((task) => {
+          const { icon, line, since } = laneLine(task, events);
+          return (
+            <li
+              key={task.id}
+              role="status"
+              className="sheen relative flex items-center gap-3 overflow-hidden rounded-2xl border border-line bg-panel px-4 py-3 text-[13.5px] shadow-card"
+            >
+              <span className="grid size-6 shrink-0 place-items-center">{icon}</span>
+              <span className="min-w-0 flex-1 truncate">{line}</span>
+              {since && (
+                <span className="shrink-0 text-[12px] text-faint tabular-nums">
+                  {elapsed(now - since)}
+                </span>
+              )}
+            </li>
+          );
+        })}
+        {Array.from({ length: free }, (_, i) => (
+          <li
+            key={`free-${i}`}
+            className="flex items-center gap-3 rounded-2xl border border-dashed border-line px-4 py-3 text-[13px] text-faint"
+          >
+            <span className="grid size-6 shrink-0 place-items-center">
+              <span className="size-2 rounded-full border border-line" aria-hidden />
+            </span>
+            Free lane: starts the next task that's ready and doesn't touch the same files
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -610,7 +610,7 @@ export class Brain {
         : i > 0
           ? [added[i - 1]!.id]
           : [];
-      if (after.length) this.projects.updateTask(task.id, { after: [...new Set(after)] });
+      this.projects.updateTask(task.id, { after: [...new Set(after)] });
     });
   }
 

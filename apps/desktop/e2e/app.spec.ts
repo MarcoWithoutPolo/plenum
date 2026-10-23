@@ -50,10 +50,12 @@ test('runs with a locked-down renderer', async () => {
     'decisions',
     'github',
     'onInstallLog',
+    'onOpenProject',
     'openExternal',
     'platform',
     'projects',
     'runs',
+    'settings',
     'threads',
     'usage',
   ]);

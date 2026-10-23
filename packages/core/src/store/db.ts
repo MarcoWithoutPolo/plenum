@@ -198,6 +198,13 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   (db) => {
     addColumn(db, 'projects', 'adaptive_team', 'INTEGER NOT NULL DEFAULT 1');
   },
+  // v10: app-wide settings (notifications, shared limits).
+  `
+  CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

@@ -82,6 +82,11 @@ const api: ConclaveApi = {
   usage: {
     report: () => invoke(IPC.usageReport),
   },
+  settings: {
+    get: () => invoke(IPC.settingsGet),
+    update: (patch) => invoke(IPC.settingsUpdate, patch),
+  },
+  onOpenProject: (listener) => listen<string>(IPC.openProject, listener),
   onInstallLog: (listener) => listen<InstallLog>(IPC.installLog, listener),
   openExternal: (url) => invoke(IPC.openExternal, url),
   platform: process.platform,

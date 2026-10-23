@@ -9,7 +9,8 @@ export type Screen =
   | { name: 'projects'; projectId?: string }
   | { name: 'approvals' }
   | { name: 'usage' }
-  | { name: 'accounts' };
+  | { name: 'accounts' }
+  | { name: 'settings' };
 
 export type RunStatus = 'waiting' | 'thinking' | 'done' | 'failed';
 

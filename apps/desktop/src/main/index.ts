@@ -1,10 +1,13 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
+import { NotificationSettings, type AppSettings } from '@conclave/shared';
 import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
 import { demoAdapters, demoGitHub } from './demo.js';
 import { registerIpc } from './ipc.js';
 import { registerProjectIpc } from './projects-ipc.js';
+import { Notifier } from './notify.js';
+import { IPC, type SettingsPatch } from '../shared/api.js';
 
 silenceSqliteWarning();
 const here = fileURLToPath(new URL('.', import.meta.url));
@@ -60,6 +63,51 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function registerSettings(engine: Engine): void {
+  ipcMain.handle(IPC.settingsGet, (): AppSettings => engine.store.settings.get());
+  ipcMain.handle(IPC.settingsUpdate, (_e, patch: SettingsPatch): AppSettings => {
+    const notifications = patch?.notifications
+      ? NotificationSettings.partial().parse(patch.notifications)
+      : undefined;
+    return engine.store.settings.update({ ...(notifications && { notifications }) });
+  });
+}
+
+/** Desktop notifications for what needs you, while the window is elsewhere (C6). */
+function watchForNotices(engine: Engine, brains: BrainManager): void {
+  const inbox = () =>
+    engine.store.projects
+      .list()
+      .reduce((n, p) => n + engine.store.projects.approvals(p.id, 'pending').length, 0);
+  const notifier = new Notifier({
+    focused: () => Boolean(window && !window.isDestroyed() && window.isFocused()),
+    settings: () => engine.store.settings.get().notifications,
+    projectName: (id) => engine.store.projects.get(id)?.name ?? 'Conclave',
+    attention: () => {
+      if (process.platform === 'win32' && window && !window.isDestroyed()) window.flashFrame(true);
+    },
+    show: (notice) => {
+      if (!Notification.isSupported()) return;
+      const n = new Notification({ title: notice.title, body: notice.body, silent: false });
+      n.on('click', () => {
+        if (!window || window.isDestroyed()) window = createWindow();
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+        window.webContents.send(IPC.openProject, notice.projectId);
+      });
+      n.show();
+    },
+  });
+  brains.onEvent((event) => {
+    notifier.handle(event);
+    // macOS: the dock shows how many things wait in the inbox.
+    if (process.platform === 'darwin' && ['question', 'approval', 'done'].includes(event.kind)) {
+      app.setBadgeCount(inbox());
+    }
+  });
+}
+
 const singleInstance = app.requestSingleInstanceLock();
 if (!singleInstance) {
   app.quit();
@@ -77,6 +125,8 @@ if (!singleInstance) {
     brains.recoverOrphans();
     registerIpc(engine, () => window);
     registerProjectIpc(engine, brains, demo ? demoGitHub() : new GitHub(), () => window);
+    registerSettings(engine);
+    watchForNotices(engine, brains);
     window = createWindow();
 
     app.on('activate', () => {

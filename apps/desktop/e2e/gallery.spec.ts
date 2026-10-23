@@ -352,3 +352,76 @@ async function pickOption(page: Page, name: string) {
     .getByRole('option', { name: new RegExp(`^${name}`) })
     .click();
 }
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`gallery lanes ${scheme}`, async () => {
+    test.setTimeout(120_000);
+    mkdirSync(out, { recursive: true });
+    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
+    const git = (...a: string[]) =>
+      execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
+        cwd: repo,
+      });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(
+      join(repo, 'package.json'),
+      JSON.stringify({ name: 'greeter', scripts: { test: 'node -e 0' } }),
+    );
+    git('add', '-A');
+    git('commit', '-q', '-m', 'init');
+    const app = await electron.launch({
+      args: [join(here, '../out/main/index.js')],
+      env: {
+        ...process.env,
+        CONCLAVE_DEMO: '1',
+        CONCLAVE_DEMO_SLOW: '1',
+        CONCLAVE_DEMO_LANES: '1',
+        CONCLAVE_HOME: home,
+        CONCLAVE_E2E_REPO: repo,
+      },
+      colorScheme: scheme,
+    });
+    try {
+      const page = await app.firstWindow();
+      await page.setViewportSize({ width: 1320, height: 860 });
+      const shot = async (name: string) => {
+        await page.waitForTimeout(250);
+        await page.screenshot({ path: join(out, `${scheme}-${name}.png`) });
+      };
+      await page
+        .getByRole('complementary')
+        .getByRole('button', { name: /^Projects/ })
+        .click();
+      await page.getByRole('button', { name: 'New project' }).click();
+      const dialog = page.getByRole('dialog', { name: 'New project' });
+      await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+      await expect(dialog.getByLabel('Ready')).toBeVisible();
+      await dialog.getByRole('button', { name: 'Next' }).click();
+      await dialog
+        .getByRole('textbox', { name: 'Goal' })
+        .fill('Add a greet() helper and document how to use it.');
+      await dialog.getByRole('button', { name: 'Next' }).click();
+      await expect(dialog.getByText('What should greet() say?')).toBeVisible({ timeout: 20_000 });
+      await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+      await expect(page.getByRole('region', { name: 'Lanes: 2 of 2 busy' })).toBeVisible({
+        timeout: 30_000,
+      });
+      await shot('project-lanes');
+      await page.getByRole('button', { name: 'Project actions' }).click();
+      await page.getByRole('button', { name: /Team and settings/ }).click();
+      const settings = page.getByRole('dialog', { name: 'Project settings' });
+      await expect(settings.getByText(/reviews take about/)).toBeVisible();
+      await settings.getByRole('checkbox', { name: /Adjust the team/ }).scrollIntoViewIfNeeded();
+      await shot('project-settings-team');
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('article', { name: /Ready to merge/ })).toBeVisible({
+        timeout: 60_000,
+      });
+    } finally {
+      await app.close();
+      rmSync(home, { recursive: true, force: true });
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+}

@@ -237,3 +237,20 @@ describe('Store', () => {
     expect(section).toContain('(5 older items not shown)');
   });
 });
+
+describe('Settings', () => {
+  it('starts from defaults, merges changes per section, and survives a damaged value', () => {
+    const store = new Store(':memory:');
+    expect(store.settings.get().notifications).toEqual({
+      needsYou: true,
+      approval: true,
+      done: true,
+      paused: true,
+      limit: true,
+    });
+    store.settings.update({ notifications: { done: false } });
+    expect(store.settings.get().notifications).toMatchObject({ done: false, needsYou: true });
+    store.db.prepare("UPDATE settings SET value = '{oops' WHERE key = 'notifications'").run();
+    expect(store.settings.get().notifications.done).toBe(true);
+  });
+});

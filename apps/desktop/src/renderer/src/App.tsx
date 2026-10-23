@@ -3,12 +3,14 @@ import { AlertCircle, X } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
+import { api } from '@/lib/api';
 import { AccountsScreen } from '@/screens/AccountsScreen';
 import { InboxScreen } from '@/screens/InboxScreen';
 import { ChatScreen } from '@/screens/ChatScreen';
 import { CouncilScreen } from '@/screens/CouncilScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { UsageScreen } from '@/screens/UsageScreen';
+import { SettingsScreen } from '@/screens/SettingsScreen';
 
 export function App() {
   const ready = useApp((s) => s.ready);
@@ -21,6 +23,12 @@ export function App() {
   useEffect(() => {
     void init().then(() => initProjects());
   }, [init, initProjects]);
+
+  // A clicked notification opens its project.
+  useEffect(
+    () => api().onOpenProject((projectId) => open({ name: 'projects', projectId })),
+    [open],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -47,6 +55,8 @@ export function App() {
           <InboxScreen />
         ) : screen.name === 'usage' ? (
           <UsageScreen />
+        ) : screen.name === 'settings' ? (
+          <SettingsScreen />
         ) : screen.name === 'council' ? (
           <CouncilScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
         ) : (

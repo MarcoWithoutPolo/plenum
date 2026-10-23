@@ -13,6 +13,7 @@ export * from './process.js';
 export * from './store/db.js';
 export * from './store/store.js';
 export * from './store/projects.js';
+export * from './store/settings.js';
 export * from './store/usage.js';
 export * from './store/decisions.js';
 export * from './chat/transcript.js';

@@ -217,10 +217,11 @@ export class ProjectStore {
       const { top } = this.db
         .prepare('SELECT COALESCE(MAX(priority), 0) AS top FROM tasks WHERE project_id = ?')
         .get(projectId) as { top: number };
+      const ids = tasks.map(() => newId('k'));
       return tasks.map((t, i) => {
         const now = Date.now();
         const task: Task = {
-          id: newId('k'),
+          id: ids[i]!,
           projectId,
           title: t.title.trim().slice(0, 200),
           spec: t.spec.trim(),
@@ -238,7 +239,8 @@ export class ProjectStore {
           blockedBy: null,
           grants: null,
           estimate: t.estimate ?? null,
-          after: t.after ?? [],
+          // Tasks added together run in order unless told otherwise (safe with lanes).
+          after: t.after ?? (i > 0 ? [ids[i - 1]!] : []),
           actualLines: null,
           createdAt: now,
           updatedAt: now,

@@ -71,7 +71,11 @@ function projectReply(req: RunRequest): string | undefined {
           recommended: 'A USAGE.md file',
         },
       ],
-      tasks: DEMO_TASKS.map(({ title, spec }) => ({ title, spec })),
+      // With lanes on, the planner plans the tasks (independent) instead of the clarify step.
+      tasks:
+        process.env.CONCLAVE_DEMO_LANES === '1'
+          ? []
+          : DEMO_TASKS.map(({ title, spec }) => ({ title, spec })),
       test_command: null,
     });
   }
@@ -93,8 +97,20 @@ function projectReply(req: RunRequest): string | undefined {
   }
   if (req.role === 'planner') {
     const todo = DEMO_TASKS.filter((t) => !existsSync(join(req.cwd, t.file)));
+    // CONCLAVE_DEMO_LANES=1: the tasks are independent and touch different files, so they run at once.
+    const lanes = process.env.CONCLAVE_DEMO_LANES === '1';
     return todo.length
-      ? JSON.stringify({ done: false, tasks: todo.map(({ title, spec }) => ({ title, spec })) })
+      ? JSON.stringify({
+          done: false,
+          tasks: todo.map(({ title, spec, file }) => ({
+            title,
+            spec,
+            ...(lanes && {
+              after: [],
+              estimate: { files: [file], lines: 200, risk: 'low' },
+            }),
+          })),
+        })
       : JSON.stringify({ done: true, reason: 'greet.js and its usage notes are in place.' });
   }
   if (req.role === 'reviewer') {
@@ -119,7 +135,10 @@ function projectReply(req: RunRequest): string | undefined {
 async function projectAct(req: RunRequest): Promise<void> {
   if (req.role !== 'builder') return;
   // CONCLAVE_DEMO_SLOW keeps builders busy long enough to see a project mid-run.
-  if (process.env.CONCLAVE_DEMO_SLOW) await new Promise((r) => setTimeout(r, 2500));
+  if (process.env.CONCLAVE_DEMO_SLOW) {
+    const ms = process.env.CONCLAVE_DEMO_LANES === '1' ? 6000 : 2500;
+    await new Promise((r) => setTimeout(r, ms));
+  }
   if (asksFirst(req)) return;
   const task = DEMO_TASKS.find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`));
   if (task) writeFileSync(join(req.cwd, task.file), task.body);

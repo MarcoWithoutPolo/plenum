@@ -1,3 +1,4 @@
+import type { AppSettings } from '@conclave/shared';
 import type {
   AgentRun,
   ClarifyResult,
@@ -318,12 +319,24 @@ export interface ConclaveApi {
   usage: {
     report(): Promise<UsageReport>;
   };
+  settings: {
+    get(): Promise<AppSettings>;
+    update(patch: SettingsPatch): Promise<AppSettings>;
+  };
+  /** A notification was clicked: open this project. */
+  onOpenProject(listener: (projectId: string) => void): () => void;
   onInstallLog(listener: (log: InstallLog) => void): () => void;
   openExternal(url: string): Promise<void>;
   platform: NodeJS.Platform;
 }
 
+/** A partial change to each settings section. */
+export type SettingsPatch = { [K in keyof AppSettings]?: Partial<AppSettings[K]> };
+
 export const IPC = {
+  settingsGet: 'settings:get',
+  settingsUpdate: 'settings:update',
+  openProject: 'app:open-project',
   accountsList: 'accounts:list',
   accountsSignIn: 'accounts:sign-in',
   accountsInstall: 'accounts:install',

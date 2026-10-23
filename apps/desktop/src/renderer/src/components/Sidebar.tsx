@@ -6,6 +6,7 @@ import {
   MessageSquarePlus,
   MessagesSquare,
   Plug,
+  Settings,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -126,6 +127,12 @@ export function Sidebar() {
               ))}
             </span>
           }
+        />
+        <NavButton
+          icon={<Settings className="size-4" />}
+          label="Settings"
+          active={screen.name === 'settings'}
+          onClick={() => open({ name: 'settings' })}
         />
       </div>
     </aside>
