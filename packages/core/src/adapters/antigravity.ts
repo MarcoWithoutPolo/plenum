@@ -173,9 +173,19 @@ export function antigravityPermissionGap(permissions: RunPermissions): string | 
   return undefined;
 }
 
+/**
+ * agy's print mode denies every shell command it can't ask about, and a denied command ends
+ * the turn with an empty answer. Saying so up front keeps agents on their file tools
+ * (verified on agy 1.4.6: builds edit files and reviews answer in JSON).
+ */
+export const NO_SHELL_NOTE =
+  'IMPORTANT: This session has no shell. Running any command (git, npm, node, tests, anything) is denied and ends your turn with no answer. Use only your file tools to read, search and edit files. The system runs the tests itself.';
+
 export function antigravityArgs(request: RunRequest): { args: string[]; cleanup: () => void } {
   assertSafeModel(request.model);
   assertSafeEffort(request.effort);
+  const fullAccess = !(request.readOnly ?? true) && request.permissions?.level === 5;
+  const chat = request.role === 'chat' || request.role === 'synthesizer' || !request.role;
   let prompt = request.prompt;
   let cleanup = () => {};
   const extra: string[] = [];
@@ -187,6 +197,10 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     extra.push('--add-dir', dir);
     cleanup = () => rmSync(dir, { recursive: true, force: true });
   }
+  if (!fullAccess && !chat) prompt = `${NO_SHELL_NOTE}\n\n${prompt}`;
+  // Slash-command expansion stays on (turning it off makes agy ignore --mode), so a prompt
+  // must never start with "/".
+  if (prompt.trimStart().startsWith('/')) prompt = `Request: ${prompt}`;
   if (request.sessionId && !/^[\w-]+$/.test(request.sessionId))
     throw new Error('Invalid session id');
   const args = [
@@ -194,7 +208,6 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     `--print=${prompt}`,
     '--output-format',
     'stream-json',
-    '--disable-slash-commands',
     ...modeArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions),
     ...(request.model ? ['--model', request.model] : []),
     ...(request.effort ? ['--effort', request.effort] : []),
@@ -208,6 +221,9 @@ export class AntigravityParser implements LineParser {
   failed = false;
   private readonly announced = new Set<number>();
   private text = '';
+  /** The last command agy's headless permission check refused. */
+  private denied: string | undefined;
+  private edited = false;
 
   parse(message: unknown): EventBody[] {
     if (!isRecord(message)) return [];
@@ -238,6 +254,11 @@ export class AntigravityParser implements LineParser {
     }
     if (step.step_type === 'tool') {
       const index = num(step.step_index);
+      if (step.state === 'ERROR' && step.tool_name === 'run_command') {
+        const info = isRecord(step.tool_info) ? step.tool_info : {};
+        const params = isRecord(info.parameters) ? info.parameters : {};
+        this.denied = str(params.CommandLine) ?? 'a command';
+      }
       // Each tool step arrives twice (ACTIVE, then DONE or ERROR); report it once.
       if (index === undefined || this.announced.has(index)) return out;
       this.announced.add(index);
@@ -251,6 +272,7 @@ export class AntigravityParser implements LineParser {
       }
       const path = str(params.Path) ?? str(params.TargetFile) ?? str(params.AbsolutePath);
       if (FILE_TOOLS.has(tool) && path) {
+        this.edited = true;
         out.push({
           type: 'file.edit',
           path,
@@ -276,14 +298,26 @@ export class AntigravityParser implements LineParser {
         outputTokens: output,
       },
     });
-    if (result.status === 'SUCCESS') {
-      out.push({ type: 'message.done', text: (str(result.response) ?? this.text).trim() });
+    const answer = (str(result.response) ?? this.text).trim();
+    const deniedActions = Array.isArray(result.denied_actions) ? result.denied_actions.length : 0;
+    if (result.status === 'SUCCESS' && (answer || !deniedActions)) {
+      out.push({ type: 'message.done', text: answer });
+      return out;
+    }
+    if (result.status === 'SUCCESS' && this.edited) {
+      // The edits are real; only the wrap-up was cut short. Tests and review judge the result.
+      out.push({
+        type: 'message.done',
+        text: `Edited files, then stopped when ${this.denied ? `\`${this.denied}\`` : 'a command'} was denied.`,
+      });
       return out;
     }
     this.failed = true;
-    const error = (str(result.error) ?? `Antigravity stopped: ${String(result.status)}`).split(
-      '\n',
-    )[0]!;
+    // "SUCCESS" with no answer after a denied command: agy gave up on the turn.
+    const error =
+      result.status === 'SUCCESS'
+        ? `Antigravity stopped without an answer: it tried to run ${this.denied ? `\`${this.denied}\`` : 'a command'}, which headless mode denies.`
+        : (str(result.error) ?? `Antigravity stopped: ${String(result.status)}`).split('\n')[0]!;
     out.push(
       looksLikeLimit(error)
         ? { type: 'rate_limit', message: error }

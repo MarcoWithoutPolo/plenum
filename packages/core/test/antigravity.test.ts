@@ -112,3 +112,41 @@ describe('antigravityArgs', () => {
     expect(dir).toBeTruthy();
   });
 });
+
+describe('Antigravity and shell commands', () => {
+  it('reports a turn that died on a denied command as an error, not an empty success', async () => {
+    const result = await collect(
+      new AntigravityAdapter({
+        exec: replay('antigravity/denied-command.jsonl'),
+        command: 'agy',
+      }).run({ prompt: 'x', cwd: '.', role: 'reviewer' }),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toContain('it tried to run `git status`, which headless mode denies');
+  });
+
+  it('keeps --mode working and tells agents there is no shell, except in chat and at level 5', () => {
+    const builder = antigravityArgs({
+      prompt: 'Build it',
+      cwd: '.',
+      role: 'builder',
+      readOnly: false,
+    });
+    expect(builder.args).not.toContain('--disable-slash-commands');
+    expect(builder.args[0]).toMatch(/^--print=IMPORTANT: This session has no shell/);
+    expect(builder.args[0]).toContain('Build it');
+    const chat = antigravityArgs({ prompt: 'hi', cwd: '.', role: 'chat' });
+    expect(chat.args[0]).toBe('--print=hi');
+    const full = antigravityArgs({
+      prompt: 'Build it',
+      cwd: '.',
+      role: 'builder',
+      readOnly: false,
+      permissions: { level: 5, network: true },
+    });
+    expect(full.args[0]).toBe('--print=Build it');
+    expect(antigravityArgs({ prompt: '/help', cwd: '.', role: 'chat' }).args[0]).toBe(
+      '--print=Request: /help',
+    );
+  });
+});

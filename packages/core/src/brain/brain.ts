@@ -593,64 +593,79 @@ export class Brain {
 
   private async review(project: Project, task: Task, tests: string): Promise<RoundOutcome> {
     const avoid = task.builtBy ? [task.builtBy] : [];
-    const pick = this.governor.pick(project.routing.reviewer, avoid);
-    if (!pick.seat) {
-      this.projects.updateTask(task.id, { status: 'queued' });
-      await this.workspace.removeTaskTree(task.id);
-      return this.waiting('reviewer', pick);
-    }
-    const reviewer = pick.seat;
-    const sameProvider = task.builtBy === reviewer.provider;
-    this.log(
-      'review',
-      `Reviewing with ${seatLabel(reviewer)}${sameProvider ? ' (no other provider free)' : ''}`,
-      {
+    // A reviewer that crashes or gives no verdict isn't the task's fault: ask the next one.
+    const tried: ProviderId[] = [];
+    let problem: { seat: Seat; detail: string } | undefined;
+    let reviewer: Seat;
+    let result: RunResult;
+    let verdict: ReturnType<typeof parseReview>;
+    for (;;) {
+      const seats = project.routing.reviewer.filter((s) => !tried.includes(s.provider));
+      const pick = this.governor.pick(seats, avoid);
+      if (!pick.seat) {
+        if (problem) {
+          return this.sendBack(project, task, {
+            failure: this.failureOf(
+              'crash',
+              `No reviewer gave a verdict (last: ${seatLabel(problem.seat)})`,
+              problem.detail,
+              problem.seat,
+            ),
+            feedback: task.feedback ?? '',
+          });
+        }
+        this.projects.updateTask(task.id, { status: 'queued' });
+        await this.workspace.removeTaskTree(task.id);
+        return this.waiting(
+          'reviewer',
+          tried.length ? this.governor.pick(project.routing.reviewer, avoid) : pick,
+        );
+      }
+      reviewer = pick.seat;
+      const sameProvider = task.builtBy === reviewer.provider;
+      this.log(
+        'review',
+        `Reviewing with ${seatLabel(reviewer)}${sameProvider ? ' (no other provider free)' : ''}`,
+        { task, provider: reviewer.provider },
+      );
+      const diff = await this.workspace.taskDiff(task.id);
+      result = await this.agent(
+        'reviewer',
+        reviewer,
+        reviewerPrompt(project, task, diff, tests, { decisions: this.decisions() }),
+        this.workspace.taskPath(task.id),
+        true,
+        task,
+      );
+      if (this.interrupted) return this.halt(task);
+      verdict = result.ok ? parseReview(result.text) : undefined;
+      if (verdict) break;
+      tried.push(reviewer.provider);
+      const detail = result.rateLimited
+        ? `${seatLabel(reviewer)} hit a usage limit`
+        : result.ok
+          ? `${seatLabel(reviewer)} replied without a verdict: ${result.text.slice(0, 1500) || '(empty reply)'}`
+          : `${seatLabel(reviewer)} stopped with an error: ${failure(result)}`;
+      if (!result.rateLimited) problem = { seat: reviewer, detail };
+      this.log('review', `${detail.split('\n')[0]!.slice(0, 240)}; asking another reviewer`, {
         task,
         provider: reviewer.provider,
-      },
-    );
-
-    const diff = await this.workspace.taskDiff(task.id);
-    const result = await this.agent(
-      'reviewer',
-      reviewer,
-      reviewerPrompt(project, task, diff, tests, { decisions: this.decisions() }),
-      this.workspace.taskPath(task.id),
-      true,
-      task,
-    );
-    if (this.interrupted) return this.halt(task);
-    if (result.rateLimited) {
-      this.projects.updateTask(task.id, { status: 'queued' });
-      await this.workspace.removeTaskTree(task.id);
-      return this.waiting('reviewer', this.governor.pick(project.routing.reviewer, avoid));
-    }
-    if (!result.ok) {
-      return this.sendBack(project, task, {
-        failure: this.failureOf(
-          'crash',
-          `The reviewer, ${seatLabel(reviewer)}, stopped with an error`,
-          failure(result),
-          reviewer,
-        ),
-        feedback: task.feedback ?? '',
       });
     }
 
-    const verdict = parseReview(result.text);
     this.projects.updateTask(task.id, { reviewedBy: reviewer.provider });
-    if (verdict && !verdict.approve) {
+    if (!verdict.approve) {
       const asked = parseQuestion(result.text);
       if (asked) return this.ask(project, task, asked, reviewer, 'review');
     }
-    if (!verdict || !verdict.approve) {
-      const issues = verdict?.issues.length
+    if (!verdict.approve) {
+      const issues = verdict.issues.length
         ? verdict.issues.map((i) => `- ${i}`).join('\n')
-        : `The reviewer did not approve:\n${result.text.slice(0, 3000)}`;
-      this.log('review', `Changes requested${verdict?.summary ? `: ${verdict.summary}` : ''}`, {
+        : `The reviewer did not approve:\n${verdict.summary || result.text.slice(0, 3000)}`;
+      this.log('review', `Changes requested${verdict.summary ? `: ${verdict.summary}` : ''}`, {
         task,
         provider: reviewer.provider,
-        data: { issues: verdict?.issues ?? [] },
+        data: { issues: verdict.issues },
       });
       return this.sendBack(project, task, {
         failure: this.failureOf(

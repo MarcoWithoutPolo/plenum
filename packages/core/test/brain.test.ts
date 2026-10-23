@@ -608,6 +608,42 @@ describe('Failure recovery', () => {
   });
 });
 
+describe('Reviewers that give no verdict', () => {
+  it('asks the next reviewer instead of charging the task', async () => {
+    let plans = 0;
+    const { store, brain, project, codex } = await setup({
+      claude: {
+        reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? PLAN : DONE) : ''),
+      },
+      codex: {
+        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'Created sum.js'),
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a + b')(req);
+        },
+      },
+    });
+    store.projects.update(project.id, {
+      routing: { ...project.routing, reviewer: [{ provider: 'claude' }, { provider: 'codex' }] },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(store.projects.listTasks(project.id)[0]).toMatchObject({
+      status: 'merged',
+      attempts: 0,
+      reviewedBy: 'codex',
+    });
+    expect(codex.requests.some((r) => r.role === 'reviewer')).toBe(true);
+    expect(
+      store.projects
+        .events(project.id)
+        .some(
+          (e) =>
+            e.message.includes('replied without a verdict') &&
+            e.message.includes('asking another reviewer'),
+        ),
+    ).toBe(true);
+  });
+});
+
 describe('One piece of work, one task', () => {
   it('lets the planner take over a failed task by id, so the total does not grow', async () => {
     let plans = 0;
