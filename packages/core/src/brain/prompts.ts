@@ -1,5 +1,10 @@
 import type { Project, Task } from '@conclave/shared';
-import { DECIDE_YOURSELF, PLANNER_QUESTION_RULE, QUESTION_RULE } from './questions.js';
+import {
+  DECIDE_AND_TELL,
+  DECIDE_YOURSELF,
+  PLANNER_QUESTION_RULE,
+  QUESTION_RULE,
+} from './questions.js';
 import { SIZE } from './shape.js';
 
 /** Optional context every agent prompt can carry. */
@@ -124,6 +129,8 @@ export interface BuilderExtras extends PromptExtras {
   network?: boolean;
   /** An install command the system ran before this attempt. */
   installed?: string;
+  /** Decide-and-tell: make choices and list them instead of stopping to ask. */
+  decideAndTell?: boolean;
 }
 
 export function builderPrompt(project: Project, task: Task, extras: BuilderExtras = {}): string {
@@ -148,7 +155,7 @@ Rules:
 ${commandRule(project, extras.allowedCommands ?? [], extras.network ?? false)}
 - Keep the existing code style.
 
-${extras.decideYourself ? DECIDE_YOURSELF : QUESTION_RULE}
+${extras.decideYourself ? DECIDE_YOURSELF : extras.decideAndTell ? DECIDE_AND_TELL : QUESTION_RULE}
 
 When you are done, reply with a short summary of what you changed.`;
 }

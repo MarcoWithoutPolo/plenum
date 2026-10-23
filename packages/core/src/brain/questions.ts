@@ -94,6 +94,25 @@ Ask only when the answer changes what gets built; never about things the code or
 export const DECIDE_YOURSELF =
   'Do not ask more questions for this task. Make the most reasonable choice yourself and state the assumption in your summary.';
 
+/**
+ * "Decide and tell me": choices don't stop the build (each question would cost a whole
+ * attempt); the builder makes them and lists them, and the brain records each as an assumption.
+ * Installs and network access still need asking: those are permissions, not choices.
+ */
+export const DECIDE_AND_TELL = `Don't stop to ask about choices: make the most reasonable one yourself and keep going. End your summary with one line per choice you made that the user might want to know about:
+ASSUMED: <the question> → <what you chose>
+If the work needs a new dependency or the network, reply with only
+{"question": "...", "why": "...", "permission": {"kind": "install" or "network", "command": "e.g. npm install howler", "alternative": "how to do it without"}}`;
+
+/** The choices a builder listed with ASSUMED: lines (decide-and-tell). */
+export function parseAssumptions(text: string): { question: string; answer: string }[] {
+  const out: { question: string; answer: string }[] = [];
+  for (const m of text.matchAll(/^\s*[-*]?\s*ASSUMED:\s*(.+?)\s*(?:→|->)\s*(.+?)\s*$/gm)) {
+    out.push({ question: m[1]!.slice(0, 1000), answer: m[2]!.slice(0, 2000) });
+  }
+  return out.slice(0, 10);
+}
+
 /** The rule builder and planner prompts carry. */
 export const QUESTION_RULE = `If you cannot continue without a decision only the user can make, do not guess and do not stop silently. Reply with only
 {"question": "...", "why": "...", "options": ["...", "..."], "recommended": "one of the options"}

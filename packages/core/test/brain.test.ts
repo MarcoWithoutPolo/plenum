@@ -18,6 +18,7 @@ import {
   calibration,
   changedLines,
   rankSeats,
+  parseAssumptions,
   moveTask,
   placeTask,
   editTask,
@@ -1865,5 +1866,46 @@ describe('Steering', () => {
     expect(store.projects.get(project.id)!.status).not.toBe('paused');
     expect(() => applySteering(ctx, reply.id, [4])).toThrow(/already applied/);
     expect(store.steering.list(project.id).map((m) => m.role)).toEqual(['you', 'planner']);
+  });
+});
+
+describe('Decide and tell', () => {
+  it('parses ASSUMED lines from a builder summary', () => {
+    expect(
+      parseAssumptions(
+        'Created calc.js.\n\nASSUMED: Which cutoff for large numbers? → 1e12, as in the examples\n- ASSUMED: Tabs or spaces -> spaces\nnot an ASSUMED line',
+      ),
+    ).toEqual([
+      { question: 'Which cutoff for large numbers?', answer: '1e12, as in the examples' },
+      { question: 'Tabs or spaces', answer: 'spaces' },
+    ]);
+  });
+
+  it('lets the builder decide as it goes and records each choice, in one build', async () => {
+    const { store, brain, project, codex } = await setup({
+      askPolicy: 'decide',
+      codex: {
+        reply: 'Created sum.js\nASSUMED: Should sum accept strings? → No, numbers only',
+        act: writeSum('a + b'),
+      },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(codex.requests).toHaveLength(1);
+    expect(codex.requests[0]!.prompt).toContain('ASSUMED: <the question> → <what you chose>');
+    expect(store.decisions.list(project.id)).toEqual([
+      expect.objectContaining({
+        kind: 'assumption',
+        question: 'Should sum accept strings?',
+        answer: 'No, numbers only',
+        provider: 'codex',
+      }),
+    ]);
+  });
+
+  it('keeps the ask-me rule when you want to be asked', async () => {
+    const { brain, codex } = await setup();
+    await brain.run({ maxRounds: 10 });
+    expect(codex.requests[0]!.prompt).not.toContain('ASSUMED:');
+    expect(codex.requests[0]!.prompt).toContain('{"question": "...", "why": "...", "options"');
   });
 });

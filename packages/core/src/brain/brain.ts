@@ -29,7 +29,7 @@ import { calibration, changedLines, shapePlan } from './shape.js';
 import type { PlannedTask } from './json.js';
 import { rankSeats, seatStats, withPriors, type RankRole } from '../governor/rank.js';
 import { QUESTION_KINDS } from './answers.js';
-import { isRunnableInstall, parseQuestion } from './questions.js';
+import { isRunnableInstall, parseAssumptions, parseQuestion } from './questions.js';
 import { builderPlan, countsAsAttempt } from './recovery.js';
 import { findReplacement } from './similar.js';
 
@@ -381,8 +381,12 @@ export class Brain {
       const { id, outcome } = await Promise.race(running.values());
       running.delete(id);
       last = outcome;
+      // A task that couldn't start waits for something to change. One turned away by a
+      // usage limit goes again at once: the governor already steers it to another AI.
+      const limited = outcome.kind === 'retry' && /usage limit/i.test(outcome.reason);
       if (
         (outcome.kind === 'waiting' || outcome.kind === 'retry') &&
+        !limited &&
         this.projects.getTask(id)?.status === 'queued'
       ) {
         parked.add(id);
@@ -763,6 +767,7 @@ export class Brain {
         ...(permissions.commands && { allowedCommands: permissions.commands }),
         network: permissions.network,
         ...(install && { installed: install }),
+        ...(project.askPolicy === 'decide' && { decideAndTell: true }),
       }),
       cwd,
       false,
@@ -809,6 +814,22 @@ export class Brain {
 
     const asked = parseQuestion(built.text);
     if (asked) return this.ask(project, task, asked, builder, 'build');
+    // Decide-and-tell: the choices the builder made become assumptions you can review.
+    for (const a of parseAssumptions(built.text)) {
+      this.ctx.store.decisions.add({
+        projectId: this.projectId,
+        kind: 'assumption',
+        question: a.question,
+        answer: a.answer,
+        source: 'agent',
+        provider: builder.provider,
+        taskId: task.id,
+      });
+      this.log('decision', `Assumed: ${a.question} → ${a.answer}`, {
+        task,
+        provider: builder.provider,
+      });
+    }
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
     if (!commit) {
       const prose = parseQuestion(built.text, { allowProse: true });
