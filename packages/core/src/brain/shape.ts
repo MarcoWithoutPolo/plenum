@@ -70,7 +70,24 @@ export function shapePlan(planned: PlannedTask[], scale = 1): ShapedPlan {
       groups.push([task]);
     }
   }
-  const tasks = groups.map((g) => (g.length === 1 ? g[0]! : fold(g)));
+  // Keep order links pointing at the right task once neighbours are folded together.
+  const groupOf: number[] = [];
+  groups.forEach((g, gi) => g.forEach(() => groupOf.push(gi)));
+  let at = 0;
+  const tasks = groups.map((g, gi) => {
+    const members = planned.slice(at, (at += g.length));
+    const task = g.length === 1 ? { ...g[0]! } : fold(g);
+    const links = members.filter((t) => t.after).flatMap((t) => t.after!);
+    delete task.after;
+    if (members.some((t) => t.after)) {
+      const mapped = links
+        .map((a) => (typeof a === 'number' ? groupOf[a - 1] : a))
+        .filter((a): a is number | string => a !== undefined && a !== gi)
+        .map((a) => (typeof a === 'number' ? a + 1 : a));
+      task.after = [...new Set(mapped)];
+    }
+    return task;
+  });
   return {
     tasks,
     folded: planned.length - tasks.length,

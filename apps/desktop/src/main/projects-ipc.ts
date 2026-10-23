@@ -36,6 +36,7 @@ import {
   type GhCheck,
   type GitHub,
   type RetryOptions,
+  clampParallel,
 } from '@conclave/core';
 import {
   IPC,
@@ -182,6 +183,7 @@ export function registerProjectIpc(
       ...(input.maxAttempts && {
         maxAttempts: Math.max(1, Math.min(10, Number(input.maxAttempts))),
       }),
+      ...(input.maxParallel && { maxParallel: clampParallel(Number(input.maxParallel)) }),
       ...(input.retryStrategy && { retryStrategy: RetryStrategy.parse(input.retryStrategy) }),
       ...(input.askPolicy && { askPolicy: AskPolicy.parse(input.askPolicy) }),
       ...(input.permissions && { permissions: checkPermissions(input.permissions) }),
@@ -225,6 +227,7 @@ export function registerProjectIpc(
       ...(settings.maxAttempts && {
         maxAttempts: Math.max(1, Math.min(10, Number(settings.maxAttempts))),
       }),
+      ...(settings.maxParallel && { maxParallel: clampParallel(Number(settings.maxParallel)) }),
       ...(settings.retryStrategy && {
         retryStrategy: RetryStrategy.parse(settings.retryStrategy),
       }),

@@ -82,6 +82,8 @@ export const Project = z.object({
   routing: Routing,
   /** How many attempts a task gets before it's marked failed. */
   maxAttempts: z.number(),
+  /** How many tasks may build at once (lanes). 1 is one task at a time. */
+  maxParallel: z.number(),
   retryStrategy: RetryStrategy,
   askPolicy: AskPolicy,
   permissions: Permissions,
@@ -120,6 +122,8 @@ export const FailureKind = z.enum([
   'review',
   'no_changes',
   'conflict',
+  /** Passed alone, but the tests fail once combined with work merged meanwhile (lanes). */
+  'combined_tests',
   'crash',
   'question',
 ]);
@@ -178,6 +182,8 @@ export const Task = z.object({
   /** One-time permissions you granted for the next attempt. */
   grants: TaskGrants.nullable(),
   estimate: TaskEstimate.nullable(),
+  /** Tasks that must finish (merge, fail or be skipped) before this one starts. */
+  after: z.array(z.string()),
   /** Changed lines in the merged diff, to calibrate the planner's estimates. */
   actualLines: z.number().nullable(),
   createdAt: z.number(),

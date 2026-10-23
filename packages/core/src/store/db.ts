@@ -189,6 +189,11 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     addColumn(db, 'tasks', 'estimate', 'TEXT');
     addColumn(db, 'tasks', 'actual_lines', 'INTEGER');
   },
+  // v8: lanes. Existing projects keep one task at a time.
+  (db) => {
+    addColumn(db, 'projects', 'max_parallel', 'INTEGER NOT NULL DEFAULT 1');
+    addColumn(db, 'tasks', 'after', 'TEXT');
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

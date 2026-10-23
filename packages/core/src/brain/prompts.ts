@@ -92,7 +92,12 @@ You can read files in the working directory to understand the code. Then plan th
 Rules for tasks:
 - As few as the work allows. Every task costs a full build, test run and review, so never split work that one engineer would do in one sitting: a small goal (a module or two, a focused fix or refactor) is ONE task.
 - Split only where a task would otherwise be too big to review well (roughly ${SIZE.reviewable}+ changed lines) or where parts are truly independent.
-- Estimate each task honestly: the files it touches, the changed lines (added + removed, tests included), and the risk (high: security, data loss, migrations, public APIs).
+- Estimate each task honestly: the files it touches, the changed lines (added + removed, tests included), and the risk (high: security, data loss, migrations, public APIs).${
+    project.maxParallel > 1
+      ? `
+- Up to ${project.maxParallel} tasks build at the same time. Give each task "after": the positions (1 = the first task in your reply) of the tasks it needs finished first, or [] if it can start right away. Split truly independent parts into tasks that touch different files, so they can run at once; never split just to fill the lanes.`
+      : ''
+  }
 - Ordered: earlier tasks must not depend on later ones.
 - Each spec says exactly what to change and how the result is checked (tests to add or update).
 - Never plan pushing, deploying or publishing. Plan new dependencies only when the goal needs them; the builder asks the user first.${project.testCommand ? '' : '\n- There are no tests yet. The first task sets them up along with its own change (not as a separate task), and you include the command in "test_command".'}
@@ -100,7 +105,7 @@ Rules for tasks:
 ${extras.decideYourself ? DECIDE_YOURSELF : PLANNER_QUESTION_RULE}
 
 Otherwise reply with ONLY one JSON object and nothing else.
-To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified", "replaces": "id of the failed task this takes over, or omit", "estimate": {"files": ["paths it changes"], "lines": 120, "risk": "low|medium|high"}}]${project.testCommand ? '' : ', "test_command": "the command that runs the tests"'}} with at most ${ctx.maxTasks} tasks.
+To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified", "replaces": "id of the failed task this takes over, or omit", "estimate": {"files": ["paths it changes"], "lines": 120, "risk": "low|medium|high"}${project.maxParallel > 1 ? ', "after": [1]' : ''}}]${project.testCommand ? '' : ', "test_command": "the command that runs the tests"'}} with at most ${ctx.maxTasks} tasks.
 If the goal is fully met: {"done": true, "reason": "one sentence on why"}.`;
 }
 

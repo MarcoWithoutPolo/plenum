@@ -43,6 +43,11 @@ const KINDS: Record<FailureKind, { icon: LucideIcon; title: string; whose: strin
     title: 'Merge conflict',
     whose: 'Newer work changed the same lines. Rebuilds are free.',
   },
+  combined_tests: {
+    icon: GitMerge,
+    title: 'Fails with newer work',
+    whose: 'It passed on its own, but not combined with work merged meanwhile. Rebuilds are free.',
+  },
   crash: {
     icon: AlertTriangle,
     title: 'The AI tool stopped',

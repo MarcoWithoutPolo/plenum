@@ -35,6 +35,8 @@ export interface CreateProjectInput {
   testCommand?: string;
   routing?: Partial<Routing>;
   maxAttempts?: number;
+  /** Lanes: how many tasks may build at once (1 to 4). */
+  maxParallel?: number;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -73,6 +75,7 @@ export async function createProject(
     baseBranch: base,
     routing,
     ...(input.maxAttempts !== undefined && { maxAttempts: input.maxAttempts }),
+    ...(input.maxParallel !== undefined && { maxParallel: input.maxParallel }),
     ...(input.retryStrategy && { retryStrategy: input.retryStrategy }),
     ...(input.askPolicy && { askPolicy: input.askPolicy }),
     ...(input.permissions && { permissions: input.permissions }),

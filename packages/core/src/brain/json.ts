@@ -29,6 +29,8 @@ export interface PlannedTask {
   spec: string;
   replaces?: string;
   estimate?: TaskEstimate;
+  /** Tasks that must finish first: 1-based positions in this reply, or existing task ids. */
+  after?: (number | string)[];
 }
 
 /** The planner's size guess, if it gave a usable one. */
@@ -67,6 +69,13 @@ export function parsePlan(text: string, maxTasks: number): PlanReply | undefined
       spec: typeof t.spec === 'string' ? t.spec.trim() : '',
       ...(typeof t.replaces === 'string' && t.replaces.trim() && { replaces: t.replaces.trim() }),
       ...(parseEstimate(t.estimate) && { estimate: parseEstimate(t.estimate)! }),
+      ...(Array.isArray(t.after) && {
+        after: t.after.filter(
+          (a): a is number | string =>
+            (typeof a === 'number' && Number.isInteger(a)) ||
+            (typeof a === 'string' && a.trim() !== ''),
+        ),
+      }),
     }))
     .filter((t) => t.title && t.spec)
     .slice(0, maxTasks);

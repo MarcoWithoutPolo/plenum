@@ -26,6 +26,7 @@ import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
 import { calibration, changedLines, shapePlan } from './shape.js';
+import type { PlannedTask } from './json.js';
 import { rankSeats, seatStats, type RankRole } from '../governor/rank.js';
 import { QUESTION_KINDS } from './answers.js';
 import { isRunnableInstall, parseQuestion } from './questions.js';
@@ -45,6 +46,8 @@ export interface BrainOptions {
   maxOpenQuestions?: number;
   agentTimeoutMs?: number;
   testTimeoutMs?: number;
+  /** Lanes: how many tasks each AI may build at once (defaults: LANE_CAPS). */
+  laneCaps?: Partial<Record<ProviderId, number>>;
   onEvent?: (event: BrainEvent) => void;
 }
 
@@ -76,6 +79,24 @@ export interface RunOptions {
  * plan when the queue is empty, otherwise build → test → review → merge one task.
  * Every stage is recorded, so a restarted brain picks up where it left off.
  */
+/** How many tasks one AI may build at once in a project, by default (lanes). */
+export const LANE_CAPS: Partial<Record<ProviderId, number>> = {
+  claude: 2,
+  codex: 2,
+  antigravity: 1,
+  gemini: 1,
+};
+
+/** Do two path lists touch the same file or folder? */
+function overlaps(a: string[], b: string[]): boolean {
+  const norm = (p: string) =>
+    p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '').toLowerCase();
+  const bs = b.map(norm);
+  return a
+    .map(norm)
+    .some((x) => bs.some((y) => x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`)));
+}
+
 export class Brain {
   readonly workspace: Workspace;
   private readonly governor: Governor;
@@ -211,7 +232,8 @@ export class Brain {
     const lock = acquireLock(join(this.workspace.root, 'run.lock'));
     this.signal = options.signal;
     try {
-      return await this.loop(options);
+      const lanes = this.project().maxParallel;
+      return await (lanes > 1 ? this.lanes(options, lanes) : this.loop(options));
     } finally {
       this.signal = undefined;
       lock.release();
@@ -254,6 +276,157 @@ export class Brain {
       }
     }
     return last;
+  }
+
+  /**
+   * Lanes: up to `max` tasks build → test → review at once, each in its own worktree.
+   * A free lane takes the next ready task (everything in its `after` has finished) whose
+   * planned files don't overlap a running lane, with a builder that has a free lane.
+   * Merges still happen one at a time (Workspace.mergeTask), re-tested when others landed first.
+   * Planning, questions and waiting run through the same round() as one lane, when no lane runs.
+   */
+  private async lanes(options: RunOptions, max: number): Promise<RoundOutcome> {
+    const sleep = options.sleep ?? interruptibleSleep;
+    const maxSleep = options.maxSleepMs ?? 30 * 60_000;
+    const running = new Map<string, Promise<{ id: string; outcome: RoundOutcome }>>();
+    let last: RoundOutcome = { kind: 'idle', reason: 'No rounds run' };
+    let waitUntil: number | null | undefined;
+    let waitReason = '';
+    // Tasks that just couldn't start (a limit, no free builder): left alone until something changes.
+    const parked = new Set<string>();
+    const drain = async () => {
+      for (const r of await Promise.all(running.values()))
+        if (r.outcome.kind === 'stopped') last = r.outcome;
+      running.clear();
+    };
+    await this.start();
+    for (let i = 0; i < (options.maxRounds ?? Infinity); i++) {
+      if (options.signal?.aborted) {
+        await drain();
+        if (this.project().status !== 'stopped') this.stop('Stopped by you');
+        return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
+      }
+      const project = this.project();
+      if (
+        project.status === 'stopped' ||
+        project.status === 'paused' ||
+        project.status === 'done'
+      ) {
+        await drain();
+        const now = this.project();
+        if (now.status === 'done')
+          return last.kind === 'done'
+            ? last
+            : { kind: 'done', reason: now.statusReason ?? 'Goal met' };
+        return now.status === 'stopped'
+          ? { kind: 'stopped', reason: now.statusReason ?? 'Stopped' }
+          : { kind: 'idle', reason: now.statusReason ?? 'Paused' };
+      }
+      // Fill the free lanes.
+      for (
+        let task = this.nextLaneTask(project, parked);
+        task && running.size < max;
+        task = this.nextLaneTask(project, parked)
+      ) {
+        const id = task.id;
+        running.set(
+          id,
+          this.work(project, task).then((outcome) => ({ id, outcome })),
+        );
+        if (this.projects.getTask(id)?.status === 'queued') break; // it didn't start (no builder)
+      }
+      if (running.size === 0) {
+        if (waitUntil !== undefined) {
+          const ms = waitUntil
+            ? Math.min(maxSleep, Math.max(30_000, waitUntil - Date.now()))
+            : 5 * 60_000;
+          this.projects.setStatus(this.projectId, 'waiting', waitReason);
+          await sleep(ms, options.signal);
+          if (this.project().status === 'waiting')
+            this.projects.setStatus(this.projectId, 'running');
+          waitUntil = undefined;
+          parked.clear();
+          continue;
+        }
+        // Nothing can start in parallel: plan, ask, wait or finish exactly as one lane does.
+        last = await this.round();
+        if (['done', 'stopped', 'idle', 'needs_you'].includes(last.kind)) return last;
+        if (last.kind === 'waiting') {
+          waitUntil = last.until ?? null;
+          waitReason = last.reason;
+        }
+        if (last.kind === 'failed' && this.pausedAfterStreak())
+          return { kind: 'idle', reason: this.project().statusReason ?? 'Paused' };
+        continue;
+      }
+      const { id, outcome } = await Promise.race(running.values());
+      running.delete(id);
+      last = outcome;
+      if (
+        (outcome.kind === 'waiting' || outcome.kind === 'retry') &&
+        this.projects.getTask(id)?.status === 'queued'
+      ) {
+        parked.add(id);
+      } else {
+        parked.clear();
+      }
+      if (outcome.kind === 'waiting') {
+        waitUntil =
+          waitUntil == null
+            ? (outcome.until ?? null)
+            : Math.min(waitUntil, outcome.until ?? waitUntil);
+        waitReason = outcome.reason;
+      }
+      if (outcome.kind === 'failed' && this.pausedAfterStreak()) {
+        await drain();
+        return { kind: 'idle', reason: this.project().statusReason ?? 'Paused' };
+      }
+    }
+    await drain();
+    return last;
+  }
+
+  /** Pause after several failures in a row with nothing merged (same rule as one lane). */
+  private pausedAfterStreak(): boolean {
+    const streak = this.failureStreak();
+    if (streak < (this.opts.maxFailureStreak ?? 3)) return false;
+    const reason = `${streak} tasks in a row failed with nothing merged. Paused so it doesn't use up your plan; check the activity, adjust the goal or tests, then resume.`;
+    this.projects.setStatus(this.projectId, 'paused', reason);
+    this.log('stop', reason);
+    return true;
+  }
+
+  /** Whether `provider` has a free builder lane in this project. */
+  private builderRoom(provider: ProviderId): boolean {
+    const busy = this.projects
+      .listTasks(this.projectId)
+      .filter((t) => t.status === 'building' && t.builtBy === provider).length;
+    return busy < (this.opts.laneCaps?.[provider] ?? LANE_CAPS[provider] ?? 1);
+  }
+
+  /**
+   * The next queued task a free lane can take: its `after` tasks have all finished, its
+   * planned files don't overlap a running task's, and one of its builders has a free lane.
+   */
+  private nextLaneTask(project: Project, skip: ReadonlySet<string>): Task | undefined {
+    const tasks = this.projects.listTasks(this.projectId);
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    const finished = (id: string): boolean => {
+      let t = byId.get(id);
+      for (let hops = 0; t?.status === 'replaced' && t.replacedBy && hops < 20; hops++)
+        t = byId.get(t.replacedBy);
+      return !t || ['merged', 'failed', 'skipped'].includes(t.status);
+    };
+    const active = tasks.filter((t) => ['building', 'verifying', 'reviewing'].includes(t.status));
+    const busy = active.flatMap((t) => t.estimate?.files ?? []);
+    return tasks.find(
+      (t) =>
+        t.status === 'queued' &&
+        !skip.has(t.id) &&
+        t.after.every(finished) &&
+        !(active.length && overlaps(t.estimate?.files ?? [], busy)) &&
+        builderPlan(project, t, this.ctx.adapters).seats.some((s) => this.builderRoom(s.provider)),
+    );
   }
 
   stop(reason = 'Stopped'): void {
@@ -398,7 +571,11 @@ export class Brain {
         provider: pick.seat.provider,
       });
     this.gaps = [];
-    const added = this.projects.addTasks(this.projectId, shaped.tasks);
+    const added = this.projects.addTasks(
+      this.projectId,
+      shaped.tasks.map(({ after: _links, ...t }) => t),
+    );
+    this.linkOrder(added, shaped.tasks, tasks);
     this.linkReplacements(
       tasks,
       added,
@@ -410,6 +587,26 @@ export class Brain {
       data: { tasks: added.map((t) => t.title) },
     });
     return { kind: 'planned', tasks: added };
+  }
+
+  /**
+   * Which tasks must finish before each new one starts. Positions in the reply become ids;
+   * only earlier tasks count (no cycles). A task the planner gave no `after` waits for the
+   * one before it, so work runs in order unless the planner says it is independent.
+   */
+  private linkOrder(added: Task[], planned: PlannedTask[], existing: Task[]): void {
+    const known = new Set(existing.map((t) => t.id));
+    added.forEach((task, i) => {
+      const links = planned[i]!.after;
+      const after = links
+        ? links
+            .map((a) => (typeof a === 'number' ? (a >= 1 && a <= i ? added[a - 1]!.id : '') : a))
+            .filter((id) => id && (known.has(id) || added.some((t) => t.id === id)))
+        : i > 0
+          ? [added[i - 1]!.id]
+          : [];
+      if (after.length) this.projects.updateTask(task.id, { after: [...new Set(after)] });
+    });
   }
 
   /**
@@ -487,6 +684,12 @@ export class Brain {
     }
     // Retries keep their escalation order; only a first, unpinned attempt is re-ranked.
     plan.seats = task.attempts === 0 && !task.pinnedSeat ? this.ranked('builder', seats) : seats;
+    if (project.maxParallel > 1) {
+      // Lanes: never more builders on one AI than its lane cap.
+      const free = plan.seats.filter((s) => this.builderRoom(s.provider));
+      if (free.length === 0) return { kind: 'retry', task, reason: 'Every builder lane is busy' };
+      plan.seats = free;
+    }
     const pick = this.governor.pick(plan.seats);
     if (!pick.seat) return this.waiting('builder', pick);
     const builder = pick.seat;
@@ -733,22 +936,44 @@ export class Brain {
       provider: reviewer.provider,
     });
 
-    const merged = await this.workspace.mergeTask(task.id, `conclave: merge "${task.title}"`);
-    if (!merged.ok) {
+    const merged = await this.workspace.mergeTask(
+      task.id,
+      `conclave: merge "${task.title}"`,
+      project.testCommand ? (cwd) => this.runTests(project, cwd) : undefined,
+    );
+    if (this.interrupted) return this.halt(task);
+    if (!merged.ok && merged.kind === 'conflict') {
       this.log('merge', 'Merge conflict with newer work; rebuilding on the latest code', {
         task,
-        data: { conflict: merged.conflict },
+        data: { conflict: merged.detail },
       });
       return this.sendBack(project, task, {
         failure: this.failureOf(
           'conflict',
           'The change conflicted with work merged meanwhile',
-          merged.conflict,
+          merged.detail,
           null,
         ),
-        feedback: `Merging conflicted with work merged meanwhile. Rebuild the change on the latest code.\n${merged.conflict}`,
+        feedback: `Merging conflicted with work merged meanwhile. Rebuild the change on the latest code.\n${merged.detail}`,
       });
     }
+    if (!merged.ok) {
+      this.log('merge', 'Tests fail once combined with work merged meanwhile; rebuilding', {
+        task,
+        data: { output: merged.detail },
+      });
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'combined_tests',
+          'The tests fail once combined with work merged meanwhile',
+          merged.detail,
+          null,
+        ),
+        feedback: `Your change passed on its own but the tests fail once combined with work merged meanwhile. Rebuild it on the latest code so both work.\n\n${merged.detail}`,
+      });
+    }
+    if (merged.retested)
+      this.log('merge', 'Re-tested on top of work merged meanwhile: passed', { task });
     const done = this.projects.updateTask(task.id, {
       status: 'merged',
       mergeCommit: merged.commit,
@@ -799,6 +1024,20 @@ export class Brain {
     return ranked.seats;
   }
 
+  /** The project's test command in `cwd`, for the merge queue's combined re-test. */
+  private async runTests(project: Project, cwd: string): Promise<{ ok: boolean; output: string }> {
+    const run = await runShell(project.testCommand!, {
+      cwd,
+      timeoutMs: this.testTimeout,
+      ...(this.signal && { signal: this.signal }),
+    });
+    const tail = run.output.trim().slice(-4000);
+    return {
+      ok: run.code === 0,
+      output: `${run.timedOut ? 'The test command timed out' : `${project.testCommand} failed (exit ${run.code})`}:\n${tail}`,
+    };
+  }
+
   /**
    * The last queued task's reviewer also checks the whole goal, which saves a planner round.
    * Not when anything else is open: failed work, questions or other queued tasks.
@@ -808,7 +1047,9 @@ export class Brain {
     task: Task,
   ): { merged: string[]; doneWhen: string | null } | undefined {
     const tasks = this.projects.listTasks(this.projectId).filter((t) => t.id !== task.id);
-    const open = tasks.some((t) => ['queued', 'blocked', 'failed'].includes(t.status));
+    const open = tasks.some((t) =>
+      ['queued', 'blocked', 'failed', 'building', 'verifying', 'reviewing'].includes(t.status),
+    );
     if (open || this.openQuestions().length) return undefined;
     return {
       merged: tasks.filter((t) => t.status === 'merged').map((t) => t.title),

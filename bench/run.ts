@@ -46,6 +46,7 @@ const { values } = parseArgs({
     runs: { type: 'string', default: '1' },
     'timeout-min': { type: 'string', default: '40' },
     nudges: { type: 'string', default: '2' },
+    parallel: { type: 'string', default: '2' },
   },
 });
 const projects = values.projects!.split(',');
@@ -53,6 +54,7 @@ const contenders = values.contenders!.split(',');
 const runs = Number(values.runs);
 const timeoutMs = Number(values['timeout-min']) * 60_000;
 const maxNudges = Number(values.nudges);
+const parallel = Number(values.parallel);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const out = join(here, 'results', stamp);
 mkdirSync(out, { recursive: true });
@@ -240,13 +242,14 @@ async function runConclave(
     repoPath: dir,
     goal,
     askPolicy: 'decide',
+    maxParallel: parallel,
     permissions: { level: 3, network: 'never', installs: 'never', expiresAt: null },
   });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const notes = [
     `team: plans ${projectRow.routing.planner.map((s) => s.provider).join('>')}, builds ${projectRow.routing.builder.map((s) => s.provider).join('>')}, reviews ${projectRow.routing.reviewer.map((s) => s.provider).join('>')}`,
-    'level 3, decide-and-tell (no human), installs never',
+    `level 3, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)`,
   ];
   let ok = false;
   try {

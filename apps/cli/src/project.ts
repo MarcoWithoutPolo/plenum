@@ -23,13 +23,14 @@ export interface ProjectArgs {
   builder?: string;
   reviewer?: string;
   attempts?: string;
+  parallel?: string;
   rounds?: string;
   use?: string;
   effortUp?: boolean;
 }
 
 const USAGE = `Usage:
-  conclave project new <repo> --goal "..." [--test "npm test"] [--done "..."]
+  conclave project new <repo> --goal "..." [--test "npm test"] [--done "..."] [--parallel 2]
                        [--planner claude:opus] [--builder codex@low,claude] [--reviewer claude]
   conclave project list
   conclave project status <id>
@@ -91,6 +92,7 @@ async function create(engine: Engine, args: ProjectArgs): Promise<number> {
     ...(args.done && { doneWhen: args.done }),
     ...(Object.keys(routing).length && { routing }),
     ...(args.attempts && { maxAttempts: Number(args.attempts) }),
+    ...(args.parallel && { maxParallel: Number(args.parallel) }),
   });
   console.log(`${bold('Project created')} ${dim(shortId(project.id))}  ${project.name}`);
   printRouting(project);

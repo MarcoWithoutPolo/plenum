@@ -1411,3 +1411,161 @@ describe('Right-sized plans', () => {
     expect(planner[1]!.prompt).toContain('- sum has no tests');
   });
 });
+
+describe('Lanes', () => {
+  interface Span {
+    title: string;
+    provider: string;
+    start: number;
+    end: number;
+  }
+  const lines200 = (file: string) => ({ files: [file], lines: 200, risk: 'low' as const });
+
+  async function lanes(opts: {
+    tasks: { title: string; file: string; after?: number[] }[];
+    testCommand?: string;
+    laneCaps?: Partial<Record<ProviderId, number>>;
+    glue?: boolean;
+  }) {
+    const repo = makeRepo();
+    const home = mkdtempSync(join(tmpdir(), 'conclave-home-'));
+    cleanup.push(home);
+    const store = new Store(':memory:');
+    const spans: Span[] = [];
+    const plan = JSON.stringify({
+      done: false,
+      tasks: opts.tasks.map((t) => ({
+        title: t.title,
+        spec: `Create ${t.file}`,
+        estimate: lines200(t.file),
+        ...(t.after && { after: t.after }),
+      })),
+    });
+    let plans = 0;
+    const build = (provider: string) => async (req: RunRequest) => {
+      const task = opts.tasks.find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`))!;
+      const span = { title: task.title, provider, start: Date.now(), end: 0 };
+      await new Promise((r) => setTimeout(r, 400));
+      writeFileSync(join(req.cwd, task.file), `module.exports = '${task.title}';\n`);
+      // Told the combined result fails: also write the glue both files need together.
+      if (opts.glue && req.prompt.includes('merged meanwhile')) {
+        writeFileSync(join(req.cwd, 'glue.js'), 'module.exports = 1;\n');
+      }
+      span.end = Date.now();
+      spans.push(span);
+    };
+    const claude = new FakeAdapter(
+      {
+        reply: (req) =>
+          req.role === 'planner'
+            ? plans++ === 0
+              ? plan
+              : DONE
+            : req.role === 'reviewer'
+              ? APPROVE
+              : 'Done',
+        act: (req) => (req.role === 'builder' ? build('claude')(req) : undefined),
+      },
+      { id: 'claude' },
+    );
+    const codex = new FakeAdapter(
+      {
+        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'Done'),
+        act: (req) => (req.role === 'builder' ? build('codex')(req) : undefined),
+      },
+      { id: 'codex' },
+    );
+    const project = await createProject(store, [{ provider: 'claude' }, { provider: 'codex' }], {
+      repoPath: repo,
+      goal: 'Ship the files',
+      testCommand: opts.testCommand ?? 'node -e "process.exit(0)"',
+      maxParallel: 2,
+    });
+    const brain = new Brain(
+      { store, adapters: adapterMap([claude, codex]), cwd: home },
+      project.id,
+      {
+        home,
+        ...(opts.laneCaps && { laneCaps: opts.laneCaps }),
+      },
+    );
+    const outcome = await brain.run({ maxRounds: 40 });
+    const tasks = store.projects.listTasks(project.id);
+    const events = store.projects.events(project.id).map((e) => e.message);
+    return { repo, store, project, outcome, tasks, spans, events };
+  }
+  const overlap = (a: Span, b: Span) => a.start < b.end && b.start < a.end;
+
+  it('builds independent tasks at the same time and re-tests the later merge', async () => {
+    const { repo, outcome, tasks, spans, events } = await lanes({
+      tasks: [
+        { title: 'Add a', file: 'a.js', after: [] },
+        { title: 'Add b', file: 'b.js', after: [] },
+      ],
+    });
+    expect(outcome.kind).toBe('done');
+    expect(tasks.map((t) => t.status)).toEqual(['merged', 'merged']);
+    expect(spans).toHaveLength(2);
+    expect(overlap(spans[0]!, spans[1]!)).toBe(true);
+    expect(git(repo, 'show', 'conclave/integration:a.js')).toContain('Add a');
+    expect(git(repo, 'show', 'conclave/integration:b.js')).toContain('Add b');
+    expect(events).toContain('Re-tested on top of work merged meanwhile: passed');
+  });
+
+  it('keeps tasks in order when the planner gives no "after"', async () => {
+    const { outcome, tasks, spans } = await lanes({
+      tasks: [
+        { title: 'Add a', file: 'a.js' },
+        { title: 'Add b', file: 'b.js' },
+      ],
+    });
+    expect(outcome.kind).toBe('done');
+    expect(tasks[1]!.after).toEqual([tasks[0]!.id]);
+    expect(overlap(spans[0]!, spans[1]!)).toBe(false);
+  });
+
+  it('never puts more builders on one AI than its lane cap', async () => {
+    const { outcome, tasks, spans } = await lanes({
+      tasks: [
+        { title: 'Add a', file: 'a.js', after: [] },
+        { title: 'Add b', file: 'b.js', after: [] },
+      ],
+      laneCaps: { codex: 1, claude: 1 },
+    });
+    expect(outcome.kind).toBe('done');
+    expect(new Set(tasks.map((t) => t.builtBy))).toEqual(new Set(['codex', 'claude']));
+    expect(overlap(spans[0]!, spans[1]!)).toBe(true);
+    // Each was reviewed by the other AI.
+    expect(tasks.every((t) => t.reviewedBy && t.reviewedBy !== t.builtBy)).toBe(true);
+  });
+
+  it('holds a task whose files overlap a running lane', async () => {
+    const { outcome, spans } = await lanes({
+      tasks: [
+        { title: 'Add a', file: 'a.js', after: [] },
+        { title: 'Change a', file: 'a.js', after: [] },
+      ],
+    });
+    expect(outcome.kind).toBe('done');
+    expect(overlap(spans[0]!, spans[1]!)).toBe(false);
+  });
+
+  it('sends back work that passes alone but fails combined, without counting the attempt', async () => {
+    const check = `const fs = require('fs'); if (fs.existsSync('a.js') && fs.existsSync('b.js') && !fs.existsSync('glue.js')) { console.error('a and b need glue.js'); process.exit(1); }`;
+    const { repo, outcome, tasks, events } = await lanes({
+      tasks: [
+        { title: 'Add a', file: 'a.js', after: [] },
+        { title: 'Add b', file: 'b.js', after: [] },
+      ],
+      testCommand: `node -e "${check.replace(/"/g, '\\"')}"`,
+      glue: true,
+    });
+    expect(outcome.kind).toBe('done');
+    expect(tasks.map((t) => t.status)).toEqual(['merged', 'merged']);
+    expect(events).toContain('Tests fail once combined with work merged meanwhile; rebuilding');
+    const rebuilt = tasks.find((t) => t.freeRetries > 0)!;
+    expect(rebuilt.attempts).toBe(0);
+    expect(rebuilt.lastFailure?.kind).toBe('combined_tests');
+    expect(git(repo, 'show', 'conclave/integration:glue.js')).toContain('1');
+  });
+});

@@ -13,7 +13,12 @@ import { seatLabel } from '../chat/transcript.js';
 import type { ProjectStore } from '../store/projects.js';
 
 /** Attempts that don't count against a task, per kind (C6b). */
-export const FREE_RETRIES: Partial<Record<FailureKind, number>> = { conflict: 2, crash: 1 };
+export const FREE_RETRIES: Partial<Record<FailureKind, number>> = {
+  conflict: 2,
+  // Shares the conflict budget: both mean other work landed first, not that this work is wrong.
+  combined_tests: 2,
+  crash: 1,
+};
 
 /** Kinds that are never the task's fault: the work moves on and no attempt is used. */
 export const UNCOUNTED: ReadonlySet<FailureKind> = new Set(['limit', 'question']);

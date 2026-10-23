@@ -109,6 +109,7 @@ export function NewProjectWizard({
   const [doneWhen, setDoneWhen] = useState('');
   const [routing, setRouting] = useState<Routing>({ planner: [], builder: [], reviewer: [] });
   const [attempts, setAttempts] = useState(3);
+  const [parallel, setParallel] = useState(2);
   const [askPolicy, setAskPolicy] = useState<AskPolicy>('ask');
   const [strategy, setStrategy] = useState<RetryStrategy>('escalate');
   const [permissions, setPermissions] = useState<Permissions>(DEFAULT_PERMISSIONS);
@@ -142,6 +143,7 @@ export function NewProjectWizard({
     setTest('');
     setDoneWhen('');
     setAttempts(3);
+    setParallel(2);
     setAskPolicy('ask');
     setStrategy('escalate');
     setPermissions(DEFAULT_PERMISSIONS);
@@ -284,6 +286,7 @@ export function NewProjectWizard({
           ...(design.trim() && { designDirection: design.trim() }),
           routing,
           maxAttempts: attempts,
+          maxParallel: parallel,
           askPolicy,
           retryStrategy: strategy,
           permissions,
@@ -309,6 +312,7 @@ export function NewProjectWizard({
           designDirection: design.trim() || null,
           routing,
           maxAttempts: attempts,
+          maxParallel: parallel,
           askPolicy,
           retryStrategy: strategy,
           permissions,
@@ -768,6 +772,19 @@ export function NewProjectWizard({
               </p>
             </Field>
             <div className="flex flex-col gap-4">
+              <Field
+                label="Parallel tasks"
+                hintBelow
+                hint="Independent tasks build at once, each AI within its lane cap. Merges stay one at a time and are re-tested."
+              >
+                <Segmented
+                  size="sm"
+                  label="Parallel tasks"
+                  value={parallel}
+                  onChange={setParallel}
+                  options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
+                />
+              </Field>
               <Field
                 label="Attempts per task"
                 hintBelow

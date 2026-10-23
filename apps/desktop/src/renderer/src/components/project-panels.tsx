@@ -582,6 +582,7 @@ export function ProjectSettingsDialog({
   const [design, setDesign] = useState(project.designDirection ?? '');
   const [routing, setRouting] = useState<Routing>(project.routing);
   const [attempts, setAttempts] = useState(project.maxAttempts);
+  const [parallel, setParallel] = useState(project.maxParallel);
   const [strategy, setStrategy] = useState<RetryStrategy>(project.retryStrategy);
   const [askPolicy, setAskPolicy] = useState<AskPolicy>(project.askPolicy);
   const [permissions, setPermissions] = useState<Permissions>(project.permissions);
@@ -596,6 +597,7 @@ export function ProjectSettingsDialog({
     setDesign(project.designDirection ?? '');
     setRouting(project.routing);
     setAttempts(project.maxAttempts);
+    setParallel(project.maxParallel);
     setStrategy(project.retryStrategy);
     setAskPolicy(project.askPolicy);
     setPermissions(project.permissions);
@@ -612,6 +614,7 @@ export function ProjectSettingsDialog({
       designDirection: design.trim() || null,
       routing,
       maxAttempts: attempts,
+      maxParallel: parallel,
       retryStrategy: strategy,
       askPolicy,
       permissions,
@@ -722,6 +725,18 @@ export function ProjectSettingsDialog({
             />
           </Field>
         </div>
+        <Field
+          label="Parallel tasks"
+          hint="Independent tasks build at once, each AI within its lane cap. Merges stay one at a time and are re-tested. Applies the next time the project starts."
+        >
+          <Segmented
+            size="sm"
+            label="Parallel tasks"
+            value={parallel}
+            onChange={setParallel}
+            options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
+          />
+        </Field>
       </div>
     </Dialog>
   );

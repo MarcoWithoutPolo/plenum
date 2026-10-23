@@ -156,6 +156,8 @@ export interface NewProjectInput {
   testCommand?: string;
   routing?: Partial<Routing>;
   maxAttempts?: number;
+  /** Tasks that may build at once (lanes), 1 to 4. */
+  maxParallel?: number;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -174,6 +176,8 @@ export interface ProjectSettings {
   designDirection?: string | null;
   routing?: Routing;
   maxAttempts?: number;
+  /** Tasks that may build at once (lanes), 1 to 4. */
+  maxParallel?: number;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;

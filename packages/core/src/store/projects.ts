@@ -34,6 +34,7 @@ export interface NewProject {
   integrationBranch?: string;
   routing: Routing;
   maxAttempts?: number;
+  maxParallel?: number;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -51,6 +52,7 @@ type ProjectPatch = Partial<
     | 'testCommand'
     | 'routing'
     | 'maxAttempts'
+    | 'maxParallel'
     | 'name'
     | 'retryStrategy'
     | 'askPolicy'
@@ -78,6 +80,7 @@ export type TaskPatch = Partial<
     | 'blockedBy'
     | 'grants'
     | 'actualLines'
+    | 'after'
   >
 >;
 
@@ -98,6 +101,7 @@ export class ProjectStore {
       integrationBranch: input.integrationBranch ?? 'conclave/integration',
       routing: input.routing,
       maxAttempts: input.maxAttempts ?? 3,
+      maxParallel: clampParallel(input.maxParallel ?? 1),
       retryStrategy: input.retryStrategy ?? 'escalate',
       askPolicy: input.askPolicy ?? 'ask',
       permissions: input.permissions ?? DEFAULT_PERMISSIONS,
@@ -113,8 +117,8 @@ export class ProjectStore {
       .prepare(
         `INSERT INTO projects (id, name, repo_path, goal, done_when, test_command, base_branch,
            integration_branch, routing, max_attempts, retry_strategy, ask_policy, permissions,
-           design_direction, github, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           design_direction, github, status, max_parallel, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         project.id,
@@ -133,6 +137,7 @@ export class ProjectStore {
         project.designDirection,
         project.github && JSON.stringify(project.github),
         project.status,
+        project.maxParallel,
         now,
         now,
       );
@@ -174,7 +179,8 @@ export class ProjectStore {
       .prepare(
         `UPDATE projects SET name = ?, goal = ?, done_when = ?, test_command = ?, routing = ?,
            max_attempts = ?, retry_strategy = ?, ask_policy = ?, permissions = ?,
-           design_direction = ?, proposed_test_command = ?, github = ?, updated_at = ? WHERE id = ?`,
+           design_direction = ?, proposed_test_command = ?, github = ?, max_parallel = ?,
+           updated_at = ? WHERE id = ?`,
       )
       .run(
         next.name,
@@ -189,17 +195,18 @@ export class ProjectStore {
         next.designDirection,
         next.proposedTestCommand,
         next.github && JSON.stringify(next.github),
+        clampParallel(next.maxParallel),
         next.updatedAt,
         id,
       );
-    return next;
+    return { ...next, maxParallel: clampParallel(next.maxParallel) };
   }
 
   /* ── Tasks ─────────────────────────────────────────────────────────── */
 
   addTasks(
     projectId: string,
-    tasks: { title: string; spec: string; estimate?: TaskEstimate }[],
+    tasks: { title: string; spec: string; estimate?: TaskEstimate; after?: string[] }[],
   ): Task[] {
     return transaction(this.db, () => {
       const { top } = this.db
@@ -226,14 +233,15 @@ export class ProjectStore {
           blockedBy: null,
           grants: null,
           estimate: t.estimate ?? null,
+          after: t.after ?? [],
           actualLines: null,
           createdAt: now,
           updatedAt: now,
         };
         this.db
           .prepare(
-            `INSERT INTO tasks (id, project_id, title, spec, status, priority, attempts, estimate, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+            `INSERT INTO tasks (id, project_id, title, spec, status, priority, attempts, estimate, after, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
           )
           .run(
             task.id,
@@ -243,6 +251,7 @@ export class ProjectStore {
             task.status,
             task.priority,
             task.estimate && JSON.stringify(task.estimate),
+            JSON.stringify(task.after),
             now,
             now,
           );
@@ -291,7 +300,8 @@ export class ProjectStore {
       .prepare(
         `UPDATE tasks SET status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
            merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
-           replaced_by = ?, blocked_by = ?, grants = ?, actual_lines = ?, updated_at = ? WHERE id = ?`,
+           replaced_by = ?, blocked_by = ?, grants = ?, actual_lines = ?, after = ?,
+           updated_at = ? WHERE id = ?`,
       )
       .run(
         next.status,
@@ -308,6 +318,7 @@ export class ProjectStore {
         next.blockedBy,
         next.grants && JSON.stringify(next.grants),
         next.actualLines,
+        JSON.stringify(next.after),
         next.updatedAt,
         id,
       );
@@ -489,6 +500,7 @@ function toProject(r: Row): Project {
     integrationBranch: r.integration_branch as string,
     routing: parse(r.routing) as Routing,
     maxAttempts: r.max_attempts as number,
+    maxParallel: clampParallel((r.max_parallel as number | null) ?? 1),
     retryStrategy: ((r.retry_strategy as string | null) ?? 'same') as RetryStrategy,
     askPolicy: ((r.ask_policy as string | null) ?? 'ask') as AskPolicy,
     permissions: {
@@ -503,6 +515,11 @@ function toProject(r: Row): Project {
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };
+}
+
+/** Lanes run 1 to 4 tasks at once. */
+export function clampParallel(n: number): number {
+  return Math.min(4, Math.max(1, Math.round(Number.isFinite(n) ? n : 1)));
 }
 
 function toTask(r: Row): Task {
@@ -526,6 +543,7 @@ function toTask(r: Row): Task {
     grants: parse(r.grants) as TaskGrants | null,
     estimate: parse(r.estimate) as TaskEstimate | null,
     actualLines: (r.actual_lines as number | null) ?? null,
+    after: (parse(r.after) as string[] | null) ?? [],
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };

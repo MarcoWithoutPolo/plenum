@@ -56,6 +56,21 @@ export async function commitIdentity(cwd: string): Promise<string[]> {
   return email.code === 0 && email.stdout.trim() ? [] : IDENTITY;
 }
 
+/** Runs async jobs one at a time, in the order they arrive. */
+export class SerialLock {
+  private tail: Promise<unknown> = Promise.resolve();
+
+  run<T>(job: () => Promise<T>): Promise<T> {
+    const next = this.tail.then(job, job);
+    this.tail = next.catch(() => undefined);
+    return next;
+  }
+}
+
+export type TaskMerge =
+  | { ok: true; commit: string; retested: boolean }
+  | { ok: false; kind: 'conflict' | 'combined_tests'; detail: string };
+
 /**
  * Isolated checkouts for the brain. The user's repo keeps its branch and
  * working files; everything happens in worktrees under Conclave's data folder.
@@ -68,6 +83,18 @@ export class Workspace {
     readonly root: string,
     readonly integrationBranch: string,
   ) {}
+
+  /**
+   * Git can't safely change worktrees and refs from several lanes at once (index.lock and
+   * packed-refs races, worst on Windows). Those short calls queue here; agents and tests don't.
+   */
+  private readonly gitLock = new SerialLock();
+  /** Merges happen one at a time, in approval order. */
+  private readonly mergeLock = new SerialLock();
+
+  get mergePath(): string {
+    return `${this.root}/merge`;
+  }
 
   get integrationPath(): string {
     return `${this.root}/integration`;
@@ -94,8 +121,14 @@ export class Workspace {
   }
 
   /** A fresh worktree on a new task branch, starting from the integration branch's tip. */
-  async createTaskTree(taskId: string): Promise<string> {
-    await this.removeTaskTree(taskId);
+  createTaskTree(taskId: string): Promise<string> {
+    return this.gitLock.run(async () => {
+      await this.removeTree(taskId);
+      return this.addTree(taskId);
+    });
+  }
+
+  private async addTree(taskId: string): Promise<string> {
     const path = this.taskPath(taskId);
     mkdirSync(dirname(path), { recursive: true });
     await git(this.repo, [
@@ -109,7 +142,11 @@ export class Workspace {
     return path;
   }
 
-  async removeTaskTree(taskId: string): Promise<void> {
+  removeTaskTree(taskId: string): Promise<void> {
+    return this.gitLock.run(() => this.removeTree(taskId));
+  }
+
+  private async removeTree(taskId: string): Promise<void> {
     const path = this.taskPath(taskId);
     if (existsSync(path)) {
       await git(this.repo, ['worktree', 'remove', '--force', path], true);
@@ -120,7 +157,11 @@ export class Workspace {
   }
 
   /** Stage and commit everything in the task's worktree. Returns null when nothing changed. */
-  async commitTask(taskId: string, message: string): Promise<string | null> {
+  commitTask(taskId: string, message: string): Promise<string | null> {
+    return this.gitLock.run(() => this.commit(taskId, message));
+  }
+
+  private async commit(taskId: string, message: string): Promise<string | null> {
     const path = this.taskPath(taskId);
     await git(path, ['add', '-A']);
     const status = await out(path, ['status', '--porcelain']);
@@ -149,13 +190,87 @@ export class Workspace {
   }
 
   /**
-   * Merge a task branch into the integration branch. On a conflict the merge
-   * is aborted and nothing changes; the task can be rebuilt from the new tip.
+   * Merge a task branch into the integration branch, one task at a time.
+   *
+   * Fast path: when nothing merged since the task's worktree was made, its own test run
+   * covered exactly this code, so it merges directly (always the case with one lane).
+   * Otherwise the merge is tried in a separate candidate worktree and `test` runs there;
+   * the integration branch only moves (compare-and-swap) when the candidate passes.
+   * A conflict or a failing candidate leaves the integration branch exactly as it was.
    */
-  async mergeTask(
+  mergeTask(
     taskId: string,
     message: string,
-  ): Promise<{ ok: true; commit: string } | { ok: false; conflict: string }> {
+    test?: (cwd: string) => Promise<{ ok: boolean; output: string }>,
+  ): Promise<TaskMerge> {
+    return this.mergeLock.run(async () => {
+      const tip = await out(this.integrationPath, ['rev-parse', 'HEAD']);
+      const current =
+        (await git(this.repo, ['merge-base', '--is-ancestor', tip, this.taskBranch(taskId)], true))
+          .code === 0;
+      if (current || !test) {
+        const merged = await this.gitLock.run(() => this.mergeDirect(taskId, message));
+        return merged.ok ? { ...merged, retested: false } : merged;
+      }
+      return this.mergeCandidate(taskId, message, tip, test);
+    });
+  }
+
+  private async mergeCandidate(
+    taskId: string,
+    message: string,
+    tip: string,
+    test: (cwd: string) => Promise<{ ok: boolean; output: string }>,
+  ): Promise<TaskMerge> {
+    const path = this.mergePath;
+    const merge = await this.gitLock.run(async () => {
+      if (!existsSync(path)) {
+        await git(this.repo, ['worktree', 'prune'], true);
+        await git(this.repo, ['worktree', 'add', '--detach', path, tip]);
+      } else {
+        await git(path, ['merge', '--abort'], true);
+        await git(path, ['checkout', '-q', '--force', '--detach', tip]);
+        await git(path, ['reset', '-q', '--hard', tip]);
+        await git(path, ['clean', '-q', '-fd']);
+      }
+      const r = await git(
+        path,
+        [
+          ...(await commitIdentity(path)),
+          'merge',
+          '--no-ff',
+          '-q',
+          '-m',
+          message,
+          this.taskBranch(taskId),
+        ],
+        true,
+      );
+      if (r.code !== 0) await git(path, ['merge', '--abort'], true);
+      return r;
+    });
+    if (merge.code !== 0) {
+      return {
+        ok: false,
+        kind: 'conflict',
+        detail: (merge.stdout + merge.stderr).trim().slice(-2000),
+      };
+    }
+    const tested = await test(path);
+    if (!tested.ok) return { ok: false, kind: 'combined_tests', detail: tested.output };
+    return this.gitLock.run(async () => {
+      const candidate = await headCommit(path);
+      // Compare-and-swap: only move the branch if nobody else moved it meanwhile.
+      await git(this.repo, ['update-ref', `refs/heads/${this.integrationBranch}`, candidate, tip]);
+      await git(this.integrationPath, ['reset', '-q', '--hard', candidate]);
+      return { ok: true, commit: candidate, retested: true } as const;
+    });
+  }
+
+  private async mergeDirect(
+    taskId: string,
+    message: string,
+  ): Promise<{ ok: true; commit: string } | { ok: false; kind: 'conflict'; detail: string }> {
     const path = this.integrationPath;
     const merge = await git(
       path,
@@ -172,7 +287,11 @@ export class Workspace {
     );
     if (merge.code !== 0) {
       await git(path, ['merge', '--abort'], true);
-      return { ok: false, conflict: (merge.stdout + merge.stderr).trim().slice(-2000) };
+      return {
+        ok: false,
+        kind: 'conflict',
+        detail: (merge.stdout + merge.stderr).trim().slice(-2000),
+      };
     }
     return { ok: true, commit: await headCommit(path) };
   }
