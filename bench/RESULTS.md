@@ -106,3 +106,47 @@ What this says:
 
 Next: re-run with Codex back, with the timeline, and with `--runs 3`; give the reviewer a cheaper diff-first review
 (read changed files first, the rest only when needed), and seed the ranking from earlier runs on the same machine.
+
+## v0.7 (2026-10-23, one run each)
+
+Everything in v0.7: right-sized plans checked by the brain, the goal check on the last review, AI ranking from
+measured data seeded with benchmark priors, diff-first reviews, verified first tasks, decide-and-tell builds, lanes (2
+by default) and the tested merge queue. Codex alone ran on a second, uncapped account; during Conclave's runs that
+account hit its usage limit too, so Conclave's builds fell back to Claude (marked ⚠).
+
+| Project   | Claude alone           | Codex alone            | Antigravity alone       | Conclave v0.6         | Conclave v0.7                 |
+| --------- | ---------------------- | ---------------------- | ----------------------- | --------------------- | ----------------------------- |
+| textkit   | 7/7 · 1.0 min · 197k   | 7/7 · 3.0 min · 134k   | 7/7 · 8.8 min · 1.2M    | 7/7 · 10.1 min · 1.4M | **7/7 · 3.0 min · 422k**      |
+| calc      | 7/7 · 1.2 min · 341k   | 7/7 · 4.2 min · 178k   | 6/7 · 20.3 min · 3.1M   | 7/7 · 19.7 min · 2.6M | **7/7 · 5.4 min · 435k** ⚠    |
+| inventory | 7/7 · 1.0 min · 389k   | 7/7 · 2.5 min · 126k   | 7/7 · 7.1 min · 682k    | 7/7 · 12.6 min · 2.1M | **7/7 · 3.0 min · 365k**      |
+| ledger    | 12/12 · 3.3 min · 472k | 11/12 · 9.4 min · 355k | 12/12 · 40.1 min · 2.8M | n/a                   | **12/12 · 15.2 min · 2.4M** ⚠ |
+
+### Where the time goes now
+
+| Project (v0.7) | Planning | Building              | Reviewing                                | Brain (git, tests, merge) |
+| -------------- | -------- | --------------------- | ---------------------------------------- | ------------------------- |
+| textkit        | 0.3 min  | 2.4 (Codex)           | 0.2 (Claude)                             | 0.1                       |
+| inventory      | 0.4 min  | 2.4 (Codex)           | 0.2 (Claude)                             | 0.0                       |
+| calc ⚠         | 0.4 min  | 1.1 (Claude)          | 3.5 Antigravity, no verdict → 0.3 Claude | 0.1                       |
+| ledger ⚠       | 1.0 min  | 5.3 (Claude, 2 lanes) | 12.7 (Antigravity, 2 lanes)              | 0.2                       |
+
+### What this says
+
+1. **Quality held everywhere:** 7/7 and 12/12 on every project. Codex alone missed one hidden test on ledger,
+   Antigravity alone one on calc; Conclave missed none.
+2. **Small projects are 3–4× faster than v0.6** and now match Codex alone (3.0 vs 3.0 and 2.5 min), with a cross-AI
+   review. When Codex builds and Claude reviews, a review takes about 15 seconds.
+3. **Ledger: 15.2 min, lanes working.** Two tasks built at once and their reviews ran side by side; it was 21.3 min
+   before limit retries stopped parking a lane. It is still about 4.5× Claude alone.
+4. **The remaining bottleneck is who's left to review.** With Codex at its limit, Claude builds, and the only other
+   reviewer is Antigravity, whose reviews take 3–4 minutes each and once gave no verdict at all. Ranking can't fix an
+   empty bench: the fix is a fast second reviewer (Codex with headroom) or a reviewer time limit.
+5. **Decide-and-tell works:** builders record their choices (13 on ledger) instead of stopping, and every one shows up
+   in the Decisions tab.
+
+### Next
+
+- A review time budget: if a slow reviewer hasn't answered in ~2 minutes and a faster one is free, ask the faster one.
+- When an AI is at its limit, say so before a project starts ("Codex is at its limit until 4 PM; reviews will use
+  Antigravity, which is slower").
+- Re-run with `--runs 3` once Codex has headroom for a whole run.
