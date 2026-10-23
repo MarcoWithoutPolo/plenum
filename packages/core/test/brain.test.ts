@@ -23,6 +23,7 @@ import {
   parseQuestion,
   startDraft,
   effortUp,
+  ensureIgnored,
   parsePlan,
   parseReview,
   providerProblems,
@@ -941,6 +942,45 @@ describe('Done means the tests pass', () => {
         .events(project.id)
         .some((e) => e.message.startsWith('Not done yet: node check.js fails')),
     ).toBe(true);
+  });
+});
+
+describe('Installs', () => {
+  it('never files a planner install request; the builder asks when its task needs it', async () => {
+    let plans = 0;
+    const { store, brain, project, claude } = await setup({
+      claude: {
+        reply: (req) => {
+          if (req.role !== 'planner') return APPROVE;
+          plans++;
+          return plans === 1
+            ? JSON.stringify({
+                question: 'May the builder run npm install left-pad?',
+                permission: { kind: 'install', command: 'npm install left-pad' },
+              })
+            : plans === 2
+              ? PLAN
+              : DONE;
+        },
+      },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(store.projects.approvals(project.id).filter((a) => a.kind === 'install')).toEqual([]);
+    expect(store.decisions.list(project.id)[0]).toMatchObject({ kind: 'assumption', taskId: null });
+    const second = claude.requests.filter((r) => r.role === 'planner')[1]!.prompt;
+    expect(second).toContain('Never ask about installing packages');
+  });
+
+  it('keeps package folders out of git after an approved install', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'conclave-ignore-'));
+    cleanup.push(dir);
+    expect(ensureIgnored(dir, 'npm install howler')).toBe('node_modules/');
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('node_modules/\n');
+    expect(ensureIgnored(dir, 'npm install other')).toBeUndefined();
+    writeFileSync(join(dir, '.gitignore'), '.env');
+    expect(ensureIgnored(dir, 'pnpm add x')).toBe('node_modules/');
+    expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('.env\nnode_modules/\n');
+    expect(ensureIgnored(dir, 'cargo add serde')).toBeUndefined();
   });
 });
 

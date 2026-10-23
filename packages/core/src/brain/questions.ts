@@ -81,6 +81,15 @@ export function isRunnableInstall(command: string | undefined): boolean {
   return INSTALL_SHAPES.some((re) => re.test(c));
 }
 
+/**
+ * The planner's version: only product questions. Installs and network are asked for by the
+ * builder of the task that needs them, so an approval always has a task to apply to.
+ */
+export const PLANNER_QUESTION_RULE = `If the plan hinges on a decision only the user can make, do not guess. Reply with only
+{"question": "...", "why": "...", "options": ["...", "..."], "recommended": "one of the options"}
+Never ask about installing packages or using the network: plan a task for it, and its builder asks when it gets there.
+Ask only when the answer changes what gets built; never about things the code or the decisions above already answer.`;
+
 /** What the agent is told when it may not ask any more questions. */
 export const DECIDE_YOURSELF =
   'Do not ask more questions for this task. Make the most reasonable choice yourself and state the assumption in your summary.';

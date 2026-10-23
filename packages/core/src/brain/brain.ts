@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import type {
   AgentQuestion,
@@ -191,7 +191,13 @@ export class Brain {
 
   private mustDecide(task: Task | null): boolean {
     if (this.openQuestions().length >= (this.opts.maxOpenQuestions ?? 10)) return true;
-    return task !== null && this.questionCount(task) >= (this.opts.maxQuestionsPerTask ?? 3);
+    const limit = this.opts.maxQuestionsPerTask ?? 3;
+    if (task) return this.questionCount(task) >= limit;
+    // The planner gets the same limit, counted over the assumptions it caused.
+    const planner = this.ctx.store.decisions
+      .list(this.projectId)
+      .filter((d) => d.taskId === null && d.source === 'agent').length;
+    return planner >= limit;
   }
 
   /** Keep doing rounds until the goal is met, the project is stopped, or `maxRounds` runs out. */
@@ -482,6 +488,9 @@ export class Brain {
       if (this.interrupted) return this.halt(task);
       const tail = ran.output.trim().slice(-3000);
       this.log('agent', `Ran ${install} (approved by you)`, { task, data: { output: tail } });
+      // Never commit what a package manager downloads.
+      const ignored = ensureIgnored(cwd, install);
+      if (ignored) this.log('agent', `Added ${ignored} to .gitignore`, { task });
       if (ran.code !== 0) {
         return this.sendBack(project, task, {
           failure: this.failureOf('crash', `The approved install failed: ${install}`, tail, null),
@@ -832,6 +841,16 @@ export class Brain {
       });
     }
     const payload = { ...question, stage, provider: seat.provider };
+    if (question.permission && !task) {
+      // A planner asking for an install has no task to apply your approval to; the builder asks.
+      return this.settle(
+        null,
+        question,
+        'Plan a task for it; that task’s builder asks for the install or network when it needs it.',
+        'agent',
+        seat,
+      );
+    }
     if (question.permission) {
       const auto = this.permissionPolicy(project, question);
       if (auto) return this.settle(task, question, auto.answer, auto.source, seat, auto.grants);
@@ -1107,6 +1126,23 @@ export class Brain {
     this.governor.observe(seat.provider, result);
     return result;
   }
+}
+
+/** Package folders by installer; added to .gitignore after Conclave runs an install. */
+const INSTALL_FOLDERS: [RegExp, string][] = [
+  [/^(npm|pnpm|yarn|bun)\b/i, 'node_modules/'],
+  [/^(uv|pip|pip3|python -m pip)\b/i, '.venv/'],
+];
+
+export function ensureIgnored(cwd: string, install: string): string | undefined {
+  const folder = INSTALL_FOLDERS.find(([re]) => re.test(install.trim()))?.[1];
+  if (!folder) return undefined;
+  const file = join(cwd, '.gitignore');
+  const current = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const lines = current.split(/\r?\n/).map((l) => l.trim());
+  if (lines.includes(folder) || lines.includes(folder.replace(/\/$/, ''))) return undefined;
+  writeFileSync(file, `${current}${current && !current.endsWith('\n') ? '\n' : ''}${folder}\n`);
+  return folder;
 }
 
 function councilPrompt(project: Project, question: AgentQuestion, decisions: string): string {

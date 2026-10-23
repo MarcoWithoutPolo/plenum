@@ -1,5 +1,5 @@
 import type { Project, Task } from '@conclave/shared';
-import { DECIDE_YOURSELF, QUESTION_RULE } from './questions.js';
+import { DECIDE_YOURSELF, PLANNER_QUESTION_RULE, QUESTION_RULE } from './questions.js';
 
 /** Optional context every agent prompt can carry. */
 export interface PromptExtras {
@@ -90,7 +90,7 @@ Rules for tasks:
 - Each spec says exactly what to change and how the result is checked (tests to add or update).
 - Never plan pushing, deploying or publishing. Plan new dependencies only when the goal needs them; the builder asks the user first.${project.testCommand ? '' : '\n- There are no tests yet. Make setting them up the first task, and include the command in "test_command".'}
 
-${extras.decideYourself ? DECIDE_YOURSELF : QUESTION_RULE}
+${extras.decideYourself ? DECIDE_YOURSELF : PLANNER_QUESTION_RULE}
 
 Otherwise reply with ONLY one JSON object and nothing else.
 To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified", "replaces": "id of the failed task this takes over, or omit"}]${project.testCommand ? '' : ', "test_command": "the command that runs the tests"'}} with at most ${ctx.maxTasks} tasks.
