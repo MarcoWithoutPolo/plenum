@@ -3,6 +3,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentEvent, ProviderStatus, Role } from '@conclave/shared';
 import { isNotFound, runCommand } from '../process.js';
+import type { RunPermissions } from './permissions.js';
 import {
   assertSafeEffort,
   assertSafeModel,
@@ -42,6 +43,7 @@ const FILE_TOOLS = new Set([
  * (see test/fixtures/antigravity).
  */
 export class AntigravityAdapter implements Adapter {
+  permissionGap = antigravityPermissionGap;
   readonly id = 'antigravity' as const;
   readonly displayName = 'Antigravity';
   readonly capabilities: Capabilities = {
@@ -149,11 +151,26 @@ export function parseModels(text: string): { id: string; label?: string }[] {
     .map(([id, label]) => ({ id: id!.trim(), label: label!.trim() }));
 }
 
-/** Execution mode per role: read-only roles plan, builders may edit. */
-function modeFor(role: Role, readOnly: boolean): string {
+/** Execution mode per role: read-only roles plan, builders may edit, level 5 runs freely. */
+function modeArgs(role: Role, readOnly: boolean, permissions?: RunPermissions): string[] {
   if (role === 'chat' || role === 'synthesizer' || role === 'planner' || role === 'reviewer')
-    return 'plan';
-  return readOnly ? 'plan' : 'accept-edits';
+    return ['--mode', 'plan'];
+  const level = permissions?.level ?? 2;
+  if (readOnly || level === 1) return ['--mode', 'plan'];
+  if (level === 5) return ['--mode', 'auto', '--dangerously-skip-permissions'];
+  // Print mode denies commands it would have to ask about, so edit-only is enforced.
+  return ['--mode', 'accept-edits'];
+}
+
+/** agy can edit-only or run freely, with nothing in between that Conclave can verify. */
+export function antigravityPermissionGap(permissions: RunPermissions): string | undefined {
+  if (permissions.level === 3 || permissions.level === 4) {
+    return "Antigravity can't limit which commands run or block the network, so it works at levels 2 and 5 only.";
+  }
+  if (permissions.network && permissions.level < 5) {
+    return "Antigravity can't grant network access on its own; it has it only at level 5.";
+  }
+  return undefined;
 }
 
 export function antigravityArgs(request: RunRequest): { args: string[]; cleanup: () => void } {
@@ -178,8 +195,7 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     '--output-format',
     'stream-json',
     '--disable-slash-commands',
-    '--mode',
-    modeFor(request.role ?? 'chat', request.readOnly ?? true),
+    ...modeArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions),
     ...(request.model ? ['--model', request.model] : []),
     ...(request.effort ? ['--effort', request.effort] : []),
     ...(request.sessionId ? ['--conversation', request.sessionId] : []),

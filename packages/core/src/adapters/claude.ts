@@ -1,4 +1,5 @@
 import type { ProviderStatus, Role } from '@conclave/shared';
+import { safeCommands, type RunPermissions } from './permissions.js';
 import { runCommand, isNotFound } from '../process.js';
 import {
   assertSafeEffort,
@@ -25,6 +26,7 @@ const READ_ONLY_TOOLS = 'Read,Grep,Glob';
  * Format recorded from Claude Code 2.1.x (see test/fixtures/claude).
  */
 export class ClaudeAdapter implements Adapter {
+  permissionGap = claudePermissionGap;
   readonly id = 'claude' as const;
   readonly displayName = 'Claude Code';
   readonly capabilities: Capabilities = {
@@ -122,15 +124,40 @@ export function claudeArgs(request: RunRequest): string[] {
     if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
     args.push('--resume', request.sessionId);
   }
-  args.push(...toolArgs(request.role ?? 'chat', request.readOnly ?? true));
+  args.push(...toolArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions));
   return args;
 }
 
-function toolArgs(role: Role, readOnly: boolean): string[] {
+const NETWORK_TOOLS = ['WebFetch', 'WebSearch'];
+
+function toolArgs(role: Role, readOnly: boolean, permissions?: RunPermissions): string[] {
   // Pure conversation needs no tools, which also keeps each prompt cheap.
   if (role === 'chat' || role === 'synthesizer') return ['--tools', ''];
-  if (readOnly) return ['--tools', READ_ONLY_TOOLS, '--permission-mode', 'dontAsk'];
-  return ['--permission-mode', 'acceptEdits'];
+  const level = permissions?.level ?? 2;
+  if (readOnly || level === 1) {
+    return ['--tools', READ_ONLY_TOOLS, '--permission-mode', 'dontAsk'];
+  }
+  if (level === 5) return ['--permission-mode', 'bypassPermissions'];
+  const network = permissions?.network ?? false;
+  const denied = network ? [] : [...NETWORK_TOOLS];
+  const allowed: string[] = [];
+  if (level === 2) denied.push('Bash');
+  if (level === 3) allowed.push(...safeCommands(permissions?.commands).map((c) => `Bash(${c})`));
+  if (level === 4) allowed.push('Bash');
+  return [
+    '--permission-mode',
+    'acceptEdits',
+    ...(allowed.length ? ['--allowedTools', allowed.join(',')] : []),
+    ...(denied.length ? ['--disallowedTools', denied.join(',')] : []),
+  ];
+}
+
+/** Claude's Bash tool has no network sandbox on every platform, so "offline commands" can't be promised. */
+export function claudePermissionGap(permissions: RunPermissions): string | undefined {
+  if (permissions.level === 4 && !permissions.network) {
+    return "Claude Code can't block the network for the commands it runs, so it can't work at level 4 offline. Allow network for level 4, or use level 3 or 5.";
+  }
+  return undefined;
 }
 
 export class ClaudeParser implements LineParser {

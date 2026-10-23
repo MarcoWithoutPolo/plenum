@@ -1,14 +1,16 @@
 import type { BrainEvent, Project, Seat, Task } from '@conclave/shared';
 import {
   Brain,
+  QUESTION_KINDS,
   createProject,
+  decideApproval,
   parseSeat,
   retryTask,
   seatLabel,
   skipTask,
   type Engine,
 } from '@conclave/core';
-import { taskProgress } from '@conclave/shared';
+import { taskProgress, type QuestionPayload } from '@conclave/shared';
 import { bold, dim, paint, shortId } from './format.js';
 
 export interface ProjectArgs {
@@ -35,7 +37,10 @@ const USAGE = `Usage:
   conclave project stop <id>                 stop a running project after its current step
   conclave project retry <task> [--use claude:opus@high] [--effort-up]
                                              requeue a failed or skipped task with fresh attempts
-  conclave project skip <task>               leave a task out of the plan`;
+  conclave project skip <task>               leave a task out of the plan
+  conclave project answer <question> "..."   answer an agent's question (or: yes / no for installs)
+  conclave project decisions <id>            what's been decided and assumed
+  conclave project decide <id> "question" "answer"   add a decision`;
 
 export async function projectCommand(engine: Engine, args: ProjectArgs): Promise<number> {
   switch (args.sub) {
@@ -53,6 +58,12 @@ export async function projectCommand(engine: Engine, args: ProjectArgs): Promise
       return retry(engine, args);
     case 'skip':
       return skip(engine, args.rest[0]);
+    case 'answer':
+      return answer(engine, args.rest[0], args.rest.slice(1).join(' '));
+    case 'decisions':
+      return decisions(engine, args.rest[0]);
+    case 'decide':
+      return decide(engine, args.rest[0], args.rest[1], args.rest[2]);
     default:
       console.log(USAGE);
       return args.sub ? 1 : 0;
@@ -142,7 +153,17 @@ function status(engine: Engine, id: string | undefined): number {
   const pending = projects.approvals(project.id, 'pending');
   if (pending.length) {
     console.log(`\n${bold('Waiting for you')}`);
-    for (const a of pending) console.log(`  ${paint('yellow', '●')} ${a.summary}`);
+    for (const a of pending) {
+      console.log(`  ${paint('yellow', '●')} ${a.summary} ${dim(shortId(a.id))}`);
+      if (QUESTION_KINDS.has(a.kind)) {
+        const q = a.payload as QuestionPayload;
+        if (q.options?.length) console.log(dim(`      options: ${q.options.join(' | ')}`));
+        if (q.permission?.command) console.log(dim(`      command: ${q.permission.command}`));
+      }
+    }
+    if (pending.some((a) => QUESTION_KINDS.has(a.kind))) {
+      console.log(dim('  Answer with: conclave project answer <id> "your answer"'));
+    }
     console.log(
       dim(
         `  To take the work into ${project.baseBranch}: cd "${project.repoPath}" && git merge ${project.integrationBranch}`,
@@ -236,6 +257,71 @@ function skip(engine: Engine, id: string | undefined): number {
   if (!task) return 1;
   skipTask(engine.store.projects, task.id);
   console.log(`Skipped ${bold(task.title)}.`);
+  return 0;
+}
+
+async function answer(engine: Engine, id: string | undefined, text: string): Promise<number> {
+  const approval = id ? engine.store.projects.findApproval(id) : undefined;
+  if (!approval || !QUESTION_KINDS.has(approval.kind) || !text.trim()) {
+    console.error(USAGE);
+    return 1;
+  }
+  // Install and network requests take yes or no; words after it are a note (or the alternative).
+  const word = /^(yes|y|ok|allow|approve|no|n|decline)\b[\s,:]*/i.exec(text.trim());
+  const no = word ? /^(no|n|decline)$/i.test(word[1]!) : false;
+  const note = word ? text.trim().slice(word[0].length) : text.trim();
+  const isQuestion = approval.kind === 'question';
+  const outcome = await decideApproval(
+    engine,
+    engine.home,
+    approval.id,
+    !isQuestion && no ? 'rejected' : 'approved',
+    isQuestion ? text : note || undefined,
+  );
+  if (!outcome.ok) {
+    console.error(outcome.error);
+    return 1;
+  }
+  console.log(`Recorded. ${dim('The waiting task is back in the queue.')}`);
+  return 0;
+}
+
+function decisions(engine: Engine, id: string | undefined): number {
+  const project = find(engine, id);
+  if (!project) return 1;
+  const all = engine.store.decisions.list(project.id);
+  if (!all.length) {
+    console.log('Nothing decided yet.');
+    return 0;
+  }
+  for (const kind of ['decision', 'assumption'] as const) {
+    const items = all.filter((d) => d.kind === kind && d.status === 'active');
+    if (!items.length) continue;
+    console.log(bold(kind === 'decision' ? 'Decisions' : 'Assumptions'));
+    for (const d of items) console.log(`  ${d.question}: ${d.answer} ${dim(`· ${d.source}`)}`);
+  }
+  return 0;
+}
+
+function decide(
+  engine: Engine,
+  id: string | undefined,
+  question: string | undefined,
+  text: string | undefined,
+): number {
+  const project = find(engine, id);
+  if (!project || !question?.trim() || !text?.trim()) {
+    if (project) console.error(USAGE);
+    return 1;
+  }
+  engine.store.decisions.add({
+    projectId: project.id,
+    kind: 'decision',
+    question,
+    answer: text,
+    source: 'you',
+  });
+  console.log(`Decided: ${question} → ${text}`);
   return 0;
 }
 

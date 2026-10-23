@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SCHEMA_VERSION, Store, openDatabase } from '../src/index.js';
+import { SCHEMA_VERSION, Store, decisionsSection, openDatabase } from '../src/index.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -178,5 +178,61 @@ describe('Store', () => {
       retryStrategy: 'same',
       permissions: { level: 3, installs: 'never' },
     });
+  });
+
+  it('keeps decisions, promotes assumptions and keeps overturned history', () => {
+    const store = new Store(':memory:');
+    const p = store.projects.create({
+      name: 'x',
+      repoPath: '/x',
+      goal: 'g',
+      baseBranch: 'main',
+      routing: { planner: [], builder: [], reviewer: [] },
+    });
+    const a = store.decisions.add({
+      projectId: p.id,
+      kind: 'assumption',
+      question: 'Decimals',
+      answer: '3',
+      source: 'agent',
+    });
+    store.decisions.add({
+      projectId: p.id,
+      kind: 'decision',
+      question: 'Framework',
+      answer: 'none',
+      source: 'you',
+    });
+    expect(store.decisions.keep(a.id)?.kind).toBe('decision');
+    const changed = store.decisions.change(a.id, '2');
+    expect(changed).toMatchObject({ answer: '2', source: 'you', status: 'active' });
+    expect(store.decisions.get(a.id)?.status).toBe('overturned');
+    const section = decisionsSection(store.decisions.list(p.id));
+    expect(section).toContain(
+      'DECISIONS (follow these; they come from the user)\n- Framework: none\n- Decimals: 2',
+    );
+    expect(section).not.toContain('ASSUMPTIONS');
+    expect(section).not.toContain(': 3');
+  });
+
+  it('caps the decisions section and says how many were left out', () => {
+    const now = Date.now();
+    const many = Array.from({ length: 45 }, (_, i) => ({
+      id: `d${i}`,
+      projectId: 'p',
+      kind: 'assumption' as const,
+      question: `Q${i}`,
+      answer: 'A',
+      source: 'agent' as const,
+      provider: null,
+      taskId: null,
+      status: 'active' as const,
+      createdAt: now + i,
+      updatedAt: now + i,
+    }));
+    const section = decisionsSection(many);
+    expect(section).toContain('- Q44: A');
+    expect(section).not.toContain('- Q4: A');
+    expect(section).toContain('(5 older items not shown)');
   });
 });

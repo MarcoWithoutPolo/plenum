@@ -8,8 +8,10 @@ import {
   GitMerge,
   Hourglass,
   ListPlus,
+  MessageCircleQuestion,
   Play,
   RotateCcw,
+  Scale,
   ScanEye,
   Sparkles,
   Terminal,
@@ -69,6 +71,8 @@ const EVENT: Record<BrainEventKind, { icon: LucideIcon; color: string }> = {
   stop: { icon: CircleStop, color: 'var(--muted)' },
   error: { icon: AlertTriangle, color: 'var(--danger)' },
   approval: { icon: Sparkles, color: 'var(--warn)' },
+  question: { icon: MessageCircleQuestion, color: 'var(--warn)' },
+  decision: { icon: Scale, color: 'var(--accent)' },
 };
 
 export function eventLooksBad(e: BrainEvent): boolean {

@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import type {
+  AgentQuestion,
   AgentEvent,
   BrainEvent,
   BrainEventKind,
@@ -12,15 +14,19 @@ import type {
   TaskFailure,
 } from '@conclave/shared';
 import { looksLikeLimit } from '../adapters/cli.js';
+import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
+import { decisionsSection } from '../store/decisions.js';
 import { collect, type RunResult } from '../collect.js';
 import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
 import { Governor } from '../governor/governor.js';
 import { runShell } from '../process.js';
 import { Workspace } from '../workspace/git.js';
-import { parsePlan, parseReview } from './json.js';
+import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
+import { QUESTION_KINDS } from './answers.js';
+import { isRunnableInstall, parseQuestion } from './questions.js';
 import { builderPlan, countsAsAttempt } from './recovery.js';
 import { findReplacement } from './similar.js';
 
@@ -31,6 +37,10 @@ export interface BrainOptions {
   maxTasksPerPlan?: number;
   /** Pause after this many tasks in a row fail with nothing merged in between. */
   maxFailureStreak?: number;
+  /** Questions one task may ask before its agent must decide for itself. */
+  maxQuestionsPerTask?: number;
+  /** Open questions a project may have before agents must decide for themselves. */
+  maxOpenQuestions?: number;
   agentTimeoutMs?: number;
   testTimeoutMs?: number;
   onEvent?: (event: BrainEvent) => void;
@@ -42,6 +52,10 @@ export type RoundOutcome =
   | { kind: 'retry'; task: Task; reason: string }
   | { kind: 'failed'; task: Task; reason: string }
   | { kind: 'waiting'; until: number | null; reason: string }
+  /** An agent asked something: filed for you, or answered by policy (`decided`). */
+  | { kind: 'asked'; task: Task | null; approvalId: string | null; decided: boolean }
+  /** Nothing can run until you answer the open questions. */
+  | { kind: 'needs_you'; reason: string }
   | { kind: 'done'; reason: string }
   | { kind: 'idle'; reason: string }
   | { kind: 'stopped'; reason: string };
@@ -117,6 +131,9 @@ export class Brain {
   async start(): Promise<void> {
     if (this.started) return;
     const project = this.project();
+    if (project.status === 'draft') {
+      throw new Error('Finish setting up this project (answer its questions and start it) first.');
+    }
     await this.workspace.prepare(project.baseBranch);
     const recovered = this.projects.requeueInterrupted(this.projectId);
     // Half-finished work is thrown away; the task rebuilds from the latest integration tip.
@@ -138,7 +155,43 @@ export class Brain {
       return { kind: 'stopped', reason: project.statusReason ?? `Project is ${project.status}` };
     }
     const task = this.projects.nextQueued(this.projectId);
-    return task ? this.work(project, task) : this.plan(project);
+    if (task) return this.work(project, task);
+    // Planning past an open question would build on a guess; wait for the answer instead.
+    const open = this.openQuestions();
+    const blocked = this.projects.listTasks(this.projectId).some((t) => t.status === 'blocked');
+    if (open.length || blocked) {
+      const reason = `${open.length || 'A'} question${open.length === 1 ? '' : 's'} waiting for you`;
+      this.projects.setStatus(this.projectId, 'needs_you', reason);
+      this.log('question', `Waiting for you: ${reason}`);
+      return { kind: 'needs_you', reason };
+    }
+    return this.plan(project);
+  }
+
+  private openQuestions() {
+    return this.projects
+      .approvals(this.projectId, 'pending')
+      .filter((a) => QUESTION_KINDS.has(a.kind));
+  }
+
+  private decisions(): string {
+    return decisionsSection(this.ctx.store.decisions.list(this.projectId, { status: 'active' }));
+  }
+
+  /** Questions this task has raised so far, answered or not. */
+  private questionCount(task: Task): number {
+    const asked = this.projects
+      .approvals(this.projectId)
+      .filter((a) => a.taskId === task.id && QUESTION_KINDS.has(a.kind)).length;
+    const assumed = this.ctx.store.decisions
+      .list(this.projectId)
+      .filter((d) => d.taskId === task.id && d.kind === 'assumption').length;
+    return asked + assumed;
+  }
+
+  private mustDecide(task: Task | null): boolean {
+    if (this.openQuestions().length >= (this.opts.maxOpenQuestions ?? 10)) return true;
+    return task !== null && this.questionCount(task) >= (this.opts.maxQuestionsPerTask ?? 3);
   }
 
   /** Keep doing rounds until the goal is met, the project is stopped, or `maxRounds` runs out. */
@@ -163,7 +216,13 @@ export class Brain {
         return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
       }
       last = await this.round();
-      if (last.kind === 'done' || last.kind === 'stopped' || last.kind === 'idle') return last;
+      if (
+        last.kind === 'done' ||
+        last.kind === 'stopped' ||
+        last.kind === 'idle' ||
+        last.kind === 'needs_you'
+      )
+        return last;
       if (last.kind === 'failed') {
         const streak = this.failureStreak();
         if (streak >= (this.opts.maxFailureStreak ?? 3)) {
@@ -226,16 +285,20 @@ export class Brain {
 
     const tasks = this.projects.listTasks(this.projectId);
     const { files, total } = await this.workspace.listFiles();
-    const prompt = plannerPrompt(project, {
-      files,
-      totalFiles: total,
-      history: await this.workspace.log(),
-      merged: tasks.filter((t) => t.status === 'merged'),
-      failed: tasks.filter((t) => t.status === 'failed'),
-      skipped: tasks.filter((t) => t.status === 'skipped'),
-      queued: tasks.filter((t) => t.status === 'queued' || t.status === 'blocked'),
-      maxTasks: this.maxTasks,
-    });
+    const prompt = plannerPrompt(
+      project,
+      {
+        files,
+        totalFiles: total,
+        history: await this.workspace.log(),
+        merged: tasks.filter((t) => t.status === 'merged'),
+        failed: tasks.filter((t) => t.status === 'failed'),
+        skipped: tasks.filter((t) => t.status === 'skipped'),
+        queued: tasks.filter((t) => t.status === 'queued' || t.status === 'blocked'),
+        maxTasks: this.maxTasks,
+      },
+      { decisions: this.decisions(), decideYourself: this.mustDecide(null) },
+    );
     this.log('plan', `Planning with ${seatLabel(pick.seat)}`, { provider: pick.seat.provider });
     const result = await this.agent(
       'planner',
@@ -254,6 +317,8 @@ export class Brain {
 
     const plan = parsePlan(result.text, this.maxTasks);
     if (!plan) {
+      const question = parseQuestion(result.text);
+      if (question) return this.ask(project, null, question, pick.seat, 'plan');
       this.log('error', 'The planner reply had no task list', {
         provider: pick.seat.provider,
         data: { reply: result.text.slice(0, 2000) },
@@ -263,6 +328,12 @@ export class Brain {
     if (plan.done) {
       this.finish(plan.reason);
       return { kind: 'done', reason: plan.reason };
+    }
+    if (plan.testCommand && !project.testCommand && !project.proposedTestCommand) {
+      this.projects.update(this.projectId, { proposedTestCommand: plan.testCommand });
+      this.log('plan', `Proposed test command: ${plan.testCommand}`, {
+        provider: pick.seat.provider,
+      });
     }
     if (plan.tasks.length === 0) {
       this.projects.setStatus(this.projectId, 'paused', 'The planner found nothing left to do');
@@ -354,7 +425,26 @@ export class Brain {
   /* ── One task: build → test → review → merge ───────────────────────── */
 
   private async work(project: Project, task: Task): Promise<RoundOutcome> {
+    project = this.expirePermissions(project);
+    const permissions = builderPermissions(project.permissions, {
+      ...(task.grants?.network && { grantNetwork: true }),
+      ...(project.permissions.level === 3 && { commands: this.checkCommands(project) }),
+    });
     const plan = builderPlan(project, task, this.ctx.adapters);
+    // A seat whose CLI can't enforce these permissions never gets the task.
+    const gaps: string[] = [];
+    const seats = plan.seats.filter((s) => {
+      const gap = this.ctx.adapters.get(s.provider)?.permissionGap?.(permissions);
+      if (gap) gaps.push(gap);
+      return !gap;
+    });
+    if (seats.length === 0) {
+      const reason = `No builder on the team can work at these permissions. ${[...new Set(gaps)].join(' ')}`;
+      this.projects.setStatus(this.projectId, 'paused', reason);
+      this.log('stop', reason, { task });
+      return { kind: 'idle', reason };
+    }
+    plan.seats = seats;
     const pick = this.governor.pick(plan.seats);
     if (!pick.seat) return this.waiting('builder', pick);
     const builder = pick.seat;
@@ -372,14 +462,46 @@ export class Brain {
     );
 
     const cwd = await this.workspace.createTaskTree(task.id);
+    const install = task.grants?.install;
+    if (install && isRunnableInstall(install)) {
+      // You approved this exact command; Conclave runs it, not the agent.
+      const ran = await runShell(install, {
+        cwd,
+        timeoutMs: this.testTimeout,
+        ...(this.signal && { signal: this.signal }),
+      });
+      if (this.interrupted) return this.halt(task);
+      const tail = ran.output.trim().slice(-3000);
+      this.log('agent', `Ran ${install} (approved by you)`, { task, data: { output: tail } });
+      if (ran.code !== 0) {
+        return this.sendBack(project, task, {
+          failure: this.failureOf('crash', `The approved install failed: ${install}`, tail, null),
+          feedback: `The approved install command failed: ${install}\n\n${tail}`,
+        });
+      }
+    }
     const built = await this.agent(
       'builder',
       builder,
-      builderPrompt(project, task),
+      builderPrompt(project, task, {
+        decisions: this.decisions(),
+        decideYourself: this.mustDecide(task),
+        ...(permissions.commands && { allowedCommands: permissions.commands }),
+        network: permissions.network,
+        ...(install && { installed: install }),
+      }),
       cwd,
       false,
       task,
+      permissions,
     );
+    // A network grant is for one attempt only.
+    if (task.grants?.network) {
+      const { network: _used, ...rest } = task.grants;
+      task = this.projects.updateTask(task.id, {
+        grants: Object.keys(rest).length ? rest : null,
+      });
+    }
     if (this.interrupted) return this.halt(task);
     if (built.rateLimited) {
       // Not the task's fault: back to the queue for whoever has headroom.
@@ -411,8 +533,12 @@ export class Brain {
       });
     }
 
+    const asked = parseQuestion(built.text);
+    if (asked) return this.ask(project, task, asked, builder, 'build');
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
     if (!commit) {
+      const prose = parseQuestion(built.text, { allowProse: true });
+      if (prose) return this.ask(project, task, prose, builder, 'build');
       return this.sendBack(project, task, {
         failure: this.failureOf(
           'no_changes',
@@ -485,7 +611,7 @@ export class Brain {
     const result = await this.agent(
       'reviewer',
       reviewer,
-      reviewerPrompt(project, task, diff, tests),
+      reviewerPrompt(project, task, diff, tests, { decisions: this.decisions() }),
       this.workspace.taskPath(task.id),
       true,
       task,
@@ -510,6 +636,10 @@ export class Brain {
 
     const verdict = parseReview(result.text);
     this.projects.updateTask(task.id, { reviewedBy: reviewer.provider });
+    if (verdict && !verdict.approve) {
+      const asked = parseQuestion(result.text);
+      if (asked) return this.ask(project, task, asked, reviewer, 'review');
+    }
     if (!verdict || !verdict.approve) {
       const issues = verdict?.issues.length
         ? verdict.issues.map((i) => `- ${i}`).join('\n')
@@ -554,13 +684,228 @@ export class Brain {
       status: 'merged',
       mergeCommit: merged.commit,
       feedback: null,
+      grants: null,
     });
     await this.workspace.removeTaskTree(task.id);
     this.log('merge', `Merged into ${project.integrationBranch} (${merged.commit.slice(0, 8)})`, {
       task: done,
       data: { commit: merged.commit },
     });
+    await this.adoptProposedTests();
     return { kind: 'merged', task: done };
+  }
+
+  /** A project without tests adopts the planner's proposed command once it passes (C5). */
+  private async adoptProposedTests(): Promise<void> {
+    const project = this.project();
+    const command = project.proposedTestCommand;
+    if (project.testCommand || !command) return;
+    const run = await runShell(command, {
+      cwd: this.workspace.integrationPath,
+      timeoutMs: this.testTimeout,
+      ...(this.signal && { signal: this.signal }),
+    });
+    if (run.code !== 0) {
+      this.log('verify', `The proposed test command doesn't pass yet: ${command}`);
+      return;
+    }
+    this.projects.update(this.projectId, { testCommand: command, proposedTestCommand: null });
+    this.ctx.store.decisions.add({
+      projectId: this.projectId,
+      kind: 'assumption',
+      question: 'Test command',
+      answer: `${command} (adopted once it passed)`,
+      source: 'agent',
+    });
+    this.log('verify', `Adopted the test command: ${command}`);
+  }
+
+  /** Level 5 turns itself off after its time is up. */
+  private expirePermissions(project: Project): Project {
+    const p = project.permissions;
+    if (p.level !== 5 || p.expiresAt === null || p.expiresAt > Date.now()) return project;
+    const next = this.projects.update(this.projectId, {
+      permissions: { ...p, level: 2, expiresAt: null },
+    })!;
+    this.log('stop', 'Full access expired; builders are back to editing files only');
+    return next;
+  }
+
+  private checkCommands(project: Project): string[] {
+    let scripts: Record<string, string> | undefined;
+    try {
+      const pkg = JSON.parse(
+        readFileSync(join(this.workspace.integrationPath, 'package.json'), 'utf8'),
+      ) as { scripts?: Record<string, string> };
+      scripts = pkg.scripts;
+    } catch {
+      // not a Node project
+    }
+    return checkCommands(project.testCommand, scripts);
+  }
+
+  /* ── Questions ─────────────────────────────────────────────────────── */
+
+  /**
+   * An agent stopped to ask. Under the "ask" policy it goes to your inbox and the task waits;
+   * under "decide" or "council" an assumption is recorded and the work goes on. Never counts
+   * as an attempt.
+   */
+  private async ask(
+    project: Project,
+    task: Task | null,
+    question: AgentQuestion,
+    seat: Seat,
+    stage: 'plan' | 'build' | 'review',
+  ): Promise<RoundOutcome> {
+    if (task) await this.workspace.removeTaskTree(task.id);
+    if (task && this.questionCount(task) >= (this.opts.maxQuestionsPerTask ?? 3) * 2) {
+      // It was told to decide and kept asking: that's the task failing, not a question.
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'no_changes',
+          `${seatLabel(seat)} kept asking questions instead of building`,
+          question.question,
+          seat,
+        ),
+        feedback:
+          'Do not ask more questions. Make reasonable choices, note them, and build the task.',
+      });
+    }
+    const payload = { ...question, stage, provider: seat.provider };
+    if (question.permission) {
+      const auto = this.permissionPolicy(project, question);
+      if (auto) return this.settle(task, question, auto.answer, auto.source, seat, auto.grants);
+      return this.file(task, question.permission.kind, payload, seat);
+    }
+    const policy = this.mustDecide(task) ? 'decide' : project.askPolicy;
+    if (policy === 'ask') return this.file(task, 'question', payload, seat);
+    const council = policy === 'council' ? await this.councilAnswer(project, question) : undefined;
+    const answer =
+      council ??
+      question.recommended ??
+      question.options[0] ??
+      'No answer from the user; make the most reasonable choice and note it.';
+    return this.settle(task, question, answer, council ? 'council' : 'agent', seat);
+  }
+
+  /** What the project's switches say about an install or network request, if they settle it. */
+  private permissionPolicy(
+    project: Project,
+    question: AgentQuestion,
+  ): { answer: string; source: 'you'; grants?: Task['grants'] } | undefined {
+    const permission = question.permission!;
+    const alternative = permission.alternative ? ` Do it this way: ${permission.alternative}` : '';
+    if (permission.kind === 'install') {
+      if (project.permissions.installs === 'never') {
+        return {
+          answer: `No: this project doesn't allow installing dependencies.${alternative}`,
+          source: 'you',
+        };
+      }
+      if (project.permissions.installs === 'allow' && isRunnableInstall(permission.command)) {
+        return {
+          answer: `Yes, install with: ${permission.command}`,
+          source: 'you',
+          grants: { install: permission.command! },
+        };
+      }
+      return undefined;
+    }
+    if (project.permissions.network === 'never') {
+      return { answer: `No: this project works offline.${alternative}`, source: 'you' };
+    }
+    if (project.permissions.network === 'allow') {
+      return { answer: 'Yes, for one attempt', source: 'you', grants: { network: true } };
+    }
+    return undefined;
+  }
+
+  /** File the question in your inbox; its task waits, other work goes on. */
+  private file(
+    task: Task | null,
+    kind: 'question' | 'install' | 'network',
+    payload: Record<string, unknown> & { question: string },
+    seat: Seat,
+  ): RoundOutcome {
+    const approval = this.projects.requestApproval({
+      projectId: this.projectId,
+      taskId: task?.id ?? null,
+      kind,
+      summary: payload.question.slice(0, 300),
+      payload,
+    });
+    const blocked = task
+      ? this.projects.updateTask(task.id, { status: 'blocked', blockedBy: approval.id })
+      : null;
+    this.log('question', `${seatLabel(seat)} asks: ${payload.question}`, {
+      ...(blocked && { task: blocked }),
+      provider: seat.provider,
+      data: { approvalId: approval.id, kind },
+    });
+    return { kind: 'asked', task: blocked, approvalId: approval.id, decided: false };
+  }
+
+  /** Record the answer as an assumption (or your standing rule) and requeue the task with it. */
+  private settle(
+    task: Task | null,
+    question: AgentQuestion,
+    answer: string,
+    source: 'agent' | 'council' | 'you',
+    seat: Seat,
+    grants?: Task['grants'],
+  ): RoundOutcome {
+    this.ctx.store.decisions.add({
+      projectId: this.projectId,
+      kind: source === 'you' ? 'decision' : 'assumption',
+      question: question.question,
+      answer,
+      source,
+      provider: seat.provider,
+      taskId: task?.id ?? null,
+    });
+    const requeued = task
+      ? this.projects.updateTask(task.id, {
+          status: 'queued',
+          feedback: `${source === 'you' ? 'Settled by the project settings' : 'Assumption made'}: ${question.question} → ${answer}`,
+          ...(grants && { grants: { ...task.grants, ...grants } }),
+        })
+      : null;
+    this.log(
+      'decision',
+      `${source === 'council' ? 'The council decided' : source === 'you' ? 'Your settings decided' : 'Assumed'}: ${question.question} → ${answer}`,
+      { ...(requeued && { task: requeued }), provider: seat.provider },
+    );
+    return { kind: 'asked', task: requeued, approvalId: null, decided: true };
+  }
+
+  /** A small vote among the reviewers: each picks one option; the majority wins. */
+  private async councilAnswer(
+    project: Project,
+    question: AgentQuestion,
+  ): Promise<string | undefined> {
+    const members = project.routing.reviewer.slice(0, 3);
+    const votes: string[] = [];
+    for (const seat of members) {
+      if (!this.governor.pick([seat]).seat) continue;
+      const result = await this.agent(
+        'reviewer',
+        seat,
+        councilPrompt(project, question, this.decisions()),
+        this.workspace.integrationPath,
+        true,
+      );
+      if (this.interrupted) return undefined;
+      if (!result.ok) continue;
+      const choice = pickChoice(result.text, question.options);
+      if (choice) votes.push(choice);
+    }
+    if (votes.length === 0) return undefined;
+    const tally = new Map<string, number>();
+    for (const v of votes) tally.set(v, (tally.get(v) ?? 0) + 1);
+    const best = Math.max(...tally.values());
+    const winners = [...tally].filter(([, n]) => n === best).map(([v]) => v);
+    return winners.find((w) => w === question.recommended) ?? winners[0];
   }
 
   /**
@@ -648,6 +993,7 @@ export class Brain {
     cwd: string,
     readOnly: boolean,
     task?: Task,
+    permissions?: RunPermissions,
   ): Promise<RunResult> {
     const adapter = this.ctx.adapters.get(seat.provider);
     if (!adapter) throw new Error(`Provider not available: ${seat.provider}`);
@@ -658,6 +1004,7 @@ export class Brain {
         cwd,
         role,
         readOnly,
+        ...(permissions && { permissions }),
         timeoutMs: this.agentTimeout,
         ...(this.signal && { signal: this.signal }),
         ...(seat.model && { model: seat.model }),
@@ -701,6 +1048,33 @@ export class Brain {
     this.governor.observe(seat.provider, result);
     return result;
   }
+}
+
+function councilPrompt(project: Project, question: AgentQuestion, decisions: string): string {
+  const options = question.options.length
+    ? question.options.map((o) => `- ${o}`).join('\n')
+    : '(free answer)';
+  return `An agent on an autonomous coding project needs a product decision and the user isn't available. Choose the best answer.
+
+PROJECT GOAL
+${project.goal}
+${decisions ? `\n${decisions}\n` : ''}
+QUESTION
+${question.question}${question.why ? `\n(Why it matters: ${question.why})` : ''}
+
+OPTIONS
+${options}
+
+Reply with ONLY one JSON object: {"choice": "${question.options.length ? 'one of the options, exactly as written' : 'your answer in one sentence'}", "why": "one sentence"}`;
+}
+
+/** The member's choice, matched to an option when there are options. */
+function pickChoice(text: string, options: string[]): string | undefined {
+  const json = extractJson(text) as { choice?: unknown } | undefined;
+  const choice = typeof json?.choice === 'string' ? json.choice.trim() : '';
+  if (!choice) return undefined;
+  if (options.length === 0) return choice.slice(0, 500);
+  return options.find((o) => o.toLowerCase() === choice.toLowerCase());
 }
 
 function normalizeTitle(title: string): string {

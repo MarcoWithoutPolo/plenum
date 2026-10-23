@@ -7,6 +7,7 @@ import {
   type RetryStrategy,
   type Seat,
   type TaskFailure,
+  type TaskGrants,
   type BrainEvent,
   type BrainEventKind,
   type Project,
@@ -35,6 +36,8 @@ export interface NewProject {
   askPolicy?: AskPolicy;
   permissions?: Permissions;
   designDirection?: string | null;
+  /** Created by the wizard before its clarify step; the brain won't run it yet. */
+  draft?: boolean;
 }
 
 type ProjectPatch = Partial<
@@ -69,6 +72,7 @@ export type TaskPatch = Partial<
     | 'pinnedSeat'
     | 'replacedBy'
     | 'blockedBy'
+    | 'grants'
   >
 >;
 
@@ -94,7 +98,7 @@ export class ProjectStore {
       permissions: input.permissions ?? DEFAULT_PERMISSIONS,
       designDirection: input.designDirection ?? null,
       proposedTestCommand: null,
-      status: 'idle',
+      status: input.draft ? 'draft' : 'idle',
       statusReason: null,
       createdAt: now,
       updatedAt: now,
@@ -209,6 +213,7 @@ export class ProjectStore {
           pinnedSeat: null,
           replacedBy: null,
           blockedBy: null,
+          grants: null,
           createdAt: now,
           updatedAt: now,
         };
@@ -263,7 +268,7 @@ export class ProjectStore {
       .prepare(
         `UPDATE tasks SET status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
            merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
-           replaced_by = ?, blocked_by = ?, updated_at = ? WHERE id = ?`,
+           replaced_by = ?, blocked_by = ?, grants = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.status,
@@ -278,6 +283,7 @@ export class ProjectStore {
         next.pinnedSeat && JSON.stringify(next.pinnedSeat),
         next.replacedBy,
         next.blockedBy,
+        next.grants && JSON.stringify(next.grants),
         next.updatedAt,
         id,
       );
@@ -401,12 +407,27 @@ export class ProjectStore {
     return rows.map(toApproval);
   }
 
-  decide(id: string, status: 'approved' | 'rejected'): Approval | undefined {
+  getApproval(id: string): Approval | undefined {
+    const row = this.db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Row | undefined;
+    return row && toApproval(row);
+  }
+
+  /** Full id or a unique prefix. */
+  findApproval(idOrPrefix: string): Approval | undefined {
+    const exact = this.getApproval(idOrPrefix);
+    if (exact) return exact;
+    const rows = this.db
+      .prepare("SELECT * FROM approvals WHERE id LIKE ? ESCAPE '!' LIMIT 2")
+      .all(`${idOrPrefix.replace(/[!%_]/g, '!$&')}%`) as Row[];
+    return rows.length === 1 ? toApproval(rows[0]!) : undefined;
+  }
+
+  decide(id: string, status: 'approved' | 'rejected', answer?: string): Approval | undefined {
     this.db
       .prepare(
-        "UPDATE approvals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
+        "UPDATE approvals SET status = ?, answer = ?, decided_at = ? WHERE id = ? AND status = 'pending'",
       )
-      .run(status, Date.now(), id);
+      .run(status, answer ?? null, Date.now(), id);
     const row = this.db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Row | undefined;
     return row && toApproval(row);
   }
@@ -459,6 +480,7 @@ function toTask(r: Row): Task {
     pinnedSeat: parse(r.pinned_seat) as Seat | null,
     replacedBy: (r.replaced_by as string | null) ?? null,
     blockedBy: (r.blocked_by as string | null) ?? null,
+    grants: parse(r.grants) as TaskGrants | null,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };

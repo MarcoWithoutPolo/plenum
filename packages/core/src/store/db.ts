@@ -174,6 +174,7 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   ALTER TABLE tasks ADD COLUMN last_failure TEXT;
   ALTER TABLE tasks ADD COLUMN pinned_seat TEXT;
   ALTER TABLE tasks ADD COLUMN free_retries INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE tasks ADD COLUMN grants TEXT;
   ALTER TABLE projects ADD COLUMN ask_policy TEXT NOT NULL DEFAULT 'ask';
   ALTER TABLE projects ADD COLUMN design_direction TEXT;
   ALTER TABLE projects ADD COLUMN proposed_test_command TEXT;

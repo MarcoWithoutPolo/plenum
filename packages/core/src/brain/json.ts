@@ -24,7 +24,11 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 export type PlanReply =
   | { done: true; reason: string }
-  | { done: false; tasks: { title: string; spec: string; replaces?: string }[] };
+  | {
+      done: false;
+      tasks: { title: string; spec: string; replaces?: string }[];
+      testCommand?: string;
+    };
 
 export function parsePlan(text: string, maxTasks: number): PlanReply | undefined {
   const json = extractJson(text);
@@ -42,7 +46,8 @@ export function parsePlan(text: string, maxTasks: number): PlanReply | undefined
     }))
     .filter((t) => t.title && t.spec)
     .slice(0, maxTasks);
-  return { done: false, tasks };
+  const test = typeof json.test_command === 'string' ? json.test_command.trim() : '';
+  return { done: false, tasks, ...(test && { testCommand: test.slice(0, 500) }) };
 }
 
 export interface ReviewReply {

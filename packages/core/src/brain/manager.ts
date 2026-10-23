@@ -11,6 +11,7 @@ import type {
 import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
 import { Brain, type RoundOutcome } from './brain.js';
+import { QUESTION_KINDS, answerQuestion, decidePermission } from './answers.js';
 import { lockHolder } from './lock.js';
 import { retryFailed, retryTask, skipTask, type RetryOptions } from './recovery.js';
 
@@ -27,7 +28,7 @@ export function isProjectRunning(home: string, projectId: string): boolean {
   return lockHolder(join(projectRoot(home, projectId), 'run.lock')) !== undefined;
 }
 
-export type Decision =
+export type ApprovalOutcome =
   { ok: true; approval: Approval; commit?: string } | { ok: false; error: string };
 
 /** Approve or reject an inbox item. Approving a `push` merges the work into the base branch. */
@@ -36,12 +37,24 @@ export async function decideApproval(
   home: string,
   approvalId: string,
   decision: 'approved' | 'rejected',
-): Promise<Decision> {
+  answer?: string,
+): Promise<ApprovalOutcome> {
   const projects = ctx.store.projects;
   const pending = projects.approvals(undefined, 'pending').find((a) => a.id === approvalId);
   if (!pending) return { ok: false, error: 'That request was already decided.' };
   const project = projects.get(pending.projectId);
   if (!project) return { ok: false, error: 'The project no longer exists.' };
+
+  if (QUESTION_KINDS.has(pending.kind)) {
+    // Questions need words; install and network requests are a yes or no (with an optional note).
+    const outcome =
+      pending.kind === 'question'
+        ? decision === 'approved'
+          ? answerQuestion(ctx.store, approvalId, answer ?? '')
+          : { ok: false as const, error: 'Answer the question, or pick one of its options.' }
+        : decidePermission(ctx.store, approvalId, decision === 'approved', answer);
+    return outcome.ok ? { ok: true, approval: outcome.approval } : outcome;
+  }
 
   if (decision === 'rejected') {
     const approval = projects.decide(approvalId, 'rejected')!;
@@ -170,6 +183,27 @@ export class BrainManager {
     }
   }
 
+  /**
+   * Answer a question or decide an install/network request. A project that stopped for you
+   * starts again by itself once nothing else is waiting.
+   */
+  async answer(
+    approvalId: string,
+    decision: 'approved' | 'rejected',
+    answer?: string,
+  ): Promise<ApprovalOutcome> {
+    const pending = this.ctx.store.projects.getApproval(approvalId);
+    const before = pending && this.ctx.store.projects.get(pending.projectId);
+    const outcome = await this.notifyAsync(() =>
+      decideApproval(this.ctx, this.home, approvalId, decision, answer),
+    );
+    if (outcome.ok && before?.status === 'needs_you') {
+      const after = this.ctx.store.projects.get(before.id);
+      if (after?.status === 'idle' && !this.isRunning(before.id)) this.start(before.id);
+    }
+    return outcome;
+  }
+
   /** Requeue a failed or skipped task; resumes a project that paused on failures. */
   retry(taskId: string, opts: RetryOptions = {}): Task {
     const task = this.notify(() =>
@@ -205,17 +239,33 @@ export class BrainManager {
 
   /** Run an action and send the log entries it wrote to the listeners. */
   private notify<T>(action: () => T): T {
+    const mark = this.mark();
+    const result = action();
+    this.flush(mark);
+    return result;
+  }
+
+  private async notifyAsync<T>(action: () => Promise<T>): Promise<T> {
+    const mark = this.mark();
+    const result = await action();
+    this.flush(mark);
+    return result;
+  }
+
+  private mark(): Map<string, number> {
     const before = new Map<string, number>();
     for (const p of this.ctx.store.projects.list()) {
       before.set(p.id, this.ctx.store.projects.events(p.id, { latest: 1 })[0]?.id ?? 0);
     }
-    const result = action();
+    return before;
+  }
+
+  private flush(before: Map<string, number>): void {
     for (const [projectId, afterId] of before) {
       for (const event of this.ctx.store.projects.events(projectId, { afterId })) {
         for (const l of this.listeners) l(event);
       }
     }
-    return result;
   }
 
   async stopAll(reason: string): Promise<void> {

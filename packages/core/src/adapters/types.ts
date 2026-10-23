@@ -1,4 +1,5 @@
 import type { AgentEvent, ProviderId, ProviderStatus, Role } from '@conclave/shared';
+import type { RunPermissions } from './permissions.js';
 
 export interface RunRequest {
   /** The prompt, already including any replayed history the caller wants the model to see. */
@@ -11,6 +12,8 @@ export interface RunRequest {
   role?: Role;
   /** When true the adapter asks its CLI for a no-write, no-shell mode. */
   readOnly?: boolean;
+  /** For writing roles: how much the agent may do. Omitted means level 2 (edit files, offline). */
+  permissions?: RunPermissions;
   /** Resume an earlier CLI session, when the provider supports it. */
   sessionId?: string;
   timeoutMs?: number;
@@ -39,6 +42,11 @@ export interface LoginCommand {
  * each adapter drives the official CLI the user has installed and signed in to.
  */
 export interface Adapter {
+  /**
+   * Can this CLI enforce these permissions? Returns why not, so the team editor can explain
+   * and the brain can skip the seat. Omitted means every level is enforceable.
+   */
+  permissionGap?(permissions: RunPermissions): string | undefined;
   readonly id: ProviderId;
   readonly displayName: string;
   readonly capabilities: Capabilities;

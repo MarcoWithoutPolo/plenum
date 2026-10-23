@@ -124,6 +124,14 @@ export const TaskFailure = z.object({
 });
 export type TaskFailure = z.infer<typeof TaskFailure>;
 
+export const TaskGrants = z.object({
+  /** An install command you approved; Conclave runs it before the next build. */
+  install: z.string().optional(),
+  /** Network for the next build only. */
+  network: z.boolean().optional(),
+});
+export type TaskGrants = z.infer<typeof TaskGrants>;
+
 export const Task = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -145,6 +153,8 @@ export const Task = z.object({
   pinnedSeat: Seat.nullable(),
   replacedBy: z.string().nullable(),
   blockedBy: z.string().nullable(),
+  /** One-time permissions you granted for the next attempt. */
+  grants: TaskGrants.nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -185,6 +195,8 @@ export const BrainEventKind = z.enum([
   'stop',
   'error',
   'approval',
+  'question',
+  'decision',
 ]);
 export type BrainEventKind = z.infer<typeof BrainEventKind>;
 
@@ -219,3 +231,44 @@ export const Approval = z.object({
   decidedAt: z.number().nullable(),
 });
 export type Approval = z.infer<typeof Approval>;
+
+/** What an agent asked when it couldn't go on without you (C4). */
+export const AgentQuestion = z.object({
+  question: z.string(),
+  why: z.string().optional(),
+  options: z.array(z.string()),
+  recommended: z.string().optional(),
+  /** A request to install something or reach the network, instead of a product question. */
+  permission: z
+    .object({
+      kind: z.enum(['install', 'network']),
+      command: z.string().optional(),
+      alternative: z.string().optional(),
+    })
+    .optional(),
+});
+export type AgentQuestion = z.infer<typeof AgentQuestion>;
+
+/** The payload of an inbox item of kind question, install or network. */
+export const QuestionPayload = AgentQuestion.extend({
+  stage: z.enum(['plan', 'build', 'review', 'clarify']),
+  provider: ProviderId.nullable(),
+});
+export type QuestionPayload = z.infer<typeof QuestionPayload>;
+
+/** Something settled for a project; every agent prompt includes the active ones (C3). */
+export const ProjectDecision = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  /** A decision comes from you; an assumption was made without you. */
+  kind: z.enum(['decision', 'assumption']),
+  question: z.string(),
+  answer: z.string(),
+  source: z.enum(['you', 'clarify', 'council', 'agent']),
+  provider: ProviderId.nullable(),
+  taskId: z.string().nullable(),
+  status: z.enum(['active', 'overturned']),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+export type ProjectDecision = z.infer<typeof ProjectDecision>;

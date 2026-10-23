@@ -1,4 +1,5 @@
 export * from './adapters/types.js';
+export * from './adapters/permissions.js';
 export * from './adapters/cli.js';
 export * from './adapters/fake.js';
 export * from './adapters/claude.js';
@@ -13,6 +14,7 @@ export * from './store/db.js';
 export * from './store/store.js';
 export * from './store/projects.js';
 export * from './store/usage.js';
+export * from './store/decisions.js';
 export * from './chat/transcript.js';
 export * from './chat/service.js';
 export * from './council/council.js';
@@ -27,5 +29,8 @@ export * from './brain/lock.js';
 export * from './brain/manager.js';
 export * from './brain/recovery.js';
 export * from './brain/similar.js';
+export * from './brain/questions.js';
+export * from './brain/answers.js';
+export * from './brain/clarify.js';
 
 export const VERSION = '0.0.0';

@@ -3,6 +3,7 @@ import type { Message, MessageKind, ProviderId, Thread, ThreadMode, Usage } from
 import { openDatabase, transaction } from './db.js';
 import { newId } from './ids.js';
 import { ProjectStore } from './projects.js';
+import { DecisionStore } from './decisions.js';
 import { UsageStore } from './usage.js';
 
 export { newId };
@@ -35,11 +36,13 @@ export class Store {
   readonly db: DatabaseSync;
   readonly projects: ProjectStore;
   readonly usage: UsageStore;
+  readonly decisions: DecisionStore;
 
   constructor(db: DatabaseSync | string = openDatabase()) {
     this.db = typeof db === 'string' ? openDatabase(db) : db;
     this.projects = new ProjectStore(this.db);
     this.usage = new UsageStore(this.db);
+    this.decisions = new DecisionStore(this.db);
   }
 
   close(): void {

@@ -37,6 +37,7 @@ export interface CreateProjectInput {
   askPolicy?: AskPolicy;
   permissions?: Permissions;
   designDirection?: string;
+  draft?: boolean;
 }
 
 /** Validate the repo and register a project. The repo's own checkout is left alone. */
@@ -73,5 +74,6 @@ export async function createProject(
     ...(input.askPolicy && { askPolicy: input.askPolicy }),
     ...(input.permissions && { permissions: input.permissions }),
     ...(input.designDirection?.trim() && { designDirection: input.designDirection.trim() }),
+    ...(input.draft && { draft: true }),
   });
 }

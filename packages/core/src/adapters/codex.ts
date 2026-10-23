@@ -142,14 +142,27 @@ export function codexArgs(request: RunRequest): string[] {
   }
   args.push('--json', '--skip-git-repo-check', '--color', 'never');
   // resume inherits the original session's sandbox, so only set it on new sessions.
-  if (!request.sessionId) {
-    args.push('--sandbox', (request.readOnly ?? true) ? 'read-only' : 'workspace-write');
-  }
+  if (!request.sessionId) args.push(...sandboxArgs(request));
   if (request.model) args.push('-m', request.model);
   // A bare value that isn't valid TOML is taken as a literal string by Codex.
   if (request.effort) args.push('-c', `model_reasoning_effort=${request.effort}`);
   args.push('-');
   return args;
+}
+
+/**
+ * Codex runs every command inside its sandbox: read-only for level 1, the worktree only and
+ * no network for levels 2–4 (network when allowed), and no sandbox at level 5.
+ */
+function sandboxArgs(request: RunRequest): string[] {
+  const level = request.permissions?.level ?? 2;
+  if ((request.readOnly ?? true) || level === 1) return ['--sandbox', 'read-only'];
+  if (level === 5) return ['--dangerously-bypass-approvals-and-sandbox'];
+  return [
+    '--sandbox',
+    'workspace-write',
+    ...(request.permissions?.network ? ['-c', 'sandbox_workspace_write.network_access=true'] : []),
+  ];
 }
 
 export class CodexParser implements LineParser {
