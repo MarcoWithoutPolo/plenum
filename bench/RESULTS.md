@@ -78,3 +78,30 @@ Since this run, the brain also checks the planner's size estimates (folds tiny n
 to be split, calibrates against real diff sizes), lets the last task's reviewer confirm the whole goal (one fewer
 planner round), and ranks seats by measured reliability, quota and review speed. The next run includes a large
 multi-module project, where splitting should pay off.
+
+## Ledger: a large multi-module project (2026-10-23, one run each)
+
+Money, a journal, reports, a query language, a file parser and a CLI, scored by 12 hidden tests. Codex was at its spend
+cap the whole time, so Conclave's builds fell back to Claude, and Claude-built work was reviewed by Antigravity.
+
+| Contender                                | Hidden tests | Time     | Tokens | Tasks |
+| ---------------------------------------- | ------------ | -------- | ------ | ----- |
+| Claude alone                             | 12/12        | 3.3 min  | 472k   | n/a   |
+| Codex alone                              | not scored ⚠ | n/a      | n/a    | n/a   |
+| Conclave, 1 lane (estimates, goal check) | 12/12        | 16.5 min | 2.5M   | 3     |
+| Conclave, 2 lanes                        | 12/12        | 19.9 min | 2.8M   | 4     |
+
+What this says:
+
+1. **Quality holds on the large project too:** 12/12 every time. But Claude alone also gets 12/12, in a fifth of the
+   time. On well-specified work of this size, one strong agent is enough.
+2. **Reviews are now the cost.** Antigravity's reviews took several minutes and about 360–470k tokens each (it reads
+   the whole project), over half of Conclave's tokens. The measured ranking that would move a slow reviewer back
+   only kicks in after 5 runs of history; every benchmark run starts with an empty history, so it never kicked in.
+3. **Lanes didn't help here.** With Codex capped, only Claude could build, every review went to Antigravity, and
+   Antigravity's solo benchmark ran at the same time. Lanes can't beat a bottleneck shared by every lane. The runner
+   now saves the brain's timeline per run, so the next run shows where every minute went.
+4. **The goal check works:** one planner call per project instead of two to four.
+
+Next: re-run with Codex back, with the timeline, and with `--runs 3`; give the reviewer a cheaper diff-first review
+(read changed files first, the rest only when needed), and seed the ranking from earlier runs on the same machine.

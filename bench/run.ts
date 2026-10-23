@@ -125,6 +125,8 @@ interface Result {
   limited: boolean;
   usage: Usage[];
   notes: string[];
+  /** Conclave only: the brain's activity, minutes from the start, to see where time went. */
+  timeline?: string[];
 }
 
 function seedRepo(project: string): string {
@@ -275,6 +277,12 @@ async function runConclave(
   const questions = engine.store.projects
     .approvals(projectRow.id)
     .filter((a) => a.kind === 'question').length;
+  const events = engine.store.projects.events(projectRow.id);
+  const t0 = events[0]?.at ?? Date.now();
+  const timeline = events.map(
+    (e) =>
+      `${((e.at - t0) / 60_000).toFixed(1).padStart(5)}  ${e.provider ?? '-'}  ${e.message.slice(0, 160)}`,
+  );
   engine.close();
   // Export what landed on the integration branch.
   const codeDir = mkdtempSync(join(tmpdir(), `bench-${project}-conclave-out-`));
@@ -297,6 +305,7 @@ async function runConclave(
       outputTokens: r.outp ?? 0,
     })),
     notes,
+    timeline,
   };
 }
 
@@ -342,6 +351,7 @@ for (const project of projects) {
         limited: partial.limited ?? false,
         usage: partial.usage ?? [],
         notes: partial.notes ?? [],
+        ...(partial.timeline && { timeline: partial.timeline }),
       };
       results.push(result);
       writeFileSync(
