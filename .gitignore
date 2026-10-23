@@ -17,3 +17,6 @@ Thumbs.db
 test-results/
 playwright-report/
 apps/desktop/e2e/screenshots/
+
+# Benchmark runs (summaries are committed by hand)
+bench/results/

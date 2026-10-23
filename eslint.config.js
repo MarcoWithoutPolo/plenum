@@ -8,6 +8,8 @@ export default tseslint.config(
       '**/node_modules/**',
       'coverage/**',
       'test/fixtures/**',
+      'bench/projects/**',
+      'bench/results/**',
       '**/test-results/**',
     ],
   },
