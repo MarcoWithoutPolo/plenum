@@ -88,6 +88,7 @@ cap the whole time, so Conclave's builds fell back to Claude, and Claude-built w
 | ---------------------------------------- | ------------ | -------- | ------ | ----- |
 | Claude alone                             | 12/12        | 3.3 min  | 472k   | n/a   |
 | Codex alone                              | not scored ⚠ | n/a      | n/a    | n/a   |
+| Antigravity alone                        | 12/12        | 40.1 min | 2.8M   | n/a   |
 | Conclave, 1 lane (estimates, goal check) | 12/12        | 16.5 min | 2.5M   | 3     |
 | Conclave, 2 lanes                        | 12/12        | 19.9 min | 2.8M   | 4     |
 
