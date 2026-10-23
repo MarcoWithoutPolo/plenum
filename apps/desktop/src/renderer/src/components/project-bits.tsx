@@ -24,6 +24,8 @@ import { modelLabel } from './SeatPicker';
 /* ── Project status ──────────────────────────────────────────────────── */
 
 const STATUS: Record<Project['status'], { label: string; tone: string; dot: string }> = {
+  draft: { label: 'Draft', tone: 'bg-sunken text-muted', dot: 'var(--faint)' },
+  needs_you: { label: 'Needs you', tone: 'bg-warn-soft text-warn', dot: 'var(--warn)' },
   running: { label: 'Running', tone: 'bg-ok-soft text-ok', dot: 'var(--ok)' },
   waiting: { label: 'Waiting for usage', tone: 'bg-warn-soft text-warn', dot: 'var(--warn)' },
   paused: { label: 'Paused', tone: 'bg-warn-soft text-warn', dot: 'var(--warn)' },
@@ -138,6 +140,12 @@ export function taskVerb(task: Task): string {
       return 'Merged';
     case 'failed':
       return 'Failed';
+    case 'blocked':
+      return 'Needs you';
+    case 'skipped':
+      return 'Skipped';
+    case 'replaced':
+      return 'Replaced';
     default:
       return task.attempts ? 'Queued for retry' : 'Queued';
   }

@@ -10,8 +10,51 @@ export const Routing = z.object({
 });
 export type Routing = z.infer<typeof Routing>;
 
-export const ProjectStatus = z.enum(['idle', 'running', 'waiting', 'paused', 'done', 'stopped']);
+export const ProjectStatus = z.enum([
+  'draft',
+  'idle',
+  'running',
+  'waiting',
+  'needs_you',
+  'paused',
+  'done',
+  'stopped',
+]);
 export type ProjectStatus = z.infer<typeof ProjectStatus>;
+
+/** What happens after a failed attempt (C6b). */
+export const RetryStrategy = z.enum(['same', 'escalate', 'ask']);
+export type RetryStrategy = z.infer<typeof RetryStrategy>;
+
+/** What agents do when they hit an open question (C4). */
+export const AskPolicy = z.enum(['ask', 'decide', 'council']);
+export type AskPolicy = z.infer<typeof AskPolicy>;
+
+/** How much builders may do (C6c). Planners and reviewers always read only. */
+export const PermissionLevel = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+]);
+export type PermissionLevel = z.infer<typeof PermissionLevel>;
+
+export const Permissions = z.object({
+  level: PermissionLevel,
+  network: z.enum(['never', 'ask', 'allow']),
+  installs: z.enum(['ask', 'allow', 'never']),
+  /** Level 5 turns itself off at this time. */
+  expiresAt: z.number().nullable(),
+});
+export type Permissions = z.infer<typeof Permissions>;
+
+export const DEFAULT_PERMISSIONS: Permissions = {
+  level: 2,
+  network: 'never',
+  installs: 'ask',
+  expiresAt: null,
+};
 
 export const Project = z.object({
   id: z.string(),
@@ -25,8 +68,15 @@ export const Project = z.object({
   baseBranch: z.string(),
   integrationBranch: z.string(),
   routing: Routing,
-  /** How many times a task is retried with feedback before it's marked failed. */
+  /** How many attempts a task gets before it's marked failed. */
   maxAttempts: z.number(),
+  retryStrategy: RetryStrategy,
+  askPolicy: AskPolicy,
+  permissions: Permissions,
+  /** Look and feel the agents follow, from the wizard or a decision. */
+  designDirection: z.string().nullable(),
+  /** A test command the clarify step suggested, waiting for you to accept it. */
+  proposedTestCommand: z.string().nullable(),
   status: ProjectStatus,
   statusReason: z.string().nullable(),
   createdAt: z.number(),
@@ -41,8 +91,38 @@ export const TaskStatus = z.enum([
   'reviewing',
   'merged',
   'failed',
+  /** Waiting on you: a question or an approval (`blockedBy`). */
+  'blocked',
+  /** You skipped it; the planner won't redo it unless asked. */
+  'skipped',
+  /** A later task took over this work (`replacedBy`); hidden from counts. */
+  'replaced',
 ]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
+
+/** What kind of problem stopped an attempt, and so whose problem it is. */
+export const FailureKind = z.enum([
+  'limit',
+  'tests',
+  'review',
+  'no_changes',
+  'conflict',
+  'crash',
+  'question',
+]);
+export type FailureKind = z.infer<typeof FailureKind>;
+
+export const TaskFailure = z.object({
+  kind: FailureKind,
+  /** One plain sentence. */
+  summary: z.string(),
+  /** Raw output: test log, review issues, CLI error. */
+  detail: z.string(),
+  provider: ProviderId.nullable(),
+  model: z.string().nullable(),
+  at: z.number(),
+});
+export type TaskFailure = z.infer<typeof TaskFailure>;
 
 export const Task = z.object({
   id: z.string(),
@@ -58,10 +138,36 @@ export const Task = z.object({
   builtBy: ProviderId.nullable(),
   reviewedBy: ProviderId.nullable(),
   mergeCommit: z.string().nullable(),
+  lastFailure: TaskFailure.nullable(),
+  /** Attempts that didn't count (merge conflicts, a first CLI crash). */
+  freeRetries: z.number(),
+  /** Build this task with exactly this seat instead of the team. */
+  pinnedSeat: Seat.nullable(),
+  replacedBy: z.string().nullable(),
+  blockedBy: z.string().nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
 export type Task = z.infer<typeof Task>;
+
+/** Honest progress: replaced and skipped work leaves the total, failures are counted apart. */
+export function taskProgress(tasks: Task[]): {
+  merged: number;
+  total: number;
+  failed: number;
+  skipped: number;
+  blocked: number;
+} {
+  const count = (s: TaskStatus) => tasks.filter((t) => t.status === s).length;
+  const skipped = count('skipped');
+  return {
+    merged: count('merged'),
+    total: tasks.length - count('replaced') - skipped,
+    failed: count('failed'),
+    skipped,
+    blocked: count('blocked'),
+  };
+}
 
 export const BrainEventKind = z.enum([
   'start',
@@ -103,10 +209,12 @@ export const Approval = z.object({
   id: z.string(),
   projectId: z.string(),
   taskId: z.string().nullable(),
-  kind: z.enum(['push', 'pull_request', 'install', 'network', 'other']),
+  kind: z.enum(['push', 'pull_request', 'install', 'network', 'question', 'other']),
   summary: z.string(),
   payload: z.unknown().nullable(),
   status: ApprovalStatus,
+  /** Your reply to a question. */
+  answer: z.string().nullable(),
   createdAt: z.number(),
   decidedAt: z.number().nullable(),
 });

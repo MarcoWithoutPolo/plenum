@@ -8,6 +8,8 @@ export interface FakeScript {
   rateLimited?: { message: string; resetsAt?: number };
   /** Fail with this error instead of answering. */
   fail?: string;
+  /** Decide per request whether to fail, and with what error. */
+  failWhen?: (request: RunRequest) => string | undefined;
   /** Side effects before replying, like a builder editing files in request.cwd. */
   act?: (request: RunRequest) => void | Promise<void>;
   /** Decide per request whether to hit a usage limit. */
@@ -107,8 +109,9 @@ export class FakeAdapter implements Adapter {
       return;
     }
 
-    if (this.script.fail) {
-      yield { ...ev, at: Date.now(), type: 'error', message: this.script.fail };
+    const failure = this.script.fail ?? this.script.failWhen?.(request);
+    if (failure) {
+      yield { ...ev, at: Date.now(), type: 'error', message: failure };
       yield {
         ...ev,
         at: Date.now(),

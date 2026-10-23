@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { dialog, ipcMain, type BrowserWindow } from 'electron';
-import type { Project } from '@conclave/shared';
+import { taskProgress, type Project } from '@conclave/shared';
 import {
   createProject,
   currentBranch,
@@ -62,7 +62,8 @@ export function registerProjectIpc(
           active: count('building', 'verifying', 'reviewing'),
           merged: count('merged'),
           failed: count('failed'),
-          total: tasks.length,
+          // Replaced and skipped work leaves the total, so failures never inflate it.
+          total: taskProgress(tasks).total,
         },
         pendingApprovals: projects.approvals(project.id, 'pending').length,
         lastEvent: projects.events(project.id, { latest: 1 }).at(-1) ?? null,

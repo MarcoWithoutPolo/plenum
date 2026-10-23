@@ -1,10 +1,18 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Approval, BrainEvent, Project } from '@conclave/shared';
+import type {
+  Approval,
+  BrainEvent,
+  FailureKind,
+  Project,
+  ProviderId,
+  Task,
+} from '@conclave/shared';
 import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
 import { Brain, type RoundOutcome } from './brain.js';
 import { lockHolder } from './lock.js';
+import { retryFailed, retryTask, skipTask, type RetryOptions } from './recovery.js';
 
 export function projectRoot(home: string, projectId: string): string {
   return join(home, 'projects', projectId);
@@ -160,6 +168,54 @@ export class BrainManager {
       run.controller.abort();
       await run.done;
     }
+  }
+
+  /** Requeue a failed or skipped task; resumes a project that paused on failures. */
+  retry(taskId: string, opts: RetryOptions = {}): Task {
+    const task = this.notify(() =>
+      retryTask(this.ctx.store.projects, taskId, opts, this.ctx.adapters),
+    );
+    this.reopen(task.projectId);
+    return task;
+  }
+
+  skip(taskId: string): Task {
+    return this.notify(() => skipTask(this.ctx.store.projects, taskId));
+  }
+
+  retryFailed(
+    projectId: string,
+    filter: { provider?: ProviderId; kind?: FailureKind },
+    opts: RetryOptions = {},
+  ): Task[] {
+    const tasks = this.notify(() =>
+      retryFailed(this.ctx.store.projects, projectId, filter, opts, this.ctx.adapters),
+    );
+    if (tasks.length) this.reopen(projectId);
+    return tasks;
+  }
+
+  /** A finished or failure-paused project becomes startable again once it has new work. */
+  private reopen(projectId: string): void {
+    const project = this.ctx.store.projects.get(projectId);
+    if (project && (project.status === 'done' || project.status === 'paused')) {
+      this.ctx.store.projects.setStatus(projectId, 'idle', 'Ready to resume');
+    }
+  }
+
+  /** Run an action and send the log entries it wrote to the listeners. */
+  private notify<T>(action: () => T): T {
+    const before = new Map<string, number>();
+    for (const p of this.ctx.store.projects.list()) {
+      before.set(p.id, this.ctx.store.projects.events(p.id, { latest: 1 })[0]?.id ?? 0);
+    }
+    const result = action();
+    for (const [projectId, afterId] of before) {
+      for (const event of this.ctx.store.projects.events(projectId, { afterId })) {
+        for (const l of this.listeners) l(event);
+      }
+    }
+    return result;
   }
 
   async stopAll(reason: string): Promise<void> {

@@ -3,11 +3,13 @@ import type {
   AgentEvent,
   BrainEvent,
   BrainEventKind,
+  FailureKind,
   Project,
   ProviderId,
   Role,
   Seat,
   Task,
+  TaskFailure,
 } from '@conclave/shared';
 import { looksLikeLimit } from '../adapters/cli.js';
 import { collect, type RunResult } from '../collect.js';
@@ -19,6 +21,8 @@ import { Workspace } from '../workspace/git.js';
 import { parsePlan, parseReview } from './json.js';
 import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
+import { builderPlan, countsAsAttempt } from './recovery.js';
+import { findReplacement } from './similar.js';
 
 export interface BrainOptions {
   /** Conclave's data folder; worktrees go under <home>/projects/<project id>. */
@@ -228,7 +232,8 @@ export class Brain {
       history: await this.workspace.log(),
       merged: tasks.filter((t) => t.status === 'merged'),
       failed: tasks.filter((t) => t.status === 'failed'),
-      queued: tasks.filter((t) => t.status === 'queued'),
+      skipped: tasks.filter((t) => t.status === 'skipped'),
+      queued: tasks.filter((t) => t.status === 'queued' || t.status === 'blocked'),
       maxTasks: this.maxTasks,
     });
     this.log('plan', `Planning with ${seatLabel(pick.seat)}`, { provider: pick.seat.provider });
@@ -285,11 +290,43 @@ export class Brain {
         provider: pick.seat.provider,
       });
     const added = this.projects.addTasks(this.projectId, fresh);
+    this.linkReplacements(
+      tasks,
+      added,
+      fresh.map((t) => t.replaces),
+      pick.seat.provider,
+    );
     this.log('plan', `Planned ${added.length} task(s)`, {
       provider: pick.seat.provider,
       data: { tasks: added.map((t) => t.title) },
     });
     return { kind: 'planned', tasks: added };
+  }
+
+  /**
+   * One piece of work, one task: a new task that redoes failed work takes its place,
+   * whether the planner said so (`replaces`) or the titles clearly describe the same work.
+   */
+  private linkReplacements(
+    before: Task[],
+    added: Task[],
+    replaces: (string | undefined)[],
+    provider: ProviderId,
+  ): void {
+    const open = new Map(before.filter((t) => t.status === 'failed').map((t) => [t.id, t]));
+    added.forEach((task, i) => {
+      const id = replaces[i];
+      const named = id ? open.get(id) : undefined;
+      const original = named ?? findReplacement(task.title, [...open.values()]);
+      if (!original) return;
+      open.delete(original.id);
+      this.projects.updateTask(original.id, { status: 'replaced', replacedBy: task.id });
+      this.log('plan', `${task.title} takes over from the failed task ${original.title}`, {
+        task,
+        provider,
+        data: { replaced: original.id, how: named ? 'planner' : 'similar title' },
+      });
+    });
   }
 
   private finish(reason: string): void {
@@ -317,17 +354,20 @@ export class Brain {
   /* ── One task: build → test → review → merge ───────────────────────── */
 
   private async work(project: Project, task: Task): Promise<RoundOutcome> {
-    const pick = this.governor.pick(project.routing.builder);
+    const plan = builderPlan(project, task, this.ctx.adapters);
+    const pick = this.governor.pick(plan.seats);
     if (!pick.seat) return this.waiting('builder', pick);
     const builder = pick.seat;
+    const note = plan.note && pick.seat === plan.seats[0] ? ` (${plan.note})` : '';
 
     task = this.projects.updateTask(task.id, { status: 'building', builtBy: builder.provider });
     this.log(
       'task',
-      `${task.attempts ? `Retrying (attempt ${task.attempts + 1})` : 'Building'}: ${task.title} with ${seatLabel(builder)}`,
+      `${task.attempts ? `Attempt ${task.attempts + 1}` : 'Building'}: ${task.title} with ${seatLabel(builder)}${note}`,
       {
         task,
         provider: builder.provider,
+        data: { attempt: task.attempts + 1, seat: builder },
       },
     );
 
@@ -343,7 +383,15 @@ export class Brain {
     if (this.interrupted) return this.halt(task);
     if (built.rateLimited) {
       // Not the task's fault: back to the queue for whoever has headroom.
-      this.projects.updateTask(task.id, { status: 'queued' });
+      this.projects.updateTask(task.id, {
+        status: 'queued',
+        lastFailure: this.failureOf(
+          'limit',
+          `${seatLabel(builder)} hit a usage limit`,
+          failure(built),
+          builder,
+        ),
+      });
       await this.workspace.removeTaskTree(task.id);
       this.log('wait', `${seatLabel(builder)} hit a usage limit; the task goes back in the queue`, {
         task,
@@ -351,15 +399,30 @@ export class Brain {
       });
       return { kind: 'retry', task, reason: 'Builder hit a usage limit' };
     }
-    if (!built.ok) return this.sendBack(project, task, `The builder failed: ${failure(built)}`);
+    if (!built.ok) {
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'crash',
+          `${seatLabel(builder)} stopped with an error`,
+          failure(built),
+          builder,
+        ),
+        feedback: `The builder failed: ${failure(built)}`,
+      });
+    }
 
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
-    if (!commit)
-      return this.sendBack(
-        project,
-        task,
-        'No files were changed. Make the change the task asks for.',
-      );
+    if (!commit) {
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'no_changes',
+          `${seatLabel(builder)} finished without changing any files`,
+          built.text.slice(0, 4000),
+          builder,
+        ),
+        feedback: 'No files were changed. Make the change the task asks for.',
+      });
+    }
     this.log('commit', `Committed ${commit.slice(0, 8)}`, {
       task,
       provider: builder.provider,
@@ -382,11 +445,15 @@ export class Brain {
           task,
           data: { output: tail },
         });
-        return this.sendBack(
-          project,
-          task,
-          `${run.timedOut ? 'The test command timed out' : `The test command failed (exit ${run.code})`}: ${project.testCommand}\n\n${tail}`,
-        );
+        return this.sendBack(project, task, {
+          failure: this.failureOf(
+            'tests',
+            run.timedOut ? 'The tests timed out' : `The tests failed (exit ${run.code})`,
+            tail,
+            builder,
+          ),
+          feedback: `${run.timedOut ? 'The test command timed out' : `The test command failed (exit ${run.code})`}: ${project.testCommand}\n\n${tail}`,
+        });
       }
       tests = `${project.testCommand} passed in ${(run.durationMs / 1000).toFixed(1)}s.\n${tail.slice(-1500)}`;
       this.log('verify', `Tests passed in ${(run.durationMs / 1000).toFixed(1)}s`, { task });
@@ -424,12 +491,21 @@ export class Brain {
       task,
     );
     if (this.interrupted) return this.halt(task);
-    if (result.rateLimited || !result.ok) {
+    if (result.rateLimited) {
       this.projects.updateTask(task.id, { status: 'queued' });
       await this.workspace.removeTaskTree(task.id);
-      return result.rateLimited
-        ? this.waiting('reviewer', this.governor.pick(project.routing.reviewer, avoid))
-        : { kind: 'retry', task, reason: `Reviewer failed: ${failure(result)}` };
+      return this.waiting('reviewer', this.governor.pick(project.routing.reviewer, avoid));
+    }
+    if (!result.ok) {
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'crash',
+          `The reviewer, ${seatLabel(reviewer)}, stopped with an error`,
+          failure(result),
+          reviewer,
+        ),
+        feedback: task.feedback ?? '',
+      });
     }
 
     const verdict = parseReview(result.text);
@@ -443,11 +519,15 @@ export class Brain {
         provider: reviewer.provider,
         data: { issues: verdict?.issues ?? [] },
       });
-      return this.sendBack(
-        project,
-        task,
-        `Review by ${seatLabel(reviewer)} asked for changes:\n${issues}`,
-      );
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'review',
+          `${seatLabel(reviewer)} asked for changes${verdict?.summary ? `: ${verdict.summary}` : ''}`,
+          issues,
+          reviewer,
+        ),
+        feedback: `Review by ${seatLabel(reviewer)} asked for changes:\n${issues}`,
+      });
     }
     this.log('review', `Approved${verdict.summary ? `: ${verdict.summary}` : ''}`, {
       task,
@@ -460,11 +540,15 @@ export class Brain {
         task,
         data: { conflict: merged.conflict },
       });
-      return this.sendBack(
-        project,
-        task,
-        `Merging conflicted with work merged meanwhile. Rebuild the change on the latest code.\n${merged.conflict}`,
-      );
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'conflict',
+          'The change conflicted with work merged meanwhile',
+          merged.conflict,
+          null,
+        ),
+        feedback: `Merging conflicted with work merged meanwhile. Rebuild the change on the latest code.\n${merged.conflict}`,
+      });
     }
     const done = this.projects.updateTask(task.id, {
       status: 'merged',
@@ -479,24 +563,66 @@ export class Brain {
     return { kind: 'merged', task: done };
   }
 
-  /** Record why an attempt didn't make it; requeue with that feedback or give up after maxAttempts. */
-  private async sendBack(project: Project, task: Task, feedback: string): Promise<RoundOutcome> {
-    const attempts = task.attempts + 1;
+  /**
+   * Record why an attempt didn't make it, then requeue with that feedback or give up
+   * after maxAttempts. Some kinds are free: a merge conflict or a first CLI crash.
+   */
+  private async sendBack(
+    project: Project,
+    task: Task,
+    { failure, feedback }: { failure: TaskFailure; feedback: string },
+  ): Promise<RoundOutcome> {
     await this.workspace.removeTaskTree(task.id);
+    const counted = countsAsAttempt(failure.kind, task.freeRetries);
+    const attempts = task.attempts + (counted ? 1 : 0);
+    const freeRetries = task.freeRetries + (counted ? 0 : 1);
+    const data = { kind: failure.kind, counted, feedback: feedback.slice(0, 4000) };
+    const provider = failure.provider ? { provider: failure.provider } : {};
     if (attempts >= project.maxAttempts) {
-      const failed = this.projects.updateTask(task.id, { status: 'failed', attempts, feedback });
-      this.log('fail', `Gave up after ${attempts} attempt(s): ${task.title}`, {
-        task: failed,
-        data: { feedback: feedback.slice(0, 4000) },
+      const failed = this.projects.updateTask(task.id, {
+        status: 'failed',
+        attempts,
+        feedback,
+        lastFailure: failure,
       });
-      return { kind: 'failed', task: failed, reason: firstLine(feedback) };
+      this.log('fail', `Gave up after ${attempts} attempt(s): ${task.title}. ${failure.summary}`, {
+        task: failed,
+        ...provider,
+        data,
+      });
+      return { kind: 'failed', task: failed, reason: failure.summary };
     }
-    const queued = this.projects.updateTask(task.id, { status: 'queued', attempts, feedback });
-    this.log('retry', `Sent back (${attempts}/${project.maxAttempts}): ${firstLine(feedback)}`, {
-      task: queued,
-      data: { feedback: feedback.slice(0, 4000) },
+    const queued = this.projects.updateTask(task.id, {
+      status: 'queued',
+      attempts,
+      freeRetries,
+      feedback,
+      lastFailure: failure,
     });
-    return { kind: 'retry', task: queued, reason: firstLine(feedback) };
+    this.log(
+      'retry',
+      counted
+        ? `Sent back (${attempts}/${project.maxAttempts}): ${failure.summary}`
+        : `Trying again, not counted as an attempt: ${failure.summary}`,
+      { task: queued, ...provider, data },
+    );
+    return { kind: 'retry', task: queued, reason: failure.summary };
+  }
+
+  private failureOf(
+    kind: FailureKind,
+    summary: string,
+    detail: string,
+    seat: Seat | null,
+  ): TaskFailure {
+    return {
+      kind,
+      summary,
+      detail: detail.slice(0, 8000),
+      provider: seat?.provider ?? null,
+      model: seat?.model ?? null,
+      at: Date.now(),
+    };
   }
 
   private waiting(
@@ -586,15 +712,6 @@ function normalizeTitle(title: string): string {
 
 function failure(result: RunResult): string {
   return result.rateLimited?.message ?? result.errors[0] ?? 'no reply';
-}
-
-function firstLine(text: string): string {
-  return (
-    text
-      .split('\n')
-      .find((l) => l.trim())
-      ?.slice(0, 200) ?? text.slice(0, 200)
-  );
 }
 
 function commitMessage(task: Task, builder: Seat): string {

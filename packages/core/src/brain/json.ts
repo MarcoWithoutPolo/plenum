@@ -23,7 +23,8 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 export type PlanReply =
-  { done: true; reason: string } | { done: false; tasks: { title: string; spec: string }[] };
+  | { done: true; reason: string }
+  | { done: false; tasks: { title: string; spec: string; replaces?: string }[] };
 
 export function parsePlan(text: string, maxTasks: number): PlanReply | undefined {
   const json = extractJson(text);
@@ -37,6 +38,7 @@ export function parsePlan(text: string, maxTasks: number): PlanReply | undefined
     .map((t) => ({
       title: typeof t.title === 'string' ? t.title.trim() : '',
       spec: typeof t.spec === 'string' ? t.spec.trim() : '',
+      ...(typeof t.replaces === 'string' && t.replaces.trim() && { replaces: t.replaces.trim() }),
     }))
     .filter((t) => t.title && t.spec)
     .slice(0, maxTasks);

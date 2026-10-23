@@ -233,12 +233,12 @@ export function NewProjectDialog({
         </Field>
 
         <Field
-          label="Retries per task"
-          hint="Failed tests or review comments go back to the builder this many times."
+          label="Attempts per task"
+          hint="How many tries a task gets. Usage limits and merge conflicts don't use one up."
         >
           <div
             role="radiogroup"
-            aria-label="Retries per task"
+            aria-label="Attempts per task"
             className="inline-flex rounded-xl border border-line bg-sunken/60 p-0.5"
           >
             {[1, 2, 3, 4, 5].map((n) => (

@@ -1,14 +1,20 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type {
-  Approval,
-  BrainEvent,
-  BrainEventKind,
-  Project,
-  ProjectStatus,
-  ProviderId,
-  Routing,
-  Task,
-  TaskStatus,
+import {
+  DEFAULT_PERMISSIONS,
+  type Approval,
+  type AskPolicy,
+  type Permissions,
+  type RetryStrategy,
+  type Seat,
+  type TaskFailure,
+  type BrainEvent,
+  type BrainEventKind,
+  type Project,
+  type ProjectStatus,
+  type ProviderId,
+  type Routing,
+  type Task,
+  type TaskStatus,
 } from '@conclave/shared';
 import { transaction } from './db.js';
 import { newId } from './ids.js';
@@ -25,7 +31,46 @@ export interface NewProject {
   integrationBranch?: string;
   routing: Routing;
   maxAttempts?: number;
+  retryStrategy?: RetryStrategy;
+  askPolicy?: AskPolicy;
+  permissions?: Permissions;
+  designDirection?: string | null;
 }
+
+type ProjectPatch = Partial<
+  Pick<
+    Project,
+    | 'goal'
+    | 'doneWhen'
+    | 'testCommand'
+    | 'routing'
+    | 'maxAttempts'
+    | 'name'
+    | 'retryStrategy'
+    | 'askPolicy'
+    | 'permissions'
+    | 'designDirection'
+    | 'proposedTestCommand'
+  >
+>;
+
+export type TaskPatch = Partial<
+  Pick<
+    Task,
+    | 'status'
+    | 'attempts'
+    | 'feedback'
+    | 'builtBy'
+    | 'reviewedBy'
+    | 'mergeCommit'
+    | 'spec'
+    | 'lastFailure'
+    | 'freeRetries'
+    | 'pinnedSeat'
+    | 'replacedBy'
+    | 'blockedBy'
+  >
+>;
 
 /** Projects, their task queue, the brain's event log and the approvals inbox. */
 export class ProjectStore {
@@ -44,6 +89,11 @@ export class ProjectStore {
       integrationBranch: input.integrationBranch ?? 'conclave/integration',
       routing: input.routing,
       maxAttempts: input.maxAttempts ?? 3,
+      retryStrategy: input.retryStrategy ?? 'escalate',
+      askPolicy: input.askPolicy ?? 'ask',
+      permissions: input.permissions ?? DEFAULT_PERMISSIONS,
+      designDirection: input.designDirection ?? null,
+      proposedTestCommand: null,
       status: 'idle',
       statusReason: null,
       createdAt: now,
@@ -52,8 +102,9 @@ export class ProjectStore {
     this.db
       .prepare(
         `INSERT INTO projects (id, name, repo_path, goal, done_when, test_command, base_branch,
-           integration_branch, routing, max_attempts, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           integration_branch, routing, max_attempts, retry_strategy, ask_policy, permissions,
+           design_direction, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         project.id,
@@ -66,6 +117,10 @@ export class ProjectStore {
         project.integrationBranch,
         JSON.stringify(project.routing),
         project.maxAttempts,
+        project.retryStrategy,
+        project.askPolicy,
+        JSON.stringify(project.permissions),
+        project.designDirection,
         project.status,
         now,
         now,
@@ -100,19 +155,15 @@ export class ProjectStore {
       .run(status, reason, Date.now(), id);
   }
 
-  update(
-    id: string,
-    patch: Partial<
-      Pick<Project, 'goal' | 'doneWhen' | 'testCommand' | 'routing' | 'maxAttempts' | 'name'>
-    >,
-  ): Project | undefined {
+  update(id: string, patch: ProjectPatch): Project | undefined {
     const current = this.get(id);
     if (!current) return undefined;
     const next = { ...current, ...patch, updatedAt: Date.now() };
     this.db
       .prepare(
         `UPDATE projects SET name = ?, goal = ?, done_when = ?, test_command = ?, routing = ?,
-           max_attempts = ?, updated_at = ? WHERE id = ?`,
+           max_attempts = ?, retry_strategy = ?, ask_policy = ?, permissions = ?,
+           design_direction = ?, proposed_test_command = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.name,
@@ -121,6 +172,11 @@ export class ProjectStore {
         next.testCommand,
         JSON.stringify(next.routing),
         next.maxAttempts,
+        next.retryStrategy,
+        next.askPolicy,
+        JSON.stringify(next.permissions),
+        next.designDirection,
+        next.proposedTestCommand,
         next.updatedAt,
         id,
       );
@@ -148,6 +204,11 @@ export class ProjectStore {
           builtBy: null,
           reviewedBy: null,
           mergeCommit: null,
+          lastFailure: null,
+          freeRetries: 0,
+          pinnedSeat: null,
+          replacedBy: null,
+          blockedBy: null,
           createdAt: now,
           updatedAt: now,
         };
@@ -167,6 +228,16 @@ export class ProjectStore {
     return row && toTask(row);
   }
 
+  /** Full id or a unique prefix. */
+  findTask(idOrPrefix: string): Task | undefined {
+    const exact = this.getTask(idOrPrefix);
+    if (exact) return exact;
+    const rows = this.db
+      .prepare("SELECT * FROM tasks WHERE id LIKE ? ESCAPE '!' LIMIT 2")
+      .all(`${idOrPrefix.replace(/[!%_]/g, '!$&')}%`) as Row[];
+    return rows.length === 1 ? toTask(rows[0]!) : undefined;
+  }
+
   listTasks(projectId: string): Task[] {
     return (
       this.db
@@ -184,19 +255,15 @@ export class ProjectStore {
     return row && toTask(row);
   }
 
-  updateTask(
-    id: string,
-    patch: Partial<
-      Pick<Task, 'status' | 'attempts' | 'feedback' | 'builtBy' | 'reviewedBy' | 'mergeCommit'>
-    >,
-  ): Task {
+  updateTask(id: string, patch: TaskPatch): Task {
     const current = this.getTask(id);
     if (!current) throw new Error(`No such task: ${id}`);
     const next = { ...current, ...patch, updatedAt: Date.now() };
     this.db
       .prepare(
         `UPDATE tasks SET status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
-           merge_commit = ?, updated_at = ? WHERE id = ?`,
+           merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
+           replaced_by = ?, blocked_by = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.status,
@@ -205,6 +272,12 @@ export class ProjectStore {
         next.builtBy,
         next.reviewedBy,
         next.mergeCommit,
+        next.spec,
+        next.lastFailure && JSON.stringify(next.lastFailure),
+        next.freeRetries,
+        next.pinnedSeat && JSON.stringify(next.pinnedSeat),
+        next.replacedBy,
+        next.blockedBy,
         next.updatedAt,
         id,
       );
@@ -297,6 +370,7 @@ export class ProjectStore {
       summary: input.summary,
       payload: input.payload ?? null,
       status: 'pending',
+      answer: null,
       createdAt: Date.now(),
       decidedAt: null,
     };
@@ -352,6 +426,14 @@ function toProject(r: Row): Project {
     integrationBranch: r.integration_branch as string,
     routing: parse(r.routing) as Routing,
     maxAttempts: r.max_attempts as number,
+    retryStrategy: ((r.retry_strategy as string | null) ?? 'same') as RetryStrategy,
+    askPolicy: ((r.ask_policy as string | null) ?? 'ask') as AskPolicy,
+    permissions: {
+      ...DEFAULT_PERMISSIONS,
+      ...(parse(r.permissions) as Partial<Permissions> | null),
+    },
+    designDirection: (r.design_direction as string | null) ?? null,
+    proposedTestCommand: (r.proposed_test_command as string | null) ?? null,
     status: r.status as ProjectStatus,
     statusReason: (r.status_reason as string | null) ?? null,
     createdAt: r.created_at as number,
@@ -372,6 +454,11 @@ function toTask(r: Row): Task {
     builtBy: (r.built_by as ProviderId | null) ?? null,
     reviewedBy: (r.reviewed_by as ProviderId | null) ?? null,
     mergeCommit: (r.merge_commit as string | null) ?? null,
+    lastFailure: parse(r.last_failure) as TaskFailure | null,
+    freeRetries: (r.free_retries as number | null) ?? 0,
+    pinnedSeat: parse(r.pinned_seat) as Seat | null,
+    replacedBy: (r.replaced_by as string | null) ?? null,
+    blockedBy: (r.blocked_by as string | null) ?? null,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };
@@ -399,6 +486,7 @@ function toApproval(r: Row): Approval {
     summary: r.summary as string,
     payload: parse(r.payload),
     status: r.status as Approval['status'],
+    answer: (r.answer as string | null) ?? null,
     createdAt: r.created_at as number,
     decidedAt: (r.decided_at as number | null) ?? null,
   };

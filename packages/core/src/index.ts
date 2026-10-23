@@ -25,5 +25,7 @@ export * from './brain/brain.js';
 export * from './brain/projects.js';
 export * from './brain/lock.js';
 export * from './brain/manager.js';
+export * from './brain/recovery.js';
+export * from './brain/similar.js';
 
 export const VERSION = '0.0.0';

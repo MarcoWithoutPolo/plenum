@@ -1,5 +1,14 @@
 import type { BrainEvent, Project, Seat, Task } from '@conclave/shared';
-import { Brain, createProject, parseSeat, seatLabel, type Engine } from '@conclave/core';
+import {
+  Brain,
+  createProject,
+  parseSeat,
+  retryTask,
+  seatLabel,
+  skipTask,
+  type Engine,
+} from '@conclave/core';
+import { taskProgress } from '@conclave/shared';
 import { bold, dim, paint, shortId } from './format.js';
 
 export interface ProjectArgs {
@@ -13,6 +22,8 @@ export interface ProjectArgs {
   reviewer?: string;
   attempts?: string;
   rounds?: string;
+  use?: string;
+  effortUp?: boolean;
 }
 
 const USAGE = `Usage:
@@ -21,7 +32,10 @@ const USAGE = `Usage:
   conclave project list
   conclave project status <id>
   conclave project run <id> [--rounds N]     work until the goal is met (Ctrl+C stops)
-  conclave project stop <id>                 stop a running project after its current step`;
+  conclave project stop <id>                 stop a running project after its current step
+  conclave project retry <task> [--use claude:opus@high] [--effort-up]
+                                             requeue a failed or skipped task with fresh attempts
+  conclave project skip <task>               leave a task out of the plan`;
 
 export async function projectCommand(engine: Engine, args: ProjectArgs): Promise<number> {
   switch (args.sub) {
@@ -35,6 +49,10 @@ export async function projectCommand(engine: Engine, args: ProjectArgs): Promise
       return run(engine, args.rest[0], args.rounds);
     case 'stop':
       return stop(engine, args.rest[0]);
+    case 'retry':
+      return retry(engine, args);
+    case 'skip':
+      return skip(engine, args.rest[0]);
     default:
       console.log(USAGE);
       return args.sub ? 1 : 0;
@@ -81,10 +99,8 @@ function list(engine: Engine): number {
     return 0;
   }
   for (const p of projects) {
-    const tasks = engine.store.projects.listTasks(p.id);
-    const merged = tasks.filter((t) => t.status === 'merged').length;
     console.log(
-      `${shortId(p.id)}  ${p.name.padEnd(24).slice(0, 24)}  ${statusText(p).padEnd(22)} ${dim(`${merged}/${tasks.length} tasks merged`)}`,
+      `${shortId(p.id)}  ${p.name.padEnd(24).slice(0, 24)}  ${statusText(p).padEnd(22)} ${dim(progressText(engine.store.projects.listTasks(p.id)))}`,
     );
   }
   return 0;
@@ -110,9 +126,18 @@ function status(engine: Engine, id: string | undefined): number {
   printRouting(project);
 
   const tasks = projects.listTasks(project.id);
-  console.log(`\n${bold('Tasks')}`);
+  console.log(`\n${bold('Tasks')} ${tasks.length ? dim(progressText(tasks)) : ''}`);
   if (!tasks.length) console.log(dim('  none yet — the planner adds them on the first run'));
-  for (const t of tasks) console.log(`  ${taskMark(t)} ${t.title}${dim(taskMeta(t))}`);
+  for (const t of tasks) {
+    if (t.status === 'replaced') continue;
+    console.log(`  ${taskMark(t)} ${t.title}${dim(taskMeta(t))} ${dim(shortId(t.id))}`);
+    if (t.status === 'failed' && t.lastFailure) {
+      console.log(`      ${paint('red', t.lastFailure.summary)}`);
+    }
+    for (const earlier of tasks.filter((e) => e.replacedBy === t.id)) {
+      console.log(dim(`      earlier attempt: ${earlier.title}`));
+    }
+  }
 
   const pending = projects.approvals(project.id, 'pending');
   if (pending.length) {
@@ -177,6 +202,55 @@ async function run(
   }
 }
 
+function findTask(engine: Engine, id: string | undefined) {
+  const task = id ? engine.store.projects.findTask(id) : undefined;
+  if (!task)
+    console.error(id ? `No task found for "${id}". See: conclave project status <id>` : USAGE);
+  return task;
+}
+
+function retry(engine: Engine, args: ProjectArgs): number {
+  const task = findTask(engine, args.rest[0]);
+  if (!task) return 1;
+  const next = retryTask(
+    engine.store.projects,
+    task.id,
+    {
+      ...(args.use && { seat: parseSeat(args.use) }),
+      ...(args.effortUp && { effortUp: true }),
+    },
+    engine.adapters,
+  );
+  const project = engine.store.projects.get(task.projectId)!;
+  if (project.status === 'done' || project.status === 'paused') {
+    engine.store.projects.setStatus(project.id, 'idle', 'Ready to resume');
+  }
+  console.log(
+    `Queued ${bold(next.title)}${next.pinnedSeat ? ` for ${seatLabel(next.pinnedSeat)}` : ''}. Run it with: conclave project run ${shortId(project.id)}`,
+  );
+  return 0;
+}
+
+function skip(engine: Engine, id: string | undefined): number {
+  const task = findTask(engine, id);
+  if (!task) return 1;
+  skipTask(engine.store.projects, task.id);
+  console.log(`Skipped ${bold(task.title)}.`);
+  return 0;
+}
+
+function progressText(tasks: Task[]): string {
+  const p = taskProgress(tasks);
+  return [
+    `${p.merged} of ${p.total} merged`,
+    p.failed && `${p.failed} failed`,
+    p.blocked && `${p.blocked} waiting for you`,
+    p.skipped && `${p.skipped} skipped`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 function stop(engine: Engine, id: string | undefined): number {
   const project = find(engine, id);
   if (!project) return 1;
@@ -197,6 +271,8 @@ function printRouting(project: Project) {
 
 function statusText(p: Project): string {
   const colors = {
+    draft: 'gray',
+    needs_you: 'yellow',
     running: 'green',
     waiting: 'yellow',
     done: 'green',
@@ -218,6 +294,10 @@ function taskMark(t: Task): string {
       return paint('red', '✗');
     case 'queued':
       return dim('○');
+    case 'skipped':
+      return dim('–');
+    case 'blocked':
+      return paint('yellow', '?');
     default:
       return paint('cyan', '◐');
   }
@@ -226,9 +306,10 @@ function taskMark(t: Task): string {
 function taskMeta(t: Task): string {
   const parts: string[] = [];
   if (t.status !== 'merged' && t.status !== 'queued') parts.push(t.status);
+  if (t.pinnedSeat) parts.push(`pinned to ${seatLabel(t.pinnedSeat)}`);
   if (t.builtBy) parts.push(`built by ${t.builtBy}`);
   if (t.reviewedBy) parts.push(`reviewed by ${t.reviewedBy}`);
-  if (t.attempts) parts.push(`${t.attempts} retr${t.attempts === 1 ? 'y' : 'ies'}`);
+  if (t.attempts) parts.push(`${t.attempts} attempt${t.attempts === 1 ? '' : 's'} used`);
   return parts.length ? `  ${parts.join(' · ')}` : '';
 }
 

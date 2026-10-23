@@ -6,6 +6,7 @@ export interface PlanContext {
   history: string;
   merged: Task[];
   failed: Task[];
+  skipped: Task[];
   queued: Task[];
   maxTasks: number;
 }
@@ -33,8 +34,20 @@ ${ctx.history || '(no commits yet)'}
 ALREADY MERGED
 ${list(ctx.merged)}
 
-FAILED (do not repeat as-is; split or approach differently)
-${list(ctx.failed, (t) => (t.feedback ?? 'failed').split('\n')[0]!.slice(0, 160))}
+FAILED (id: title, why). Leave these alone, or take one over with a different approach by adding "replaces": "<its id>" to the new task. Never redo one as-is.
+${
+  ctx.failed.length
+    ? ctx.failed
+        .map(
+          (t) =>
+            `- ${t.id}: ${t.title} (${(t.lastFailure?.summary ?? t.feedback ?? 'failed').split('\n')[0]!.slice(0, 160)})`,
+        )
+        .join('\n')
+    : '- none'
+}
+
+SKIPPED BY THE USER (do not redo)
+${list(ctx.skipped)}
 
 STILL QUEUED
 ${list(ctx.queued)}
@@ -48,7 +61,7 @@ Rules for tasks:
 - Never ask for pushing, deploying, publishing or installing new dependencies.
 
 Reply with ONLY one JSON object and nothing else.
-To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified"}]} with at most ${ctx.maxTasks} tasks.
+To add work: {"done": false, "tasks": [{"title": "short imperative title", "spec": "what to do and how it's verified", "replaces": "id of the failed task this takes over, or omit"}]} with at most ${ctx.maxTasks} tasks.
 If the goal is fully met: {"done": true, "reason": "one sentence on why"}.`;
 }
 

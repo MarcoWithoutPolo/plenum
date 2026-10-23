@@ -1,5 +1,13 @@
 import { basename, resolve } from 'node:path';
-import type { Project, ProviderId, Routing, Seat } from '@conclave/shared';
+import type {
+  AskPolicy,
+  Permissions,
+  Project,
+  ProviderId,
+  RetryStrategy,
+  Routing,
+  Seat,
+} from '@conclave/shared';
 import type { Store } from '../store/store.js';
 import { currentBranch, isRepo, repoRoot } from '../workspace/git.js';
 
@@ -25,6 +33,10 @@ export interface CreateProjectInput {
   testCommand?: string;
   routing?: Partial<Routing>;
   maxAttempts?: number;
+  retryStrategy?: RetryStrategy;
+  askPolicy?: AskPolicy;
+  permissions?: Permissions;
+  designDirection?: string;
 }
 
 /** Validate the repo and register a project. The repo's own checkout is left alone. */
@@ -57,5 +69,9 @@ export async function createProject(
     baseBranch: base,
     routing,
     ...(input.maxAttempts !== undefined && { maxAttempts: input.maxAttempts }),
+    ...(input.retryStrategy && { retryStrategy: input.retryStrategy }),
+    ...(input.askPolicy && { askPolicy: input.askPolicy }),
+    ...(input.permissions && { permissions: input.permissions }),
+    ...(input.designDirection?.trim() && { designDirection: input.designDirection.trim() }),
   });
 }

@@ -98,4 +98,85 @@ describe('Store', () => {
     expect(second.getThread(t.id)?.provider).toBe('claude');
     second.close();
   });
+
+  it('links earlier failed attempts to their newer twins when upgrading to schema 6', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'conclave-db-'));
+    dirs.push(dir);
+    const path = join(dir, 'conclave.db');
+    const store = new Store(path);
+    const p = store.projects.create({
+      name: 'Calc',
+      repoPath: dir,
+      goal: 'g',
+      baseBranch: 'main',
+      routing: { planner: [], builder: [], reviewer: [] },
+    });
+    const [a, b, c] = store.projects.addTasks(p.id, [
+      { title: 'Add particle burst and screen shake on every button press', spec: 'x' },
+      { title: 'Add fx.js hook called on every button activation', spec: 'x' },
+      { title: 'Add keyboard support', spec: 'x' },
+    ]);
+    store.projects.updateTask(a!.id, { status: 'failed' });
+    store.projects.updateTask(b!.id, { status: 'failed' });
+    store.projects.updateTask(c!.id, { status: 'merged' });
+    const [twin] = store.projects.addTasks(p.id, [
+      { title: 'Add particle burst on every press in fx.js', spec: 'x' },
+    ]);
+    // Make the twin clearly newer, then pretend the database is from before schema 6.
+    const db = openDatabase(path);
+    db.prepare('UPDATE tasks SET created_at = created_at + 1000 WHERE id = ?').run(twin!.id);
+    db.exec('PRAGMA user_version = 5');
+    db.close();
+    store.close();
+
+    const reopened = new Store(path);
+    const tasks = reopened.projects.listTasks(p.id);
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    expect(byId.get(a!.id)).toMatchObject({ status: 'replaced', replacedBy: twin!.id });
+    expect(byId.get(b!.id)?.status).toBe('failed');
+    expect(byId.get(c!.id)?.status).toBe('merged');
+    reopened.close();
+  });
+
+  it('stores failure details, pinned seats and project settings', () => {
+    const store = new Store(':memory:');
+    const p = store.projects.create({
+      name: 'x',
+      repoPath: '/x',
+      goal: 'g',
+      baseBranch: 'main',
+      routing: { planner: [], builder: [], reviewer: [] },
+    });
+    expect(p).toMatchObject({
+      retryStrategy: 'escalate',
+      askPolicy: 'ask',
+      permissions: { level: 2, network: 'never', installs: 'ask', expiresAt: null },
+    });
+    const [t] = store.projects.addTasks(p.id, [{ title: 'T', spec: 's' }]);
+    store.projects.updateTask(t!.id, {
+      pinnedSeat: { provider: 'claude', model: 'opus', effort: 'high' },
+      lastFailure: {
+        kind: 'review',
+        summary: 'Changes requested',
+        detail: '- fix it',
+        provider: 'claude',
+        model: 'opus',
+        at: 5,
+      },
+    });
+    expect(store.projects.findTask(t!.id.slice(0, 10))).toMatchObject({
+      pinnedSeat: { provider: 'claude', model: 'opus', effort: 'high' },
+      lastFailure: { kind: 'review', at: 5 },
+      freeRetries: 0,
+      replacedBy: null,
+    });
+    store.projects.update(p.id, {
+      retryStrategy: 'same',
+      permissions: { level: 3, network: 'never', installs: 'never', expiresAt: null },
+    });
+    expect(store.projects.get(p.id)).toMatchObject({
+      retryStrategy: 'same',
+      permissions: { level: 3, installs: 'never' },
+    });
+  });
 });

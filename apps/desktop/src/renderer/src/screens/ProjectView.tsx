@@ -11,7 +11,13 @@ import {
   Square,
   Trash2,
 } from 'lucide-react';
-import type { Approval, BrainEvent, Project, Task } from '@conclave/shared';
+import {
+  taskProgress,
+  type Approval,
+  type BrainEvent,
+  type Project,
+  type Task,
+} from '@conclave/shared';
 import { Dialog } from '@/components/Dialog';
 import { Popover } from '@/components/Popover';
 import { Button, ProviderDot } from '@/components/bits';
@@ -423,7 +429,9 @@ const GROUPS: { title: string; match: (t: Task) => boolean; empty?: string }[] =
   { title: 'In progress', match: (t) => ACTIVE.includes(t.status) },
   { title: 'Up next', match: (t) => t.status === 'queued' },
   { title: 'Merged', match: (t) => t.status === 'merged' },
+  { title: 'Needs you', match: (t) => t.status === 'blocked' },
   { title: 'Failed', match: (t) => t.status === 'failed' },
+  { title: 'Skipped', match: (t) => t.status === 'skipped' },
 ];
 
 function TaskBoard({
@@ -435,7 +443,7 @@ function TaskBoard({
   onOpen: (id: string) => void;
   selected: string | null;
 }) {
-  const merged = tasks.filter((t) => t.status === 'merged').length;
+  const { merged, total } = taskProgress(tasks);
   return (
     <section aria-label="Tasks" className="rounded-2xl border border-line bg-panel shadow-card">
       <header className="flex items-center gap-3 border-b border-line px-4 py-3">
@@ -443,7 +451,7 @@ function TaskBoard({
         {tasks.length > 0 && (
           <>
             <span className="text-[12px] text-faint">
-              {merged} of {tasks.length} merged
+              {merged} of {total} merged
             </span>
             <span
               className="ml-auto flex h-1.5 w-32 overflow-hidden rounded-full bg-sunken"
@@ -451,7 +459,7 @@ function TaskBoard({
             >
               <span
                 className="h-full bg-ok transition-[width] duration-700"
-                style={{ width: `${(merged / tasks.length) * 100}%` }}
+                style={{ width: `${total ? (merged / total) * 100 : 0}%` }}
               />
             </span>
           </>

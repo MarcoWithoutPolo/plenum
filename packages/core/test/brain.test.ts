@@ -13,9 +13,18 @@ import {
   createProject,
   displayCommand,
   displayPath,
+  builderPlan,
+  countsAsAttempt,
+  effortUp,
   parsePlan,
   parseReview,
+  providerProblems,
+  retryFailed,
+  retryTask,
+  sameWork,
+  skipTask,
 } from '../src/index.js';
+import { taskProgress } from '@conclave/shared';
 
 const cleanup: string[] = [];
 afterEach(() => {
@@ -75,6 +84,7 @@ interface Setup {
   claude?: ConstructorParameters<typeof FakeAdapter>[0];
   codex?: ConstructorParameters<typeof FakeAdapter>[0];
   maxAttempts?: number;
+  retryStrategy?: 'same' | 'escalate' | 'ask';
 }
 
 async function setup(opts: Setup = {}) {
@@ -91,6 +101,7 @@ async function setup(opts: Setup = {}) {
   );
   const codex = new FakeAdapter(opts.codex ?? { reply: 'Created sum.js', act: writeSum('a + b') }, {
     id: 'codex',
+    efforts: ['low', 'medium', 'high', 'xhigh'],
   });
   const adapters = adapterMap([claude, codex]);
   const ready = [{ provider: 'claude' as ProviderId }, { provider: 'codex' as ProviderId }];
@@ -99,6 +110,7 @@ async function setup(opts: Setup = {}) {
     goal: 'Ship a working sum function',
     testCommand: 'node check.js',
     ...(opts.maxAttempts && { maxAttempts: opts.maxAttempts }),
+    ...(opts.retryStrategy && { retryStrategy: opts.retryStrategy }),
   });
   const brain = new Brain({ store, adapters, cwd: home }, project.id, { home });
   return { repo, home, store, claude, codex, project, brain };
@@ -357,7 +369,7 @@ describe('Brain', () => {
     const outcome = await brain.round();
     expect(outcome).toMatchObject({
       kind: 'retry',
-      reason: 'No files were changed. Make the change the task asks for.',
+      reason: 'Codex finished without changing any files',
     });
   });
 
@@ -374,6 +386,275 @@ describe('Brain', () => {
     await brain.run({ maxRounds: 10 });
     const integration = join(home, 'projects', project.id, 'integration', 'sum.js');
     expect(readFileSync(integration, 'utf8')).toContain('a + b');
+  });
+});
+
+describe('Failure recovery', () => {
+  it('records what kind of failure stopped an attempt, and whose problem it was', async () => {
+    const { store, brain, project } = await setup({
+      codex: { reply: 'done', act: writeSum('a * b') },
+      maxAttempts: 1,
+    });
+    await brain.round();
+    await brain.round();
+    const [task] = store.projects.listTasks(project.id);
+    expect(task).toMatchObject({ status: 'failed', attempts: 1 });
+    expect(task?.lastFailure).toMatchObject({
+      kind: 'tests',
+      summary: 'The tests failed (exit 1)',
+      provider: 'codex',
+    });
+    expect(task?.lastFailure?.detail).toContain('should be 5, got 6');
+  });
+
+  it('gives a CLI crash one free retry before it counts', async () => {
+    let builds = 0;
+    const { store, brain, project } = await setup({
+      codex: {
+        reply: 'done',
+        act: writeSum('a + b'),
+        failWhen: (req) =>
+          req.role === 'builder' && builds++ === 0 ? 'socket hang up' : undefined,
+      },
+      maxAttempts: 1,
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    const [task] = store.projects.listTasks(project.id);
+    expect(task).toMatchObject({ status: 'merged', attempts: 0, freeRetries: 1 });
+    expect(
+      store.projects
+        .events(project.id)
+        .some((e) => e.message.includes('not counted as an attempt')),
+    ).toBe(true);
+  });
+
+  it('never counts a usage limit, gives conflicts two free rebuilds and crashes one', () => {
+    expect(countsAsAttempt('limit', 0)).toBe(false);
+    expect(countsAsAttempt('limit', 9)).toBe(false);
+    expect(countsAsAttempt('conflict', 0)).toBe(false);
+    expect(countsAsAttempt('conflict', 1)).toBe(false);
+    expect(countsAsAttempt('conflict', 2)).toBe(true);
+    expect(countsAsAttempt('crash', 0)).toBe(false);
+    expect(countsAsAttempt('crash', 1)).toBe(true);
+    expect(countsAsAttempt('tests', 0)).toBe(true);
+    expect(countsAsAttempt('review', 0)).toBe(true);
+    expect(countsAsAttempt('no_changes', 0)).toBe(true);
+  });
+
+  it('raises effort on attempt 2 and switches builder on attempt 3 when escalating', async () => {
+    const { store, brain, project, codex, claude } = await setup({
+      codex: { reply: 'done', act: writeSum('a * b') },
+      claude: {
+        reply: (req) =>
+          req.role === 'planner' ? PLAN : req.role === 'builder' ? 'built' : APPROVE,
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a * b')(req);
+        },
+      },
+      maxAttempts: 3,
+    });
+    expect(store.projects.get(project.id)?.retryStrategy).toBe('escalate');
+    store.projects.update(project.id, {
+      routing: { ...project.routing, builder: [{ provider: 'codex' }, { provider: 'claude' }] },
+    });
+    for (let i = 0; i < 4; i++) await brain.round();
+    const builds = [
+      ...codex.requests.filter((r) => r.role === 'builder').map((r) => `codex@${r.effort ?? '-'}`),
+      ...claude.requests
+        .filter((r) => r.role === 'builder')
+        .map((r) => `claude@${r.effort ?? '-'}`),
+    ];
+    expect(builds).toEqual(['codex@-', 'codex@high', 'claude@high']);
+    const log = store.projects.events(project.id).map((e) => e.message);
+    expect(log.some((m) => m.includes('Attempt 3') && m.includes('switching to Claude'))).toBe(
+      true,
+    );
+  });
+
+  it('keeps the same team with the "same" strategy', () => {
+    const project = {
+      routing: { builder: [{ provider: 'codex' }, { provider: 'claude' }] },
+      retryStrategy: 'same',
+    } as never;
+    const task = { attempts: 2, builtBy: 'codex', pinnedSeat: null } as never;
+    expect(builderPlan(project, task, new Map()).seats.map((s) => s.provider)).toEqual([
+      'codex',
+      'claude',
+    ]);
+  });
+
+  it('steps effort up within what the provider supports', () => {
+    expect(effortUp(undefined, ['low', 'medium', 'high'])).toBe('high');
+    expect(effortUp('high', ['low', 'medium', 'high'])).toBe('high');
+    expect(effortUp('high', undefined)).toBe('xhigh');
+    expect(effortUp('xhigh', undefined, 'xhigh')).toBe('xhigh');
+    expect(effortUp('low', ['low', 'medium'])).toBe('medium');
+  });
+
+  it('retries a failed task with a pinned seat and fresh attempts, for that task only', async () => {
+    let plans = 0;
+    const { store, brain, project, claude } = await setup({
+      codex: {
+        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'done'),
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a * b')(req);
+        },
+      },
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? plans++ === 0
+              ? JSON.stringify({
+                  done: false,
+                  tasks: [
+                    { title: 'Add sum', spec: 'Create sum.js' },
+                    { title: 'Document it', spec: 'Add a README line' },
+                  ],
+                })
+              : DONE
+            : req.role === 'builder'
+              ? 'built'
+              : APPROVE,
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a + b')(req);
+        },
+      },
+      maxAttempts: 1,
+    });
+    await brain.round(); // plan
+    await brain.round(); // Add sum fails on Codex
+    const [first, second] = store.projects.listTasks(project.id);
+    expect(first?.status).toBe('failed');
+
+    const retried = retryTask(store.projects, first!.id, {
+      seat: { provider: 'claude', effort: 'high' },
+    });
+    expect(retried).toMatchObject({
+      status: 'queued',
+      attempts: 0,
+      pinnedSeat: { provider: 'claude' },
+    });
+    await brain.round();
+    expect(store.projects.getTask(first!.id)?.status).toBe('merged');
+    const build = claude.requests.find((r) => r.role === 'builder');
+    expect(build?.effort).toBe('high');
+    expect(store.projects.getTask(second!.id)?.pinnedSeat).toBeNull();
+  });
+
+  it('skips a task so it leaves the progress total', async () => {
+    const { store, brain, project } = await setup({
+      codex: { reply: 'done', act: writeSum('a * b') },
+      maxAttempts: 1,
+    });
+    await brain.round();
+    await brain.round();
+    const [task] = store.projects.listTasks(project.id);
+    expect(taskProgress(store.projects.listTasks(project.id))).toMatchObject({
+      total: 1,
+      failed: 1,
+    });
+    skipTask(store.projects, task!.id);
+    expect(taskProgress(store.projects.listTasks(project.id))).toMatchObject({
+      total: 0,
+      failed: 0,
+      skipped: 1,
+    });
+    expect(() => skipTask(store.projects, task!.id)).toThrow(/Only failed/);
+  });
+
+  it('finds a provider causing repeated failures and retries them all with another AI', async () => {
+    const { store, project } = await setup();
+    const tasks = store.projects.addTasks(project.id, [
+      { title: 'One', spec: 'x' },
+      { title: 'Two', spec: 'x' },
+      { title: 'Three', spec: 'x' },
+    ]);
+    const crash = {
+      kind: 'crash' as const,
+      summary: 'Codex stopped with an error',
+      detail: 'boom',
+      provider: 'codex' as const,
+      model: null,
+      at: 1,
+    };
+    for (const t of tasks.slice(0, 2)) {
+      store.projects.updateTask(t.id, { status: 'failed', attempts: 3, lastFailure: crash });
+    }
+    const problems = providerProblems(store.projects.listTasks(project.id));
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatchObject({ provider: 'codex', kind: 'crash' });
+    expect(problems[0]?.tasks).toHaveLength(2);
+
+    const retried = retryFailed(
+      store.projects,
+      project.id,
+      { provider: 'codex' },
+      { seat: { provider: 'claude' } },
+    );
+    expect(retried.map((t) => [t.title, t.status, t.pinnedSeat?.provider])).toEqual([
+      ['One', 'queued', 'claude'],
+      ['Two', 'queued', 'claude'],
+    ]);
+  });
+});
+
+describe('One piece of work, one task', () => {
+  it('lets the planner take over a failed task by id, so the total does not grow', async () => {
+    let plans = 0;
+    let failedId = '';
+    const { store, brain, project, claude } = await setup({
+      codex: {
+        reply: 'done',
+        act: (req) => writeSum(req.prompt.includes('YOUR TASK: Add sum') ? 'a * b' : 'a + b')(req),
+      },
+      claude: {
+        reply: (req) => {
+          if (req.role !== 'planner') return APPROVE;
+          plans++;
+          if (plans === 1) return PLAN;
+          if (plans === 2) {
+            failedId = /- (k_\w+): Add sum/.exec(req.prompt)?.[1] ?? '';
+            return JSON.stringify({
+              done: false,
+              tasks: [
+                { title: 'Write sum.js from scratch', spec: 'Create sum.js', replaces: failedId },
+              ],
+            });
+          }
+          return DONE;
+        },
+      },
+      maxAttempts: 1,
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(failedId).toMatch(/^k_/);
+    expect(claude.requests.filter((r) => r.role === 'planner')[1]?.prompt).toContain('"replaces"');
+    const tasks = store.projects.listTasks(project.id);
+    expect(tasks.map((t) => [t.title, t.status])).toEqual([
+      ['Add sum', 'replaced'],
+      ['Write sum.js from scratch', 'merged'],
+    ]);
+    expect(tasks[0]?.replacedBy).toBe(tasks[1]?.id);
+    expect(taskProgress(tasks)).toMatchObject({ merged: 1, total: 1, failed: 0 });
+  });
+
+  it('links a re-proposal with a clearly similar title even without "replaces"', () => {
+    expect(
+      sameWork(
+        'Add particle burst and screen shake on every button press',
+        'Add particle burst on every press in fx.js',
+      ),
+    ).toBe(true);
+    expect(
+      sameWork(
+        'Add combo counter with escalating effects and sound-free juice',
+        'Add combo counter with timed decay and escalating tiers',
+      ),
+    ).toBe(true);
+    expect(sameWork('Add tests for parser', 'Add tests for lexer')).toBe(false);
+    expect(
+      sameWork('Add fx.js hook called on every button activation', 'Add keyboard support'),
+    ).toBe(false);
   });
 });
 

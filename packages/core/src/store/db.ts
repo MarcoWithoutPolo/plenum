@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type * as Sqlite from 'node:sqlite';
 import type { DatabaseSync } from 'node:sqlite';
+import { findReplacement } from '../brain/similar.js';
 
 /**
  * Loaded on first use instead of imported: node:sqlite prints an
@@ -24,7 +25,7 @@ export function silenceSqliteWarning(): void {
 }
 
 /** Ordered schema migrations; index + 1 is the schema version. Never edit a shipped entry. */
-const MIGRATIONS = [
+const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   `
   CREATE TABLE threads (
     id          TEXT PRIMARY KEY,
@@ -152,6 +153,35 @@ const MIGRATIONS = [
   );
   CREATE INDEX agent_runs_at ON agent_runs(at);
   `,
+  `
+  CREATE TABLE decisions (
+    id          TEXT PRIMARY KEY,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL CHECK (kind IN ('decision', 'assumption')),
+    question    TEXT NOT NULL,
+    answer      TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    provider    TEXT,
+    task_id     TEXT,
+    status      TEXT NOT NULL DEFAULT 'active',
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL
+  );
+  CREATE INDEX decisions_project ON decisions(project_id, status);
+  ALTER TABLE approvals ADD COLUMN answer TEXT;
+  ALTER TABLE tasks ADD COLUMN blocked_by TEXT;
+  ALTER TABLE tasks ADD COLUMN replaced_by TEXT;
+  ALTER TABLE tasks ADD COLUMN last_failure TEXT;
+  ALTER TABLE tasks ADD COLUMN pinned_seat TEXT;
+  ALTER TABLE tasks ADD COLUMN free_retries INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE projects ADD COLUMN ask_policy TEXT NOT NULL DEFAULT 'ask';
+  ALTER TABLE projects ADD COLUMN design_direction TEXT;
+  ALTER TABLE projects ADD COLUMN proposed_test_command TEXT;
+  ALTER TABLE projects ADD COLUMN permissions TEXT;
+  ALTER TABLE projects ADD COLUMN retry_strategy TEXT NOT NULL DEFAULT 'same';
+  `,
+  // One piece of work, one task: earlier failed attempts at the same work become "replaced".
+  linkReplacedTasks,
 ];
 
 /** Current schema version (number of migrations). */
@@ -174,7 +204,9 @@ function migrate(db: DatabaseSync): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
   for (let v = row.user_version; v < MIGRATIONS.length; v++) {
     transaction(db, () => {
-      db.exec(MIGRATIONS[v]!);
+      const step = MIGRATIONS[v]!;
+      if (typeof step === 'string') db.exec(step);
+      else step(db);
       db.exec(`PRAGMA user_version = ${v + 1}`);
     });
   }
@@ -189,5 +221,29 @@ export function transaction<T>(db: DatabaseSync, fn: () => T): T {
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
+  }
+}
+
+function linkReplacedTasks(db: DatabaseSync): void {
+  const tasks = db
+    .prepare('SELECT id, project_id, title, status, created_at FROM tasks ORDER BY created_at')
+    .all() as {
+    id: string;
+    project_id: string;
+    title: string;
+    status: string;
+    created_at: number;
+  }[];
+  const update = db.prepare("UPDATE tasks SET status = 'replaced', replaced_by = ? WHERE id = ?");
+  for (const failed of tasks.filter((t) => t.status === 'failed')) {
+    const later = tasks.filter(
+      (t) =>
+        t.project_id === failed.project_id &&
+        t.created_at > failed.created_at &&
+        t.status !== 'failed' &&
+        t.status !== 'replaced',
+    );
+    const twin = findReplacement(failed.title, later);
+    if (twin) update.run(twin.id, failed.id);
   }
 }

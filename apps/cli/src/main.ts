@@ -32,6 +32,8 @@ Commands:
   project run <id>       Work on it until the goal is met (Ctrl+C stops after the step)
   project status <id>    Tasks, approvals and recent activity
   project list | stop <id>
+  project retry <task>   Requeue a failed task (--use claude:opus@high, --effort-up)
+  project skip <task>    Leave a task out
 
 Options:
   --json         Machine-readable output (doctor, ask)
@@ -63,6 +65,7 @@ export async function main(argv: string[]): Promise<number> {
       reviewer: { type: 'string' },
       attempts: { type: 'string' },
       rounds: { type: 'string' },
+      'effort-up': { type: 'boolean' },
     },
   });
 
@@ -114,6 +117,8 @@ export async function main(argv: string[]): Promise<number> {
           ...(values.reviewer && { reviewer: values.reviewer }),
           ...(values.attempts && { attempts: values.attempts }),
           ...(values.rounds && { rounds: values.rounds }),
+          ...(values.use && { use: values.use }),
+          ...(values['effort-up'] && { effortUp: true }),
         });
       case 'threads':
         return threadsCommand(engine);
