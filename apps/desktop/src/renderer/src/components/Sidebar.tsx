@@ -92,7 +92,7 @@ export function Sidebar() {
       <div className="flex flex-col gap-0.5 border-t border-line p-2.5">
         <NavButton
           icon={<Inbox className="size-4" />}
-          label="Approvals"
+          label="Inbox"
           active={screen.name === 'approvals'}
           onClick={() => open({ name: 'approvals' })}
           trailing={

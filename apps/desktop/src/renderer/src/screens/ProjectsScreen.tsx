@@ -6,7 +6,7 @@ import { EventIcon, StatusPill, folderName } from '@/components/project-bits';
 import { relative } from '@/components/PlanUsage';
 import { useProjects } from '@/lib/projects';
 import { readyProviders, useApp } from '@/lib/store';
-import { NewProjectDialog } from './NewProjectDialog';
+import { NewProjectWizard } from './NewProjectWizard';
 import { ProjectView } from './ProjectView';
 import { ConnectPrompt } from './ChatScreen';
 
@@ -70,7 +70,7 @@ function ProjectList() {
           )}
         </div>
       </div>
-      <NewProjectDialog open={creating} onClose={close} />
+      <NewProjectWizard open={creating} onClose={close} />
     </div>
   );
 }

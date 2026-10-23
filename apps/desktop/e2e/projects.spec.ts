@@ -11,7 +11,8 @@ import {
   type Page,
 } from '@playwright/test';
 
-// The whole project flow in demo mode: create → run → inspect a task → approve the merge.
+// The whole project flow in demo mode: wizard → clarify → run → answer a question → inspect a
+// task → change a decision → approve the merge.
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots');
 let app: ElectronApplication;
@@ -56,7 +57,13 @@ test.beforeAll(async () => {
 
   app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
-    env: { ...process.env, CONCLAVE_DEMO: '1', CONCLAVE_HOME: home, CONCLAVE_E2E_REPO: repo },
+    env: {
+      ...process.env,
+      CONCLAVE_DEMO: '1',
+      CONCLAVE_DEMO_ASK: '1',
+      CONCLAVE_HOME: home,
+      CONCLAVE_E2E_REPO: repo,
+    },
   });
   page = await app.firstWindow();
   await page.setViewportSize({ width: 1320, height: 860 });
@@ -68,30 +75,57 @@ test.afterAll(async () => {
   rmSync(repo, { recursive: true, force: true });
 });
 
-test('creates a project from a repo, with the test command guessed', async () => {
+test('creates a project in three steps, with the test command guessed', async () => {
   await page.getByRole('button', { name: /^Projects/ }).click();
   await expect(page.getByRole('heading', { name: 'Start your first project' })).toBeVisible();
   await page.getByRole('button', { name: 'New project' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'New project' });
+  // Where: a folder is required.
+  await dialog.getByRole('button', { name: 'Next' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText('Choose a folder and set it up first');
   await dialog.getByRole('button', { name: 'Choose a folder' }).click();
   await expect(dialog.getByLabel('Ready')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+
+  // What: the goal is required; the test command was guessed from package.json.
   await expect(dialog.getByRole('textbox', { name: 'Test command' })).toHaveValue('npm test');
-
-  // Validation: no goal yet.
-  await dialog.getByRole('button', { name: 'Create and start' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(dialog.getByRole('alert')).toHaveText('Describe the goal');
-
   await dialog.getByRole('textbox', { name: 'Goal' }).fill('Add a greet() helper and document it.');
   await expect(dialog.getByText('Plans', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('radiogroup', { name: 'Permission level' })).toBeVisible();
   await page.screenshot({ path: join(shots, '4-new-project.png') });
-  await dialog.getByRole('button', { name: 'Create and start' }).click();
+  await dialog.getByRole('button', { name: 'Next' }).click();
+
+  // Clarify: questions with the recommended answer picked, and a draft plan to edit.
+  await expect(dialog.getByText('What should greet() say?')).toBeVisible({ timeout: 20_000 });
+  await expect(dialog.getByRole('radio', { name: /Hello, <name>!/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await dialog.getByRole('radio', { name: 'The README' }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Task 1 title' })).toHaveValue(
+    'Add a greet() helper',
+  );
+  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(dialog).toBeHidden();
 });
 
-test('runs on its own and asks before merging', async () => {
+test('stops to ask a question, then carries on by itself after the answer', async () => {
   await expect(page.getByRole('heading', { level: 1 })).toContainText(/conclave-e2e-repo/);
-  const banner = page.getByRole('region', { name: 'Ready to merge' });
+  const needsYou = page.getByRole('region', { name: 'Needs you' });
+  await expect(needsYou).toContainText('Which tone should the usage notes use?', {
+    timeout: 30_000,
+  });
+  await expect(page.getByRole('button', { name: /^Inbox/ })).toContainText('1');
+  await needsYou.getByRole('radio', { name: 'Friendly, with examples' }).click();
+  await needsYou.getByRole('button', { name: 'Answer' }).click();
+  await expect(needsYou).toBeHidden();
+});
+
+test('runs on its own and asks before merging', async () => {
+  const banner = page.getByRole('article', { name: /Ready to merge/ });
   await expect(banner).toBeVisible({ timeout: 30_000 });
   await expect(banner).toContainText('Add a greet() helper');
 
@@ -100,6 +134,7 @@ test('runs on its own and asks before merging', async () => {
   const activity = page.getByRole('region', { name: 'Activity' });
   await expect(activity).toContainText('Tests passed');
   await expect(activity).toContainText(/Merged into conclave\/integration/);
+  await expect(activity).toContainText('You answered: Which tone should the usage notes use?');
   await page.screenshot({ path: join(shots, '5-project.png') });
 
   // Nothing reached the user's branch yet.
@@ -121,18 +156,37 @@ test('shows what a task changed', async () => {
   await expect(drawer).toBeHidden();
 });
 
+test('keeps every answer as a decision, and a changed one can queue a task', async () => {
+  await page.getByRole('tab', { name: /Decisions/ }).click();
+  const panel = page.getByRole('region', { name: 'Decisions' });
+  await expect(panel).toContainText('What should greet() say?');
+  await expect(panel).toContainText('The README');
+  await expect(panel).toContainText('Friendly, with examples');
+  await panel.getByRole('button', { name: 'Change: Where should the usage notes live?' }).click();
+  await panel
+    .getByRole('textbox', { name: 'New answer: Where should the usage notes live?' })
+    .fill('A USAGE.md file');
+  await panel.getByRole('button', { name: 'Change', exact: true }).click();
+  await expect(panel).toContainText('Changed earlier · 1');
+  await expect(page.getByRole('region', { name: 'Tasks' })).toContainText(
+    'Apply: Where should the usage notes live?',
+  );
+  await page.getByRole('tab', { name: 'Activity' }).click();
+});
+
 test('approving merges the work into the base branch', async () => {
   await page
-    .getByRole('region', { name: 'Ready to merge' })
+    .getByRole('article', { name: /Ready to merge/ })
     .getByRole('button', { name: 'Approve merge' })
     .click();
   await expect(page.getByRole('alert')).toContainText('Merged');
-  await expect(page.getByRole('region', { name: 'Ready to merge' })).toBeHidden();
+  await expect(page.getByRole('article', { name: /Ready to merge/ })).toBeHidden();
   expect(git('show', 'main:greet.js')).toContain('Hello, ${name}!');
   expect(git('rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
 
-  await page.getByRole('button', { name: /^Approvals/ }).click();
+  await page.getByRole('button', { name: /^Inbox/ }).click();
   await expect(page.getByRole('heading', { name: "You're all caught up" })).toBeVisible();
+  await expect(page.getByText('Answered', { exact: false }).first()).toBeVisible();
   await expect(page.getByText('Merged', { exact: false }).first()).toBeVisible();
 });
 

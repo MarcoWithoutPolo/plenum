@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, nativeTheme, shell } from 'electron';
-import { BrainManager, Engine, silenceSqliteWarning } from '@conclave/core';
-import { demoAdapters } from './demo.js';
+import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
+import { demoAdapters, demoGitHub } from './demo.js';
 import { registerIpc } from './ipc.js';
 import { registerProjectIpc } from './projects-ipc.js';
 
@@ -76,7 +76,7 @@ if (!singleInstance) {
     const brains = new BrainManager(engine, engine.home);
     brains.recoverOrphans();
     registerIpc(engine, () => window);
-    registerProjectIpc(engine, brains, () => window);
+    registerProjectIpc(engine, brains, demo ? demoGitHub() : new GitHub(), () => window);
     window = createWindow();
 
     app.on('activate', () => {

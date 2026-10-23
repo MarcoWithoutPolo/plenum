@@ -47,6 +47,8 @@ test('runs with a locked-down renderer', async () => {
     'approvals',
     'chat',
     'council',
+    'decisions',
+    'github',
     'onInstallLog',
     'openExternal',
     'platform',
@@ -76,7 +78,10 @@ test('accounts show which providers are connected', async () => {
     page.getByRole('region', { name: 'OpenAI Codex' }).getByText('Connected', { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('region', { name: 'Gemini' }).getByText('Not connected', { exact: true }),
+    page.getByRole('region', { name: 'Antigravity' }).getByText('Connected', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'GitHub' }).getByText('Connected', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('never sees or stores your passwords')).toBeVisible();
   await page.screenshot({ path: join(shots, '1-accounts.png') });
@@ -132,7 +137,7 @@ test('council asks every member and shows the merged answer with citations', asy
   await expect(page.getByRole('heading', { name: 'Ask the council' })).toBeVisible();
   await expect(
     page.getByRole('group', { name: 'Council members' }).getByRole('button'),
-  ).toHaveCount(2);
+  ).toHaveCount(3);
 
   const box = page.getByRole('textbox', { name: 'Message' });
   await box.fill('Best way to store small settings?');

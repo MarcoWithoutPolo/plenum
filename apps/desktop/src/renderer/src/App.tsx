@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
 import { AccountsScreen } from '@/screens/AccountsScreen';
-import { ApprovalsScreen } from '@/screens/ApprovalsScreen';
+import { InboxScreen } from '@/screens/InboxScreen';
 import { ChatScreen } from '@/screens/ChatScreen';
 import { CouncilScreen } from '@/screens/CouncilScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
@@ -44,7 +44,7 @@ export function App() {
         ) : screen.name === 'projects' ? (
           <ProjectsScreen projectId={screen.projectId} />
         ) : screen.name === 'approvals' ? (
-          <ApprovalsScreen />
+          <InboxScreen />
         ) : screen.name === 'usage' ? (
           <UsageScreen />
         ) : screen.name === 'council' ? (

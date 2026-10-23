@@ -1,9 +1,12 @@
 import { create } from 'zustand';
-import type { BrainEvent } from '@conclave/shared';
+import type { Approval, BrainEvent, FailureKind, ProviderId } from '@conclave/shared';
+import type { RetryOptions } from '@conclave/core';
 import type {
   ApprovalItem,
+  DecideOptions,
   NewProjectInput,
   ProjectDetail,
+  ProjectSettings,
   ProjectSummary,
   UsageReport,
 } from '../../../shared/api';
@@ -27,8 +30,41 @@ interface ProjectsState {
   stop(id: string): Promise<void>;
   remove(id: string): Promise<void>;
   refreshApprovals(): Promise<void>;
-  decide(approvalId: string, decision: 'approved' | 'rejected'): Promise<boolean>;
+  decide(
+    approvalId: string,
+    decision: 'approved' | 'rejected',
+    opts?: DecideOptions,
+  ): Promise<boolean>;
+  update(id: string, settings: ProjectSettings): Promise<boolean>;
+  retry(projectId: string, taskId: string, opts?: RetryOptions): Promise<boolean>;
+  skip(projectId: string, taskId: string): Promise<boolean>;
+  retryFailed(
+    projectId: string,
+    filter: { provider?: ProviderId; kind?: FailureKind },
+    opts?: RetryOptions,
+  ): Promise<number>;
+  keepDecision(projectId: string, id: string): Promise<void>;
+  changeDecision(projectId: string, id: string, answer: string, addTask: boolean): Promise<void>;
+  addDecision(projectId: string, question: string, answer: string): Promise<void>;
   loadUsage(): Promise<void>;
+}
+
+/** What to say after you act on an inbox item. */
+function decidedText(kind: Approval['kind'] | undefined, decision: string, opts?: DecideOptions) {
+  if (decision === 'rejected') return 'Declined.';
+  switch (kind) {
+    case 'question':
+      return 'Answered. The task is back in the queue.';
+    case 'install':
+    case 'network':
+      return 'Allowed. The task is back in the queue.';
+    case 'create_repo':
+      return 'Published to GitHub.';
+    default:
+      return opts?.via === 'pr'
+        ? 'Pull request opened.'
+        : 'Merged. The work is on your branch now.';
+  }
 }
 
 let subscribed = false;
@@ -56,7 +92,8 @@ export const useProjects = create<ProjectsState>((set, get) => {
       window.setTimeout(() => {
         void get().refresh();
         if (get().details[event.projectId]) void get().load(event.projectId);
-        if (event.kind === 'approval' || event.kind === 'merge') void get().refreshApprovals();
+        if (['approval', 'merge', 'question', 'decision', 'done'].includes(event.kind))
+          void get().refreshApprovals();
       }, 250),
     );
   };
@@ -151,17 +188,19 @@ export const useProjects = create<ProjectsState>((set, get) => {
       }
     },
 
-    async decide(approvalId, decision) {
+    async decide(approvalId, decision, opts) {
+      const kind =
+        get().approvals.find((a) => a.approval.id === approvalId)?.approval.kind ??
+        Object.values(get().details)
+          .flatMap((d) => d.approvals)
+          .find((a) => a.id === approvalId)?.kind;
       try {
-        const result = await api().approvals.decide(approvalId, decision);
+        const result = await api().approvals.decide(approvalId, decision, opts);
         if (!result.ok) {
           toast(result.error ?? 'That did not work.');
           return false;
         }
-        toast(
-          decision === 'approved' ? 'Merged. The work is on your branch now.' : 'Declined.',
-          'info',
-        );
+        toast(decidedText(kind, decision, opts), 'info');
         return true;
       } catch (err) {
         toast(errorText(err));
@@ -173,6 +212,86 @@ export const useProjects = create<ProjectsState>((set, get) => {
           get().refresh(),
           ...(item ? [get().load(item.project.id)] : []),
         ]);
+      }
+    },
+
+    async update(id, settings) {
+      try {
+        await api().projects.update(id, settings);
+        await Promise.all([get().refresh(), get().load(id)]);
+        return true;
+      } catch (err) {
+        toast(errorText(err));
+        return false;
+      }
+    },
+
+    async retry(projectId, taskId, opts) {
+      try {
+        await api().projects.retry(taskId, opts);
+        toast('Back in the queue. Start the project to build it.', 'info');
+        return true;
+      } catch (err) {
+        toast(errorText(err));
+        return false;
+      } finally {
+        await Promise.all([get().refresh(), get().load(projectId)]);
+      }
+    },
+
+    async skip(projectId, taskId) {
+      try {
+        await api().projects.skip(taskId);
+        return true;
+      } catch (err) {
+        toast(errorText(err));
+        return false;
+      } finally {
+        await Promise.all([get().refresh(), get().load(projectId)]);
+      }
+    },
+
+    async retryFailed(projectId, filter, opts) {
+      try {
+        const tasks = await api().projects.retryFailed(projectId, filter, opts);
+        toast(`${tasks.length} task${tasks.length === 1 ? '' : 's'} back in the queue.`, 'info');
+        return tasks.length;
+      } catch (err) {
+        toast(errorText(err));
+        return 0;
+      } finally {
+        await Promise.all([get().refresh(), get().load(projectId)]);
+      }
+    },
+
+    async keepDecision(projectId, id) {
+      try {
+        await api().decisions.keep(id);
+      } catch (err) {
+        toast(errorText(err));
+      } finally {
+        await get().load(projectId);
+      }
+    },
+
+    async changeDecision(projectId, id, answer, addTask) {
+      try {
+        await api().decisions.change(id, answer, addTask);
+        if (addTask) toast('Changed, and a task to apply it is queued.', 'info');
+      } catch (err) {
+        toast(errorText(err));
+      } finally {
+        await Promise.all([get().refresh(), get().load(projectId)]);
+      }
+    },
+
+    async addDecision(projectId, question, answer) {
+      try {
+        await api().decisions.add(projectId, question, answer);
+      } catch (err) {
+        toast(errorText(err));
+      } finally {
+        await get().load(projectId);
       }
     },
 
@@ -189,3 +308,9 @@ export const useProjects = create<ProjectsState>((set, get) => {
 export function pendingApprovalCount(items: ApprovalItem[]): number {
   return items.filter((a) => a.approval.status === 'pending').length;
 }
+
+export const QUESTION_KINDS: ReadonlySet<Approval['kind']> = new Set([
+  'question',
+  'install',
+  'network',
+]);

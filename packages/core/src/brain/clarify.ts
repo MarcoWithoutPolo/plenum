@@ -133,10 +133,12 @@ export async function clarify(
   }
   const parsed = parseClarify(result.text);
   if (!parsed) throw new Error(`${seatLabel(seat)} didn't return questions or a plan. Try again.`);
+  const q = parsed.questions.length;
+  const t = parsed.tasks.length;
   ctx.store.projects.log({
     projectId,
     kind: 'plan',
-    message: `${seatLabel(seat)} looked at the project: ${parsed.questions.length} question(s), ${parsed.tasks.length} draft task(s)`,
+    message: `${seatLabel(seat)} looked at the project: ${q} question${q === 1 ? '' : 's'}, ${t} draft task${t === 1 ? '' : 's'}`,
     provider: seat.provider,
   });
   return { ...parsed, seat };
@@ -169,10 +171,14 @@ export function startDraft(ctx: EngineContext, projectId: string, input: DraftSt
   const test = input.testCommand?.trim();
   if (test && !project.testCommand) projects.update(projectId, { proposedTestCommand: test });
   projects.setStatus(projectId, 'idle', null);
+  const answered = input.answers.filter((a) => a.question.trim() && a.answer.trim()).length;
   projects.log({
     projectId,
     kind: 'plan',
-    message: `Set up with ${input.answers.length} answer(s) and ${tasks.length} task(s)`,
+    message:
+      answered || tasks.length
+        ? `Set up with ${answered} decision${answered === 1 ? '' : 's'} and ${tasks.length} task${tasks.length === 1 ? '' : 's'}`
+        : 'Set up; the planner plans the first tasks',
   });
   return projects.get(projectId)!;
 }

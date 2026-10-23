@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { MessageSquareWarning, RefreshCw, X } from 'lucide-react';
-import type { BrainEvent, Project, Task } from '@conclave/shared';
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, CircleDot, Pin, RefreshCw, RotateCcw, X, XCircle } from 'lucide-react';
+import type { Approval, BrainEvent, Project, Seat, Task } from '@conclave/shared';
 import { DiffView } from '@/components/DiffView';
+import { FailureCard } from '@/components/FailureCard';
 import { Markdown } from '@/components/Markdown';
+import { QuestionCard } from '@/components/QuestionCard';
 import { ProviderDot, Thinking } from '@/components/bits';
 import { ACTIVE, TaskStatusIcon, taskVerb } from '@/components/project-bits';
 import { api } from '@/lib/api';
@@ -13,13 +15,22 @@ export function TaskDrawer({
   task,
   project,
   events,
+  tasks,
+  approvals,
   onClose,
 }: {
   task: Task;
   project: Project;
   events: BrainEvent[];
+  tasks: Task[];
+  approvals: Approval[];
   onClose: () => void;
 }) {
+  const earlier = tasks.filter((t) => t.replacedBy === task.id);
+  const question = task.blockedBy
+    ? approvals.find((a) => a.id === task.blockedBy && a.status === 'pending')
+    : undefined;
+  const history = useMemo(() => attemptHistory(events, task.id), [events, task.id]);
   const [diff, setDiff] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const mine = events.filter((e) => e.taskId === task.id);
@@ -91,6 +102,11 @@ export function TaskDrawer({
                   of {project.maxAttempts}
                 </span>
               )}
+              {task.pinnedSeat && task.status !== 'merged' && (
+                <span className="inline-flex items-center gap-1">
+                  <Pin className="size-3" aria-hidden /> {seatText(task.pinnedSeat)} only
+                </span>
+              )}
               {task.mergeCommit && (
                 <span className="font-mono">{task.mergeCommit.slice(0, 8)}</span>
               )}
@@ -107,25 +123,73 @@ export function TaskDrawer({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {question && (
+            <div className="mb-6">
+              <QuestionCard approval={question} compact />
+            </div>
+          )}
+          {(task.status === 'failed' || (task.lastFailure && task.status === 'queued')) && (
+            <div className="mb-6">
+              <FailureCard task={task} project={project} />
+            </div>
+          )}
           <Section title="What it should do">
             <div className="rounded-xl bg-sunken/60 px-3.5 py-2.5">
               <Markdown text={task.spec} />
             </div>
           </Section>
 
-          {task.feedback && (
-            <Section title={task.status === 'failed' ? 'Why it failed' : 'Sent back because'}>
-              <div className="rounded-xl border border-warn/30 bg-warn-soft/50">
-                <div className="flex items-center gap-2 px-3.5 pt-2.5 text-[12.5px] font-medium text-warn">
-                  <MessageSquareWarning className="size-3.5" aria-hidden />
-                  {task.feedback.split('\n')[0]}
-                </div>
-                {task.feedback.includes('\n') && (
-                  <pre className="selectable max-h-64 overflow-auto px-3.5 pt-1.5 pb-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-muted">
-                    {task.feedback.split('\n').slice(1).join('\n').trim()}
-                  </pre>
-                )}
-              </div>
+          {history.length > 1 && (
+            <Section title="Attempts">
+              <ol className="flex flex-col gap-1">
+                {history.map((h, i) => (
+                  <li key={i} className="flex items-center gap-2.5 text-[12.5px]">
+                    {h.outcome === 'merged' ? (
+                      <CheckCircle2 className="size-3.5 shrink-0 text-ok" aria-hidden />
+                    ) : h.outcome === 'running' ? (
+                      <CircleDot className="size-3.5 shrink-0 text-accent" aria-hidden />
+                    ) : h.counted ? (
+                      <XCircle className="size-3.5 shrink-0 text-danger" aria-hidden />
+                    ) : (
+                      <RotateCcw className="size-3.5 shrink-0 text-faint" aria-hidden />
+                    )}
+                    <span className="w-16 shrink-0 text-faint">Attempt {h.n}</span>
+                    {h.seat && (
+                      <span className="inline-flex shrink-0 items-center gap-1 font-medium">
+                        <ProviderDot provider={h.seat.provider} size={6} />
+                        {seatText(h.seat)}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-muted">
+                      {h.outcome === 'merged'
+                        ? 'merged'
+                        : h.outcome === 'running'
+                          ? 'in progress'
+                          : `${h.summary}${h.counted ? '' : ' (not counted)'}`}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </Section>
+          )}
+
+          {earlier.length > 0 && (
+            <Section title="Earlier attempts at this work">
+              <ul className="flex flex-col gap-1.5">
+                {earlier.map((t) => (
+                  <li key={t.id} className="rounded-xl bg-sunken/60 px-3 py-2 text-[12.5px]">
+                    <span className="font-medium">{t.title}</span>
+                    <span className="block text-faint">
+                      Failed
+                      {t.lastFailure
+                        ? `: ${t.lastFailure.summary}`
+                        : t.feedback
+                          ? `: ${t.feedback.split('\n')[0]}`
+                          : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </Section>
           )}
 
@@ -174,6 +238,61 @@ export function TaskDrawer({
       </aside>
     </div>
   );
+}
+
+function seatText(seat: Seat): string {
+  return [providerName(seat.provider), seat.model, seat.effort && `${seat.effort} effort`]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+interface AttemptRow {
+  n: number;
+  seat?: Seat;
+  outcome: 'merged' | 'failed' | 'running';
+  summary: string;
+  counted: boolean;
+}
+
+/** One row per attempt, from the activity log: who built it and how it ended. */
+function attemptHistory(events: BrainEvent[], taskId: string): AttemptRow[] {
+  const rows: AttemptRow[] = [];
+  for (const e of events) {
+    if (e.taskId !== taskId) continue;
+    const data = (e.data ?? {}) as {
+      attempt?: number;
+      seat?: Seat;
+      kind?: string;
+      counted?: boolean;
+    };
+    if (e.kind === 'task' && data.seat) {
+      rows.push({
+        n: rows.length + 1,
+        seat: data.seat,
+        outcome: 'running',
+        summary: '',
+        counted: true,
+      });
+      continue;
+    }
+    const last = rows.at(-1);
+    if (!last || last.outcome !== 'running') continue;
+    if (e.kind === 'merge' && /^Merged/.test(e.message)) {
+      last.outcome = 'merged';
+    } else if (e.kind === 'retry' || e.kind === 'fail') {
+      last.outcome = 'failed';
+      last.counted = data.counted !== false;
+      last.summary = e.message
+        .replace(/^Sent back \(\d+\/\d+\): /, '')
+        .replace(/^Trying again, not counted as an attempt: /, '')
+        .replace(/^Gave up after \d+ attempt\(s\): [^.]*\. /, '');
+    } else if (e.kind === 'wait' || e.kind === 'question') {
+      last.outcome = 'failed';
+      last.counted = false;
+      last.summary = e.kind === 'wait' ? 'hit a usage limit' : 'asked a question';
+    }
+  }
+  return rows;
 }
 
 function Section({

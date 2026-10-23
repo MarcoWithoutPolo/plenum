@@ -1,9 +1,30 @@
-import type { AgentRun, DailyActivity, ModelOption, ProviderTotals } from '@conclave/core';
+import type {
+  AgentRun,
+  ClarifyResult,
+  DailyActivity,
+  DraftStart,
+  FolderState,
+  GhCheck,
+  GhIssue,
+  GhRepo,
+  GitHubStatus,
+  GitSetup,
+  ModelOption,
+  ProviderTotals,
+  PullRequestStatus,
+  RetryOptions,
+} from '@conclave/core';
 import type {
   AgentEvent,
   Approval,
+  AskPolicy,
   BrainEvent,
+  FailureKind,
+  GitHubLink,
+  Permissions,
   Project,
+  ProjectDecision,
+  RetryStrategy,
   Routing,
   Task,
   Message,
@@ -91,7 +112,20 @@ export interface ProjectDetail {
   tasks: Task[];
   events: BrainEvent[];
   approvals: Approval[];
+  decisions: ProjectDecision[];
+  /** One AI causing repeated failures: drives the "Retry all with…" banner. */
+  problems: ProviderProblem[];
 }
+
+export interface ProviderProblem {
+  provider: ProviderId;
+  kind: FailureKind;
+  summary: string;
+  taskIds: string[];
+}
+
+/** Why each provider can't work at a permission level (absent when it can). */
+export type PermissionGaps = Partial<Record<ProviderId, string>>;
 
 export interface RepoInfo {
   path: string;
@@ -112,6 +146,35 @@ export interface NewProjectInput {
   testCommand?: string;
   routing?: Partial<Routing>;
   maxAttempts?: number;
+  retryStrategy?: RetryStrategy;
+  askPolicy?: AskPolicy;
+  permissions?: Permissions;
+  designDirection?: string;
+  /** Saved as a draft for the clarify step. */
+  draft?: boolean;
+  github?: GitHubLink;
+}
+
+/** What can change on an existing project. Applies from the next step. */
+export interface ProjectSettings {
+  name?: string;
+  goal?: string;
+  doneWhen?: string | null;
+  testCommand?: string | null;
+  designDirection?: string | null;
+  routing?: Routing;
+  maxAttempts?: number;
+  retryStrategy?: RetryStrategy;
+  askPolicy?: AskPolicy;
+  permissions?: Permissions;
+}
+
+export interface DecideOptions {
+  /** A reply to a question, or a note on an install/network request. */
+  answer?: string;
+  /** For a finished project: merge here, or open (or update) a pull request. */
+  via?: 'merge' | 'pr';
+  draft?: boolean;
 }
 
 export interface ApprovalItem {
@@ -176,7 +239,24 @@ export interface ConclaveApi {
     /** Native folder picker; resolves to null when cancelled. */
     pickRepo(): Promise<string | null>;
     inspectRepo(path: string): Promise<RepoInfo>;
+    inspectFolder(path: string): Promise<FolderState>;
+    setUpGit(path: string, confirmLarge?: boolean): Promise<GitSetup>;
+    /** Make a new empty folder under `parent` (default: Documents/Conclave Projects). */
+    createFolder(name: string, parent?: string): Promise<string>;
+    defaultFolder(): Promise<string>;
     create(input: NewProjectInput): Promise<Project>;
+    update(id: string, settings: ProjectSettings): Promise<Project>;
+    /** One read-only planner pass: questions, a draft plan, a test command. */
+    clarify(id: string): Promise<ClarifyResult>;
+    startDraft(id: string, input: DraftStart): Promise<Project>;
+    retry(taskId: string, opts?: RetryOptions): Promise<Task>;
+    skip(taskId: string): Promise<Task>;
+    retryFailed(
+      projectId: string,
+      filter: { provider?: ProviderId; kind?: FailureKind },
+      opts?: RetryOptions,
+    ): Promise<Task[]>;
+    permissionGaps(permissions: Permissions): Promise<PermissionGaps>;
     start(id: string): Promise<void>;
     stop(id: string): Promise<void>;
     remove(id: string): Promise<void>;
@@ -184,9 +264,32 @@ export interface ConclaveApi {
     /** Every brain event, as it happens, for every project. */
     onEvent(listener: (event: BrainEvent) => void): () => void;
   };
+  decisions: {
+    add(projectId: string, question: string, answer: string): Promise<ProjectDecision>;
+    /** Promote an assumption to a decision. */
+    keep(id: string): Promise<ProjectDecision | null>;
+    /** New answer; the old one stays as overturned history. Optionally queue a task to apply it. */
+    change(id: string, answer: string, addTask?: boolean): Promise<ProjectDecision | null>;
+  };
+  /** Questions, permission requests and approvals: the Inbox. */
   approvals: {
     list(): Promise<ApprovalItem[]>;
-    decide(id: string, decision: 'approved' | 'rejected'): Promise<{ ok: boolean; error?: string }>;
+    decide(
+      id: string,
+      decision: 'approved' | 'rejected',
+      opts?: DecideOptions,
+    ): Promise<{ ok: boolean; error?: string; url?: string }>;
+  };
+  github: {
+    status(): Promise<GitHubStatus>;
+    signIn(): Promise<{ opened: boolean; error?: string }>;
+    repos(owner?: string): Promise<GhRepo[]>;
+    /** Clone into the projects folder; resolves to the new folder. */
+    clone(repo: string, parent?: string): Promise<string>;
+    issues(repoPath: string): Promise<GhIssue[]>;
+    prStatus(projectId: string): Promise<PullRequestStatus | null>;
+    fixCheck(projectId: string, check: GhCheck): Promise<Task>;
+    publish(projectId: string, input: { name: string; private: boolean }): Promise<Approval>;
   };
   usage: {
     report(): Promise<UsageReport>;
@@ -222,6 +325,28 @@ export const IPC = {
   projectsRemove: 'projects:remove',
   projectsTaskChanges: 'projects:task-changes',
   projectsEvent: 'projects:event',
+  projectsInspectFolder: 'projects:inspect-folder',
+  projectsSetUpGit: 'projects:set-up-git',
+  projectsCreateFolder: 'projects:create-folder',
+  projectsDefaultFolder: 'projects:default-folder',
+  projectsUpdate: 'projects:update',
+  projectsClarify: 'projects:clarify',
+  projectsStartDraft: 'projects:start-draft',
+  projectsRetry: 'projects:retry',
+  projectsSkip: 'projects:skip',
+  projectsRetryFailed: 'projects:retry-failed',
+  projectsPermissionGaps: 'projects:permission-gaps',
+  decisionsAdd: 'decisions:add',
+  decisionsKeep: 'decisions:keep',
+  decisionsChange: 'decisions:change',
+  githubStatus: 'github:status',
+  githubSignIn: 'github:sign-in',
+  githubRepos: 'github:repos',
+  githubClone: 'github:clone',
+  githubIssues: 'github:issues',
+  githubPrStatus: 'github:pr-status',
+  githubFixCheck: 'github:fix-check',
+  githubPublish: 'github:publish',
   approvalsList: 'approvals:list',
   approvalsDecide: 'approvals:decide',
   usageReport: 'usage:report',

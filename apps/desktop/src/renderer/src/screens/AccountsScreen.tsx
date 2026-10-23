@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, LogIn, RefreshCw, ShieldCheck } from 'lucide-react';
+import type { GitHubStatus } from '@conclave/core';
 import type { ProviderInfo, QuotaInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
 import { useApp } from '@/lib/store';
-import { Badge, Button, ProviderDot } from '@/components/bits';
+import { Badge, Button, GitHubMark, ProviderDot } from '@/components/bits';
 import { PlanUsage } from '@/components/PlanUsage';
 
 export function AccountsScreen() {
@@ -11,10 +12,20 @@ export function AccountsScreen() {
   const quotas = useApp((s) => s.quotas);
   const refresh = useApp((s) => s.refreshProviders);
   const [checking, setChecking] = useState(false);
+  const [github, setGithub] = useState<GitHubStatus | null>(null);
+
+  const checkGithub = () =>
+    api()
+      .github.status()
+      .then(setGithub)
+      .catch(() => setGithub({ installed: false, signedIn: false, detail: 'gh did not start' }));
+  useEffect(() => {
+    void checkGithub();
+  }, []);
 
   const recheck = async () => {
     setChecking(true);
-    await refresh();
+    await Promise.all([refresh(), checkGithub()]);
     setChecking(false);
   };
 
@@ -54,6 +65,13 @@ export function AccountsScreen() {
                 onChanged={recheck}
               />
             ))}
+          </div>
+
+          <h2 className="mt-8 text-[11.5px] font-semibold tracking-wide text-faint uppercase">
+            Code hosting
+          </h2>
+          <div className="mt-2">
+            <GitHubCard status={github} />
           </div>
         </div>
       </div>
@@ -182,6 +200,76 @@ function ProviderCard({
           {log}
         </pre>
       )}
+    </section>
+  );
+}
+
+/** GitHub through the official gh CLI: optional, for cloning, issues and pull requests. */
+function GitHubCard({ status }: { status: GitHubStatus | null }) {
+  const showToast = useApp((s) => s.showToast);
+  const [note, setNote] = useState<string | null>(null);
+  const badge = !status
+    ? { tone: 'neutral' as const, text: 'Checking…' }
+    : status.signedIn
+      ? { tone: 'ok' as const, text: 'Connected' }
+      : status.installed
+        ? { tone: 'warn' as const, text: 'Not connected' }
+        : { tone: 'neutral' as const, text: 'Not installed' };
+  return (
+    <section
+      aria-label="GitHub"
+      className="rounded-2xl border border-line bg-panel p-4 shadow-card"
+    >
+      <div className="flex items-start gap-3.5">
+        <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-sunken">
+          <GitHubMark className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[15px] font-semibold">GitHub</h2>
+            <Badge tone={badge.tone}>{badge.text}</Badge>
+            {status?.version && (
+              <span className="text-[12px] text-faint">gh v{status.version}</span>
+            )}
+          </div>
+          <p className="selectable mt-0.5 text-[13px] text-muted">
+            {status?.signedIn
+              ? `${status.detail}. Clone repositories, start from issues and finish with pull requests.`
+              : status?.installed
+                ? 'Sign in to clone your repositories and open pull requests. Optional.'
+                : 'Optional. Install the GitHub CLI (gh) to clone repositories and open pull requests.'}
+          </p>
+          {status?.signedIn && status.scopes && status.scopes.length > 0 && (
+            <p className="mt-1 text-[12px] text-faint">Scopes: {status.scopes.join(', ')}</p>
+          )}
+          {note && <p className="mt-2 text-[12.5px] text-accent-ink">{note}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {status && !status.installed && (
+            <Button onClick={() => void api().openExternal('https://cli.github.com/')}>
+              <ExternalLink className="size-3.5" /> Get gh
+            </Button>
+          )}
+          {status?.installed && (
+            <Button
+              variant={status.signedIn ? 'secondary' : 'primary'}
+              onClick={async () => {
+                const r = await api().github.signIn();
+                if (r.opened) {
+                  setNote(
+                    'A terminal window opened with the GitHub sign-in. Finish there, then press Check again.',
+                  );
+                } else {
+                  showToast('error', `Couldn't open a terminal: ${r.error ?? 'unknown error'}`);
+                }
+              }}
+            >
+              <LogIn className="size-3.5" />
+              {status.signedIn ? 'Switch account' : 'Sign in'}
+            </Button>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

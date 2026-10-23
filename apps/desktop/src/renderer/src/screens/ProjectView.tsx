@@ -1,26 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronLeft,
+  ExternalLink,
   FlaskConical,
   GitBranch,
-  GitMerge,
   Hourglass,
   MoreHorizontal,
+  Pin,
   Play,
   RotateCcw,
+  Settings2,
+  ShieldAlert,
+  ShieldCheck,
   Square,
   Trash2,
 } from 'lucide-react';
 import {
   taskProgress,
-  type Approval,
   type BrainEvent,
   type Project,
+  type ProjectDecision,
   type Task,
 } from '@conclave/shared';
+import { ApprovalCard } from '@/components/ApprovalCard';
 import { Dialog } from '@/components/Dialog';
 import { Popover } from '@/components/Popover';
-import { Button, ProviderDot } from '@/components/bits';
+import { Button, GitHubMark, ProviderDot } from '@/components/bits';
+import { ASK_POLICIES, LEVEL_NAMES } from '@/components/form';
+import {
+  DecisionsPanel,
+  DraftBanner,
+  NeedsYou,
+  ProblemBanner,
+  ProjectSettingsDialog,
+  PublishDialog,
+  PullRequestCard,
+} from '@/components/project-panels';
 import {
   ACTIVE,
   EventIcon,
@@ -34,7 +49,8 @@ import {
   taskVerb,
 } from '@/components/project-bits';
 import { relative } from '@/components/PlanUsage';
-import { useProjects } from '@/lib/projects';
+import { api } from '@/lib/api';
+import { QUESTION_KINDS, useProjects } from '@/lib/projects';
 import { providerName, useApp } from '@/lib/store';
 import { TaskDrawer } from './TaskDrawer';
 
@@ -53,6 +69,7 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const load = useProjects((s) => s.load);
   const open = useApp((s) => s.open);
   const [selected, setSelected] = useState<string | null>(null);
+  const [settings, setSettings] = useState(false);
 
   useEffect(() => {
     void load(projectId).then((d) => {
@@ -63,8 +80,11 @@ export function ProjectView({ projectId }: { projectId: string }) {
   if (!detail) {
     return <div className="grid flex-1 place-items-center text-muted">Loading…</div>;
   }
-  const { project, tasks, events, approvals, running } = detail;
-  const pending = approvals.find((a) => a.status === 'pending');
+  const { project, tasks, events, approvals, running, decisions, problems } = detail;
+  const pending = approvals.find((a) => a.status === 'pending' && !QUESTION_KINDS.has(a.kind));
+  const questions = approvals
+    .filter((a) => a.status === 'pending' && QUESTION_KINDS.has(a.kind))
+    .sort((a, b) => a.createdAt - b.createdAt);
   const task = selected ? tasks.find((t) => t.id === selected) : undefined;
 
   return (
@@ -80,12 +100,28 @@ export function ProjectView({ projectId }: { projectId: string }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-8 pt-2 pb-16">
-          <Header project={project} running={running} />
-          {pending && <ApprovalBanner approval={pending} project={project} running={running} />}
+          <Header project={project} running={running} onSettings={() => setSettings(true)} />
+          {project.status === 'draft' && <DraftBanner project={project} />}
+          <NeedsYou questions={questions} tasks={tasks} />
+          {pending && (
+            <ApprovalCard approval={pending} project={project} running={running} variant="banner" />
+          )}
+          <ProblemBanner
+            project={project}
+            problems={problems}
+            onChangeTeam={() => setSettings(true)}
+          />
+          <PullRequestCard project={project} />
           <NowStrip project={project} running={running} tasks={tasks} events={events} />
           <div className="mt-6 grid grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)] items-start gap-5">
             <TaskBoard tasks={tasks} onOpen={setSelected} selected={selected} />
-            <Activity events={events} tasks={tasks} onOpenTask={setSelected} />
+            <SidePanel
+              project={project}
+              events={events}
+              tasks={tasks}
+              decisions={decisions}
+              onOpenTask={setSelected}
+            />
           </div>
         </div>
       </div>
@@ -94,24 +130,37 @@ export function ProjectView({ projectId }: { projectId: string }) {
           task={task}
           project={project}
           events={events}
+          tasks={tasks}
+          approvals={approvals}
           onClose={() => setSelected(null)}
         />
       )}
+      <ProjectSettingsDialog project={project} open={settings} onClose={() => setSettings(false)} />
     </div>
   );
 }
 
 /* ── Header ──────────────────────────────────────────────────────────── */
 
-function Header({ project, running }: { project: Project; running: boolean }) {
+function Header({
+  project,
+  running,
+  onSettings,
+}: {
+  project: Project;
+  running: boolean;
+  onSettings: () => void;
+}) {
   const start = useProjects((s) => s.start);
   const stop = useProjects((s) => s.stop);
   const busy = useProjects((s) => s.busy[project.id] ?? false);
   const [expanded, setExpanded] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const startLabel =
     project.status === 'idle' ? 'Start' : project.status === 'done' ? 'Keep improving' : 'Resume';
+  const level = project.permissions.level;
 
   return (
     <section>
@@ -126,7 +175,12 @@ function Header({ project, running }: { project: Project; running: boolean }) {
               <Square className="size-3 fill-current" /> {busy ? 'Stopping…' : 'Stop'}
             </Button>
           ) : (
-            <Button variant="primary" onClick={() => void start(project.id)} disabled={busy}>
+            <Button
+              // Answering resumes a project that stopped for you; this is only a fallback.
+              variant={project.status === 'needs_you' ? 'secondary' : 'primary'}
+              onClick={() => void start(project.id)}
+              disabled={busy || project.status === 'draft'}
+            >
               {project.status === 'done' ? (
                 <RotateCcw className="size-3.5" />
               ) : (
@@ -158,6 +212,42 @@ function Header({ project, running }: { project: Project; running: boolean }) {
                   type="button"
                   onClick={() => {
                     close();
+                    onSettings();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium hover:bg-sunken"
+                >
+                  <Settings2 className="size-3.5" /> Team and settings…
+                </button>
+                {project.github?.prUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close();
+                      void api().openExternal(project.github!.prUrl!);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium hover:bg-sunken"
+                  >
+                    <ExternalLink className="size-3.5" /> Pull request on GitHub
+                  </button>
+                ) : (
+                  !project.github && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        close();
+                        setPublishing(true);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium hover:bg-sunken"
+                    >
+                      <GitHubMark className="size-3.5" /> Publish to GitHub…
+                    </button>
+                  )
+                )}
+                <div className="my-1 h-px bg-line" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
                     setConfirmRemove(true);
                   }}
                   className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-danger hover:bg-danger-soft"
@@ -170,7 +260,7 @@ function Header({ project, running }: { project: Project; running: boolean }) {
         </div>
       </div>
 
-      {project.statusReason && project.status !== 'running' && (
+      {project.statusReason && project.status !== 'running' && project.status !== 'needs_you' && (
         <p className="mt-1 text-[12.5px] text-muted">
           <span className="font-medium text-ink">
             {project.status === 'done'
@@ -213,12 +303,50 @@ function Header({ project, running }: { project: Project; running: boolean }) {
           </dd>
           <dt className="text-faint">Tests</dt>
           <dd className="font-mono text-[12px]">
-            {project.testCommand ?? <span className="font-sans text-faint">review only</span>}
+            {project.testCommand ??
+              (project.proposedTestCommand ? (
+                <span title="Adopted once it passes">
+                  {project.proposedTestCommand}{' '}
+                  <span className="font-sans text-faint">(proposed)</span>
+                </span>
+              ) : (
+                <span className="font-sans text-faint">review only</span>
+              ))}
           </dd>
-          <dt className="text-faint">Retries</dt>
-          <dd>{project.maxAttempts} per task</dd>
+          <dt className="text-faint">Attempts</dt>
+          <dd>
+            {project.maxAttempts} per task
+            <span className="text-faint">
+              {' '}
+              · {project.retryStrategy === 'escalate' ? 'escalating' : 'same team'}
+            </span>
+          </dd>
+          <dt className="text-faint">Permissions</dt>
+          <dd
+            className={`inline-flex items-center gap-1 ${level === 5 ? 'font-medium text-danger' : ''}`}
+          >
+            {level === 5 ? (
+              <ShieldAlert className="size-3" aria-hidden />
+            ) : (
+              <ShieldCheck className="size-3 text-ok" aria-hidden />
+            )}
+            {level} · {LEVEL_NAMES[level]}
+            {level === 5 && project.permissions.expiresAt && (
+              <span className="font-normal text-faint">
+                {' '}
+                until{' '}
+                {new Date(project.permissions.expiresAt).toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
+          </dd>
+          <dt className="text-faint">Questions</dt>
+          <dd>{ASK_POLICIES.find((p) => p.value === project.askPolicy)?.label}</dd>
         </dl>
       </div>
+      <PublishDialog project={project} open={publishing} onClose={() => setPublishing(false)} />
 
       <RemoveDialog
         project={project}
@@ -273,66 +401,6 @@ function RemoveDialog({
   );
 }
 
-/* ── Approval banner ─────────────────────────────────────────────────── */
-
-export function ApprovalBanner({
-  approval,
-  project,
-  running,
-}: {
-  approval: Approval;
-  project: Project;
-  running: boolean;
-}) {
-  const decide = useProjects((s) => s.decide);
-  const [busy, setBusy] = useState<'approved' | 'rejected' | null>(null);
-  const tasks = ((approval.payload as { tasks?: string[] } | null)?.tasks ?? []).slice(0, 6);
-  const act = async (d: 'approved' | 'rejected') => {
-    setBusy(d);
-    await decide(approval.id, d);
-    setBusy(null);
-  };
-  return (
-    <section
-      aria-label="Ready to merge"
-      className="mt-5 flex items-start gap-4 rounded-2xl border border-accent/35 bg-accent-soft/60 px-5 py-4"
-    >
-      <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-white">
-        <GitMerge className="size-4.5" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="text-[14.5px] font-semibold">Ready to merge into {project.baseBranch}</h2>
-        <p className="mt-0.5 text-[13px] text-muted">
-          {tasks.length} task{tasks.length === 1 ? '' : 's'} passed tests and review on{' '}
-          {project.integrationBranch}.
-          {running ? ' Stop the project to merge.' : ' Approving merges it into your branch now.'}
-        </p>
-        {tasks.length > 0 && (
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {tasks.map((t) => (
-              <li key={t} className="rounded-full bg-panel px-2.5 py-0.5 text-[12px] text-muted">
-                {t}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <Button onClick={() => void act('rejected')} disabled={busy !== null}>
-          {busy === 'rejected' ? 'Declining…' : 'Not now'}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => void act('approved')}
-          disabled={busy !== null || running}
-        >
-          <GitMerge className="size-3.5" /> {busy === 'approved' ? 'Merging…' : 'Approve merge'}
-        </Button>
-      </div>
-    </section>
-  );
-}
-
 /* ── What's happening now ────────────────────────────────────────────── */
 
 function NowStrip({
@@ -354,7 +422,10 @@ function NowStrip({
   let icon: React.ReactNode = null;
   let since: number | undefined;
 
-  if (project.status === 'waiting') {
+  if (project.status === 'needs_you' && !running) {
+    // The Needs you cards above say it all.
+    return null;
+  } else if (project.status === 'waiting') {
     icon = <Hourglass className="size-4 text-warn" aria-hidden />;
     const until = (last?.data as { until?: number | null } | null)?.until;
     line = (
@@ -533,9 +604,15 @@ function TaskRow({
               reviewed
             </span>
           )}
-          {task.attempts > 0 && task.status !== 'failed' && (
-            <span className="text-warn">
-              · {task.attempts} retr{task.attempts === 1 ? 'y' : 'ies'}
+          {task.attempts > 0 && task.status !== 'failed' && task.status !== 'merged' && (
+            <span className="text-warn">· attempt {task.attempts + 1}</span>
+          )}
+          {task.status === 'failed' && task.lastFailure && (
+            <span className="truncate text-danger">· {task.lastFailure.summary}</span>
+          )}
+          {task.pinnedSeat && task.status !== 'merged' && (
+            <span className="inline-flex items-center gap-1">
+              · <Pin className="size-3" aria-hidden /> {providerName(task.pinnedSeat.provider)}
             </span>
           )}
         </span>
@@ -544,18 +621,88 @@ function TaskRow({
   );
 }
 
-/* ── Activity ────────────────────────────────────────────────────────── */
+/* ── Activity and decisions ──────────────────────────────────────────── */
+
+function SidePanel({
+  project,
+  events,
+  tasks,
+  decisions,
+  onOpenTask,
+}: {
+  project: Project;
+  events: BrainEvent[];
+  tasks: Task[];
+  decisions: ProjectDecision[];
+  onOpenTask: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<'activity' | 'decisions'>('activity');
+  const [steps, setSteps] = useState(false);
+  const active = decisions.filter((d) => d.status === 'active').length;
+  const tabClass = (on: boolean) =>
+    `relative h-10 text-[13.5px] font-semibold transition ${on ? 'text-ink after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-accent' : 'text-faint hover:text-muted'}`;
+  return (
+    <section
+      aria-label={tab === 'activity' ? 'Activity' : 'Decisions'}
+      className="sticky top-4 flex max-h-[calc(100vh-140px)] flex-col rounded-2xl border border-line bg-panel shadow-card"
+    >
+      <header className="flex items-center gap-4 border-b border-line px-4">
+        <div role="tablist" aria-label="Project panels" className="flex gap-4">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'activity'}
+            onClick={() => setTab('activity')}
+            className={tabClass(tab === 'activity')}
+          >
+            Activity
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'decisions'}
+            onClick={() => setTab('decisions')}
+            className={tabClass(tab === 'decisions')}
+          >
+            Decisions
+            {active > 0 && <span className="ml-1 font-normal text-faint">{active}</span>}
+          </button>
+        </div>
+        {tab === 'activity' && (
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-muted select-none">
+            <input
+              type="checkbox"
+              checked={steps}
+              onChange={(e) => setSteps(e.target.checked)}
+              className="peer sr-only"
+            />
+            <span className="relative h-4 w-7 rounded-full bg-line-strong transition peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent after:absolute after:top-0.5 after:left-0.5 after:size-3 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-3" />
+            Agent steps
+          </label>
+        )}
+      </header>
+      {tab === 'activity' ? (
+        <Activity events={events} tasks={tasks} onOpenTask={onOpenTask} steps={steps} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <DecisionsPanel project={project} decisions={decisions} />
+        </div>
+      )}
+    </section>
+  );
+}
 
 function Activity({
   events,
   tasks,
   onOpenTask,
+  steps,
 }: {
   events: BrainEvent[];
   tasks: Task[];
   onOpenTask: (id: string) => void;
+  steps: boolean;
 }) {
-  const [steps, setSteps] = useState(false);
   const list = useMemo(
     () => (steps ? events : events.filter((e) => e.kind !== 'agent')),
     [events, steps],
@@ -569,23 +716,7 @@ function Activity({
   const titles = useMemo(() => new Map(tasks.map((t) => [t.id, t.title])), [tasks]);
 
   return (
-    <section
-      aria-label="Activity"
-      className="sticky top-4 flex max-h-[calc(100vh-140px)] flex-col rounded-2xl border border-line bg-panel shadow-card"
-    >
-      <header className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <h2 className="text-[13.5px] font-semibold">Activity</h2>
-        <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-muted select-none">
-          <input
-            type="checkbox"
-            checked={steps}
-            onChange={(e) => setSteps(e.target.checked)}
-            className="peer sr-only"
-          />
-          <span className="relative h-4 w-7 rounded-full bg-line-strong transition peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent after:absolute after:top-0.5 after:left-0.5 after:size-3 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-3" />
-          Agent steps
-        </label>
-      </header>
+    <>
       <div
         ref={scroller}
         onScroll={(e) => {
@@ -619,7 +750,7 @@ function Activity({
           </ol>
         )}
       </div>
-    </section>
+    </>
   );
 }
 

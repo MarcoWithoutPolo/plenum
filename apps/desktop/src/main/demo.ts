@@ -1,6 +1,13 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { FakeAdapter, type Adapter, type RunRequest } from '@conclave/core';
+import {
+  FakeAdapter,
+  GitHub,
+  type Adapter,
+  type CommandResult,
+  type RunRequest,
+} from '@conclave/core';
 
 /** Demo project work: a two-task plan, builders that write real files, reviewers that approve. */
 const DEMO_TASKS = [
@@ -26,7 +33,46 @@ const DEMO_TASKS = [
   },
 ];
 
+/** CONCLAVE_DEMO_ASK=1: the second task's builder asks a question before it builds. */
+const DEMO_QUESTION = {
+  question: 'Which tone should the usage notes use?',
+  why: 'It sets how all the docs read.',
+  options: ['Short and plain', 'Friendly, with examples'],
+  recommended: 'Short and plain',
+};
+
+function asksFirst(req: RunRequest): boolean {
+  return (
+    process.env.CONCLAVE_DEMO_ASK === '1' &&
+    req.role === 'builder' &&
+    req.prompt.includes(`YOUR TASK: ${DEMO_TASKS[1]!.title}`) &&
+    !/The user answered|Assumption made|Settled by/.test(req.prompt)
+  );
+}
+
 function projectReply(req: RunRequest): string | undefined {
+  if (req.prompt.includes('Before any work starts, find out what only the user can decide')) {
+    return JSON.stringify({
+      questions: [
+        {
+          id: 'q1',
+          question: 'What should greet() say?',
+          why: 'Every later task builds on the wording.',
+          options: ['Hello, <name>!', 'Hi <name>', 'Welcome, <name>.'],
+          recommended: 'Hello, <name>!',
+        },
+        {
+          id: 'q2',
+          question: 'Where should the usage notes live?',
+          options: ['A USAGE.md file', 'The README'],
+          recommended: 'A USAGE.md file',
+        },
+      ],
+      tasks: DEMO_TASKS.map(({ title, spec }) => ({ title, spec })),
+      test_command: null,
+    });
+  }
+  if (asksFirst(req)) return JSON.stringify(DEMO_QUESTION);
   if (req.role === 'planner') {
     const todo = DEMO_TASKS.filter((t) => !existsSync(join(req.cwd, t.file)));
     return todo.length
@@ -48,8 +94,88 @@ async function projectAct(req: RunRequest): Promise<void> {
   if (req.role !== 'builder') return;
   // CONCLAVE_DEMO_SLOW keeps builders busy long enough to see a project mid-run.
   if (process.env.CONCLAVE_DEMO_SLOW) await new Promise((r) => setTimeout(r, 2500));
+  if (asksFirst(req)) return;
   const task = DEMO_TASKS.find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`));
   if (task) writeFileSync(join(req.cwd, task.file), task.body);
+}
+
+/** A GitHub CLI stand-in for demo mode: signed in, two repositories, two issues. */
+export function demoGitHub(): GitHub {
+  const ok = (stdout: string): CommandResult => ({ code: 0, stdout, stderr: '' });
+  return new GitHub({
+    command: 'gh',
+    exec: async (args) => {
+      const cmd = args.slice(0, 2).join(' ');
+      if (args[0] === '--version') return ok('gh version 2.96.0 (2026-07-02)');
+      if (cmd === 'auth status') {
+        return ok(
+          JSON.stringify({
+            hosts: {
+              'github.com': [
+                {
+                  state: 'success',
+                  active: true,
+                  login: 'demo-user',
+                  scopes: 'gist, read:org, repo, workflow',
+                  gitProtocol: 'https',
+                },
+              ],
+            },
+          }),
+        );
+      }
+      if (cmd === 'repo list') {
+        return ok(
+          JSON.stringify([
+            {
+              nameWithOwner: 'demo-user/calculator',
+              description: 'A calculator with too many particles',
+              isPrivate: true,
+              pushedAt: '2026-10-20T09:00:00Z',
+              primaryLanguage: { name: 'JavaScript' },
+              defaultBranchRef: { name: 'main' },
+            },
+            {
+              nameWithOwner: 'demo-user/landing',
+              description: 'Personal site',
+              isPrivate: false,
+              pushedAt: '2026-09-01T09:00:00Z',
+              primaryLanguage: { name: 'HTML' },
+              defaultBranchRef: { name: 'main' },
+            },
+          ]),
+        );
+      }
+      if (cmd === 'repo clone') {
+        // A real local repository, so the rest of the flow works offline.
+        const dest = args[3]!;
+        mkdirSync(dest, { recursive: true });
+        const git = (...a: string[]) =>
+          execFileSync('git', ['-c', 'user.name=Demo', '-c', 'user.email=demo@localhost', ...a], {
+            cwd: dest,
+          });
+        git('init', '-q', '-b', 'main');
+        writeFileSync(join(dest, 'README.md'), `# ${args[2]}\n`);
+        git('add', '-A');
+        git('commit', '-q', '-m', 'init');
+        return ok('');
+      }
+      if (cmd === 'issue list') {
+        return ok(
+          JSON.stringify([
+            {
+              number: 12,
+              title: 'Add a greet() helper',
+              body: 'greet(name) should return a friendly greeting.',
+              url: 'https://github.com/demo-user/calculator/issues/12',
+              labels: [{ name: 'enhancement' }],
+            },
+          ]),
+        );
+      }
+      return { code: 1, stdout: '', stderr: `demo gh has no answer for: gh ${args.join(' ')}` };
+    },
+  });
 }
 
 /**
@@ -101,6 +227,11 @@ export function demoAdapters(): Adapter[] {
         reply: answer('Codex'),
         delayMs: 40,
         act: projectAct,
+        // CONCLAVE_DEMO_BREAK=1: Codex's builds crash, to show failure recovery.
+        failWhen: (req) =>
+          process.env.CONCLAVE_DEMO_BREAK === '1' && req.role === 'builder'
+            ? 'codex exec: stream disconnected before completion (connection reset)'
+            : undefined,
       },
       {
         id: 'codex',
