@@ -278,7 +278,7 @@ function Header({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`selectable mt-3 block max-w-4xl text-left text-[14px] leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}
+        className={`selectable mt-3 block max-w-4xl text-left text-[14px] leading-relaxed whitespace-pre-line ${expanded ? '' : 'line-clamp-2'}`}
       >
         {project.goal}
       </button>

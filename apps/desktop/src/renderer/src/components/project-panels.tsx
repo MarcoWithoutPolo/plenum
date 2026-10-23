@@ -252,7 +252,10 @@ export function PullRequestCard({ project }: { project: Project }) {
       {status && status.checks.length > 0 && !merged && (
         <ul className="mt-3 flex flex-col gap-1 border-t border-line pt-2.5">
           {status.checks.map((c) => (
-            <li key={`${c.workflow}:${c.name}`} className="flex items-center gap-2 text-[12.5px]">
+            <li
+              key={`${c.workflow}:${c.name}:${c.event ?? ''}`}
+              className="flex items-center gap-2 text-[12.5px]"
+            >
               {c.bucket === 'pass' ? (
                 <CheckCircle2 className="size-3.5 shrink-0 text-ok" aria-label="Passed" />
               ) : c.bucket === 'fail' ? (
@@ -262,6 +265,12 @@ export function PullRequestCard({ project }: { project: Project }) {
               )}
               <span className="min-w-0 flex-1 truncate">
                 {c.bucket === 'fail' ? `CI failed: ${c.name}` : c.name}
+                {status.checks.filter((o) => o.name === c.name).length > 1 && c.event && (
+                  <span className="text-faint">
+                    {' '}
+                    · {c.event === 'pull_request' ? 'pull request' : c.event}
+                  </span>
+                )}
               </span>
               {c.bucket === 'fail' && (
                 <Button

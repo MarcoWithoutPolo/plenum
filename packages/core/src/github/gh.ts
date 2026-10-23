@@ -45,6 +45,8 @@ export interface GhCheck {
   bucket: CheckBucket;
   link: string;
   workflow: string;
+  /** What triggered it: push or pull_request (the same check often runs for both). */
+  event?: string;
 }
 
 export interface GhPullRequest {
@@ -273,7 +275,7 @@ export class GitHub {
   /** CI checks; `gh pr checks` exits non-zero while checks fail or run, so the JSON is read anyway. */
   async checks(cwd: string, url: string): Promise<GhCheck[]> {
     const result = await this.exec(
-      ['pr', 'checks', url, '--json', 'name,state,bucket,link,workflow'],
+      ['pr', 'checks', url, '--json', 'name,state,bucket,link,workflow,event'],
       { cwd },
     );
     const rows = safeJson(result.stdout);
@@ -289,6 +291,7 @@ export class GitHub {
       bucket: c.bucket,
       link: c.link,
       workflow: c.workflow ?? '',
+      ...(c.event && { event: c.event }),
     }));
   }
 
