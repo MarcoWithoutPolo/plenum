@@ -15,6 +15,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
+import type { RetryOptions } from '@conclave/core';
 import type { FailureKind, Project, Seat, Task } from '@conclave/shared';
 import { Dialog } from './Dialog';
 import { SeatPicker, modelLabel } from './SeatPicker';
@@ -62,10 +63,12 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
   const failure = task.lastFailure;
   const retry = useProjects((s) => s.retry);
   const skip = useProjects((s) => s.skip);
+  const addDecision = useProjects((s) => s.addDecision);
   const providers = useApp((s) => s.providers);
   const [details, setDetails] = useState(false);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [declined, setDeclined] = useState<number[]>([]);
   const failed = task.status === 'failed';
   const kind = failure ? KINDS[failure.kind] : KINDS.crash;
   const Icon = kind.icon;
@@ -81,15 +84,47 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
     (p) => p.provider !== failure?.provider && p.provider !== task.builtBy,
   );
   const base: Seat = task.pinnedSeat ??
-    project.routing.builder.find((s) => s.provider === (failure?.provider ?? task.builtBy)) ??
+    // Whoever built it; for a review failure, failure.provider is the reviewer.
+    project.routing.builder.find((s) => s.provider === task.builtBy) ??
     project.routing.builder[0] ?? { provider: 'claude' };
 
   const baseInfo = providers.find((p) => p.provider === base.provider);
-  const tried = failure?.provider === base.provider ? (failure.model ?? base.model) : base.model;
+  const builtThis = failure?.kind !== 'review' && failure?.provider === base.provider;
+  const tried = builtThis ? (failure.model ?? base.model) : base.model;
   const stronger = strongerModel(baseInfo, tried ?? undefined);
 
   const summary = failure?.summary ?? task.feedback?.split('\n')[0] ?? 'The last attempt failed.';
   const detail = failure?.detail ?? task.feedback?.split('\n').slice(1).join('\n').trim();
+
+  // Review issues as a checklist: untick the ones you disagree with before retrying.
+  const issues =
+    failure?.kind === 'review'
+      ? (failure.detail ?? '')
+          .split('\n')
+          .filter((l) => l.startsWith('- '))
+          .map((l) => l.slice(2).trim())
+          .filter(Boolean)
+      : [];
+
+  /** Retry, sending only the issues you kept; each one you untick is saved as a decision. */
+  const retryWith = async (opts: RetryOptions = {}) => {
+    if (!issues.length) return retry(project.id, task.id, opts);
+    const kept = issues.filter((_, i) => !declined.includes(i));
+    for (const i of declined) {
+      await addDecision(
+        project.id,
+        `Reviewer's request: ${issues[i]}`,
+        "Declined by you; don't ask for it.",
+      );
+    }
+    const reviewer = failure?.provider ? providerName(failure.provider) : 'The reviewer';
+    return retry(project.id, task.id, {
+      ...opts,
+      feedback: kept.length
+        ? `${reviewer} asked for changes:\n${kept.map((k) => `- ${k}`).join('\n')}`
+        : null,
+    });
+  };
 
   return (
     <div
@@ -118,7 +153,41 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
           </p>
         </div>
       </div>
-      {detail && (
+      {failed && issues.length > 0 && (
+        <fieldset className="px-4 pt-2.5">
+          <legend className="text-[12px] font-medium text-muted">
+            The next attempt fixes the ticked issues. Untick any you disagree with.
+          </legend>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {issues.map((issue, i) => {
+              const on = !declined.includes(i);
+              return (
+                <li key={i}>
+                  <label className="flex cursor-pointer items-start gap-2 text-[12.5px]">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() =>
+                        setDeclined((d) => (on ? [...d, i] : d.filter((x) => x !== i)))
+                      }
+                      className="mt-0.5 accent-[var(--accent)]"
+                    />
+                    <span className={`selectable ${on ? '' : 'text-faint line-through'}`}>
+                      {issue}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+          {declined.length > 0 && (
+            <p className="mt-1.5 text-[11.5px] text-faint">
+              Unticked issues are saved as decisions, so reviewers won't ask for them again.
+            </p>
+          )}
+        </fieldset>
+      )}
+      {detail && !(failed && issues.length > 0) && (
         <div className="px-4 pt-2">
           <button
             type="button"
@@ -146,7 +215,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             size="sm"
             variant="primary"
             disabled={busy}
-            onClick={() => void run(() => retry(project.id, task.id))}
+            onClick={() => void run(() => retryWith())}
           >
             <RotateCcw className="size-3.5" /> Retry
           </Button>
@@ -154,9 +223,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             <Button
               size="sm"
               disabled={busy}
-              onClick={() =>
-                void run(() => retry(project.id, task.id, { seat: { provider: other.provider } }))
-              }
+              onClick={() => void run(() => retryWith({ seat: { provider: other.provider } }))}
             >
               <ProviderDot provider={other.provider} size={7} /> Retry with{' '}
               {providerName(other.provider)}
@@ -165,7 +232,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
           <SeatPicker
             value={base}
             label="Retry with"
-            onChange={(seat) => void run(() => retry(project.id, task.id, { seat }))}
+            onChange={(seat) => void run(() => retryWith({ seat }))}
             trigger={({ ref, toggle, open, ...aria }) => (
               <button
                 ref={ref}
@@ -183,7 +250,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             size="sm"
             disabled={busy}
             title="Same AI, one reasoning level up"
-            onClick={() => void run(() => retry(project.id, task.id, { effortUp: true }))}
+            onClick={() => void run(() => retryWith({ effortUp: true }))}
           >
             <TrendingUp className="size-3.5" /> More effort
           </Button>
@@ -192,9 +259,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
               size="sm"
               disabled={busy}
               title={`${providerName(base.provider)}'s stronger model, for this task only`}
-              onClick={() =>
-                void run(() => retry(project.id, task.id, { seat: { ...base, model: stronger } }))
-              }
+              onClick={() => void run(() => retryWith({ seat: { ...base, model: stronger } }))}
             >
               <Sparkles className="size-3.5" /> Retry with {modelLabel(baseInfo, stronger)}
             </Button>

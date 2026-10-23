@@ -133,9 +133,9 @@ export function retryTask(
   const project = projects.get(task.projectId)!;
   let seat = opts.seat ?? task.pinnedSeat ?? undefined;
   if (opts.effortUp) {
+    // The builder, never the reviewer: a review failure's provider is whoever reviewed it.
     const base =
       seat ??
-      project.routing.builder.find((s) => s.provider === task.lastFailure?.provider) ??
       project.routing.builder.find((s) => s.provider === task.builtBy) ??
       project.routing.builder[0];
     if (base) seat = raiseSeat(base, adapters?.get(base.provider));

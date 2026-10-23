@@ -98,6 +98,14 @@ function projectReply(req: RunRequest): string | undefined {
       : JSON.stringify({ done: true, reason: 'greet.js and its usage notes are in place.' });
   }
   if (req.role === 'reviewer') {
+    // CONCLAVE_DEMO_REJECT=1: reviewers always ask for changes, to show the issue checklist.
+    if (process.env.CONCLAVE_DEMO_REJECT === '1') {
+      return JSON.stringify({
+        approve: false,
+        issues: ['Add a JSDoc comment to greet()', 'Rename the parameter to fullName'],
+        summary: 'Two small things before this merges.',
+      });
+    }
     return JSON.stringify({
       approve: true,
       issues: [],

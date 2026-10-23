@@ -85,3 +85,70 @@ test('a provider that keeps failing is called out, and Retry all hands the work 
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('review issues are a checklist; an unticked one becomes a decision', async () => {
+  test.setTimeout(120_000);
+  const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
+  const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-review-'));
+  const git = (...a: string[]) =>
+    execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
+      cwd: repo,
+      encoding: 'utf8',
+    }).trim();
+  git('init', '-q', '-b', 'main');
+  writeFileSync(join(repo, 'README.md'), '# greeter');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'init');
+  const app = await electron.launch({
+    args: [join(here, '../out/main/index.js')],
+    env: {
+      ...process.env,
+      CONCLAVE_DEMO: '1',
+      CONCLAVE_DEMO_REJECT: '1',
+      CONCLAVE_HOME: home,
+      CONCLAVE_E2E_REPO: repo,
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1320, height: 860 });
+    await page.getByRole('button', { name: /^Projects/ }).click();
+    await page.getByRole('button', { name: 'New project' }).click();
+    const dialog = page.getByRole('dialog', { name: 'New project' });
+    await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+    await dialog.getByRole('button', { name: 'Next' }).click();
+    await dialog.getByRole('textbox', { name: 'Goal' }).fill('Add a greet() helper.');
+    await dialog
+      .getByRole('radiogroup', { name: 'Attempts per task' })
+      .getByRole('radio', { name: '1', exact: true })
+      .click();
+    await dialog.getByRole('button', { name: 'Next' }).click();
+    await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+
+    const tasks = page.getByRole('region', { name: 'Tasks' });
+    await expect(tasks).toContainText('Failed', { timeout: 60_000 });
+    await tasks.getByRole('button', { name: /Add a greet\(\) helper/ }).click();
+    const drawer = page.getByRole('dialog', { name: 'Add a greet() helper' });
+    const keep = drawer.getByRole('checkbox', { name: 'Add a JSDoc comment to greet()' });
+    const drop = drawer.getByRole('checkbox', { name: 'Rename the parameter to fullName' });
+    await expect(keep).toBeChecked();
+    await drop.uncheck();
+    await expect(drawer).toContainText("reviewers won't ask for them again");
+    // Codex built it (Claude only reviewed), and Codex is already on its frontier model.
+    await expect(drawer.getByRole('button', { name: /^Retry with (Fable|Opus|GPT)/ })).toHaveCount(
+      0,
+    );
+    await page.screenshot({ path: join(here, 'screenshots', 'review-checklist.png') });
+    await drawer.getByRole('button', { name: 'Retry', exact: true }).click();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('tab', { name: /Decisions/ }).click();
+    await expect(page.getByRole('region', { name: 'Decisions' })).toContainText(
+      "Reviewer's request: Rename the parameter to fullName",
+    );
+  } finally {
+    await app.close();
+    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
