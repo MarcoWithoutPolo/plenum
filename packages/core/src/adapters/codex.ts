@@ -5,6 +5,7 @@ import {
   assertSafeEffort,
   assertSafeModel,
   defaultExec,
+  limitResetsAt,
   looksLikeLimit,
   isRecord,
   num,
@@ -259,7 +260,8 @@ ${text}`
     if (message === this.lastError) return []; // turn.failed repeats the preceding error
     this.lastError = message;
     if (looksLikeLimit(`${raw} ${message}`)) {
-      return [{ type: 'rate_limit', message }];
+      const resetsAt = limitResetsAt(message);
+      return [{ type: 'rate_limit', message, ...(resetsAt && { resetsAt }) }];
     }
     return [{ type: 'error', message }];
   }

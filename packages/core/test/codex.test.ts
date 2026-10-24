@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AgentEvent } from '@conclave/shared';
-import { CodexAdapter, CodexParser, codexArgs, collect } from '../src/index.js';
+import { CodexAdapter, CodexParser, codexArgs, collect, limitResetsAt } from '../src/index.js';
 import { fixturePath, replay } from './helpers.js';
 
 const home = fixturePath('codex/home');
@@ -148,5 +148,40 @@ describe('codexArgs with screenshots', () => {
     expect(codexArgs({ prompt: 'x', cwd: '.', sessionId: 'abc', images: [png] })).not.toContain(
       '--image',
     );
+  });
+});
+
+describe('limitResetsAt', () => {
+  const now = new Date(2026, 9, 25, 2, 30);
+  const at = (h: number, m: number, day = 25) => new Date(2026, 9, day, h, m).getTime();
+
+  it("reads the reset time from Codex's limit message", () => {
+    const message =
+      'You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 5:48 AM.';
+    expect(limitResetsAt(message, now)).toBe(at(5, 48));
+    // A time already past today means tomorrow.
+    expect(limitResetsAt('try again at 1:15 AM', now)).toBe(at(1, 15, 26));
+    expect(limitResetsAt('try again at 12:05 PM', now)).toBe(at(12, 5));
+    expect(limitResetsAt('try again at 12:05 am', now)).toBe(at(0, 5, 26));
+    expect(limitResetsAt('Try again at 17:30.', now)).toBe(at(17, 30));
+  });
+
+  it('reads "in N hours M minutes", and nothing from other messages', () => {
+    expect(limitResetsAt('try again in 2 hours 13 minutes', now)).toBe(at(4, 43));
+    expect(limitResetsAt('Please try again in 45m', now)).toBe(at(3, 15));
+    expect(limitResetsAt('usage limit reached', now)).toBeUndefined();
+    expect(limitResetsAt('try again at 25:00', now)).toBeUndefined();
+    expect(limitResetsAt('try again at 13:00 PM', now)).toBeUndefined();
+  });
+
+  it('puts the reset time on the limit event', () => {
+    const parser = new CodexParser();
+    const events = parser.parse({
+      type: 'error',
+      message: 'You’ve hit your usage limit. Try again at 5:48 AM.',
+    });
+    expect(events).toEqual([
+      expect.objectContaining({ type: 'rate_limit', resetsAt: expect.any(Number) }),
+    ]);
   });
 });

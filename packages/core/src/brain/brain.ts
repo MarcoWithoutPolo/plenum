@@ -14,7 +14,7 @@ import type {
   TaskFailure,
 } from '@conclave/shared';
 import { IN_FLIGHT, visualIssueLine } from '@conclave/shared';
-import { looksLikeLimit } from '../adapters/cli.js';
+import { limitResetsAt, looksLikeLimit } from '../adapters/cli.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
 import { collect, type RunResult } from '../collect.js';
@@ -1829,7 +1829,9 @@ export class Brain {
     // Safety net for any provider: a failure that reads like a plan or spend limit is a limit,
     // so the work moves to the next provider and the task keeps its attempts.
     if (!result.ok && !result.rateLimited && looksLikeLimit(result.errors.join(' '))) {
-      result.rateLimited = { message: result.errors[0] ?? 'usage limit reached' };
+      const message = result.errors[0] ?? 'usage limit reached';
+      const resetsAt = limitResetsAt(result.errors.join(' '));
+      result.rateLimited = { message, ...(resetsAt && { resetsAt }) };
     }
     // Stopped because another review answered first, or you skipped the task: not a failure.
     const cancelled =

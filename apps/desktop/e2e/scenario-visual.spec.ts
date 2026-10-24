@@ -359,11 +359,11 @@ test('scenario 11: the review time budget', async () => {
       // A web page: Antigravity's review then reads screenshots too, which makes it slow
       // (98 s in scenario 9), past the 90 s budget.
       goal: 'A static unit converter web page: index.html, style.css and app.js at the top of the repo, no build step and no dependencies. Convert between at least 30 units of length, mass, volume and temperature, picked from two dropdowns, updating as you type, with a swap button. Light and dark themes that follow the system setting, a layout that works on a 390px-wide phone without sideways scrolling, readable contrast and controls at least 44px tall. The conversion table and convert(value, from, to) live in units.js, which works both in the page and in node:test tests in test/ covering every unit. npm test runs node --test.',
-      // Antigravity reviews first, in the order you set; Claude is the faster backup.
+      // Antigravity reviews first (at max effort: slow on purpose); Claude is the faster backup.
       routing: {
         planner: [{ provider: 'claude' }],
         builder: [{ provider: 'codex' }],
-        reviewer: [{ provider: 'antigravity' }, { provider: 'claude' }],
+        reviewer: [{ provider: 'antigravity', effort: 'max' }, { provider: 'claude' }],
       },
       adaptiveTeam: false,
       maxAttempts: 2,
