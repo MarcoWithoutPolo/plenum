@@ -19,16 +19,10 @@ modules are fine.
   - Delete removes the card.
 - The board is saved in `localStorage`, so the cards and their columns survive a page reload.
 
-**How it must look**
+**How it should look**
 
-- **Dark mode:** follows the system setting (`prefers-color-scheme`), with a dark background in dark mode and a light
-  one in light mode.
-- **Readable:** all text, including button labels, has a contrast ratio of at least 4.5:1 against its background, in
-  both themes.
-- **Phones:** at 390 px wide, the columns are stacked vertically and the page never scrolls sideways. On desktop
-  (1280 px), the columns sit side by side.
-- **Touch-friendly:** every button is at least 44 × 44 px on phones.
-- **No errors:** the page loads with no JavaScript errors in the console.
+It should look clean and be comfortable to use on a phone as well as on a desktop, follow the system's light or dark
+setting, and meet common accessibility guidelines. The page should load without errors.
 
 **Code**
 

@@ -173,3 +173,28 @@ Antigravity reviewed much of the time: the slowest pairing.
   AI's review, and most of it is Antigravity reviewing when Codex is out of usage. With Codex building and Claude
   reviewing, a small project took 2.6 minutes.
 - **Limits:** Codex ran out mid-benchmark. Codex alone stopped; Conclave carried on with Claude and lost nothing.
+
+## v0.8 P0: kanban baseline (2026-10-24)
+
+A static web app with 12 hidden checks run in a real browser (Electron's Chromium, through Playwright): 7 for behavior
+and 5 for how it looks. The goal asks in plain words for a clean layout on phones and desktops, dark mode and "common
+accessibility guidelines". It doesn't give numbers. The checks use widely accepted ones: WCAG AA text contrast (4.5:1)
+in both themes, 44 × 44 px touch targets, no sideways scrolling at 390 px, no console errors.
+
+| Contender         | Runs | Hidden checks   | Missed                       | Time    |
+| ----------------- | ---- | --------------- | ---------------------------- | ------- |
+| Conclave v0.7     | 2    | 11/12 and 12/12 | text contrast (once)         | 5.5 min |
+| Claude alone      | 2    | 12/12 and 11/12 | text contrast (once)         | 1.7 min |
+| Codex alone       | 1    | 12/12           | none                         | 4.9 min |
+| Antigravity alone | 1    | 10/12           | text contrast, touch targets | 7.7 min |
+
+- **Behavior is solved; looks are where everyone slips.** Text contrast was missed by Conclave, Claude and
+  Antigravity. No one missed a behavior check.
+- A first version of the goal spelled out the numbers (4.5:1, 44 px, 390 px). Then every contender passed everything,
+  so the goal now asks the way a person would.
+- Antigravity first scored 1/12 because the hidden checks found the text field by its label and its page labelled
+  the form "New card" too. The checks now find the text field by its role; re-scored, 10/12. Nobody else's score
+  changed.
+- **Change to the v0.8 plan:** contrast and touch-target checks join the free visual checks (C4). They're measured
+  from the page, cost no tokens, and send work back like failing tests. The AI visual review stays for what can't be
+  measured.

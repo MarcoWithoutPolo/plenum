@@ -62,7 +62,7 @@ async function fresh() {
 const col = (name) => page.locator(`[data-column="${name}"]`);
 const cards = (name) => col(name).locator('[data-card]');
 async function add(text) {
-  await page.getByLabel('New card').fill(text);
+  await page.getByRole('textbox', { name: 'New card' }).fill(text);
   await page.getByRole('button', { name: 'Add card' }).click();
 }
 const texts = async (name) =>
@@ -97,12 +97,12 @@ test('three columns in order, each with its name and a count', async () => {
 test('adds cards with the button and with Enter, trimmed, ignoring empty text', async () => {
   await fresh();
   await add('  First  ');
-  await page.getByLabel('New card').fill('Second');
-  await page.getByLabel('New card').press('Enter');
+  await page.getByRole('textbox', { name: 'New card' }).fill('Second');
+  await page.getByRole('textbox', { name: 'New card' }).press('Enter');
   await add('   ');
   await add('');
   assert.deepStrictEqual(await texts('todo'), ['First', 'Second']);
-  assert.strictEqual(await page.getByLabel('New card').inputValue(), '');
+  assert.strictEqual(await page.getByRole('textbox', { name: 'New card' }).inputValue(), '');
 });
 
 test('moves cards to the end of the next column, never past the ends', async () => {
