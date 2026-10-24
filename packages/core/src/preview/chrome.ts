@@ -129,7 +129,7 @@ export class ChromeSnapshotter implements Snapshotter {
       let err = '';
       const timer = setTimeout(
         () => fail(new Error(`The browser didn't start.\n${err.slice(-500)}`)),
-        20_000,
+        45_000, // a first start on a busy machine can be slow
       );
       child.on('exit', (code) =>
         fail(new Error(`The browser exited (${code}).\n${err.slice(-500)}`)),
