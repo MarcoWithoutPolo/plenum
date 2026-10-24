@@ -29,3 +29,10 @@ jobs:
       - name: Desktop end-to-end (demo mode)
         if: runner.os != 'Linux'
         run: npm run -w @conclave/desktop e2e
+      - name: Keep the end-to-end traces of a failure
+        if: failure() && runner.os != 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.os }}-node${{ matrix.node }}
+          path: apps/desktop/test-results/
+          retention-days: 7
