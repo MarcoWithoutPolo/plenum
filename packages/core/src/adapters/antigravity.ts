@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import type { AgentEvent, ProviderStatus, Role } from '@conclave/shared';
 import { isNotFound, runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
@@ -52,8 +52,9 @@ export class AntigravityAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: true,
-    // Headless agy has no image option; promoted only once it's shown to read image files.
-    vision: 'none',
+    // Headless agy has no image option, but it reads image files with its own tools (shown
+    // live, test/live-vision.test.ts): screenshots are named in the prompt, their folders added.
+    vision: 'files',
   };
   private readonly exec: Exec;
   private readonly explicitCommand: string | undefined;
@@ -202,6 +203,10 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     extra.push('--add-dir', dir);
     cleanup = () => rmSync(dir, { recursive: true, force: true });
   }
+  // Screenshots live outside the worktree: let it read their folders.
+  for (const dir of new Set((request.images ?? []).map((p) => dirname(safeImage(p))))) {
+    extra.push('--add-dir', dir);
+  }
   if (!fullAccess && !chat) prompt = `${NO_SHELL_NOTE}\n\n${prompt}\n\n${NO_SHELL_REMINDER}`;
   // Slash-command expansion stays on (turning it off makes agy ignore --mode), so a prompt
   // must never start with "/".
@@ -220,6 +225,13 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     ...extra,
   ];
   return { args, cleanup };
+}
+
+function safeImage(path: string): string {
+  if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
+    throw new Error(`Not a screenshot path: ${path}`);
+  }
+  return path;
 }
 
 export class AntigravityParser implements LineParser {

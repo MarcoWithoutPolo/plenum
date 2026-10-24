@@ -391,7 +391,7 @@ export function demoAdapters(): Adapter[] {
       {
         id: 'claude',
         displayName: 'Claude Code',
-        // Like the real CLIs: Claude reads screenshot files, Codex takes them attached.
+        // Like the real CLIs: Claude and Antigravity read screenshot files, Codex takes them attached.
         vision: 'files',
         resume: true,
         efforts: levels,
@@ -468,7 +468,7 @@ export function demoAdapters(): Adapter[] {
       {
         id: 'antigravity',
         displayName: 'Antigravity',
-        vision: 'none',
+        vision: 'files',
         resume: true,
         efforts: levels,
         status: { version: '1.4.6', detail: 'Google account · 6 models' },

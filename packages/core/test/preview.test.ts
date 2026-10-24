@@ -12,6 +12,7 @@ import {
   createProject,
   detectPreview,
   findLocalUrl,
+  reachableUrl,
   removeDir,
 } from '../src/index.js';
 
@@ -114,6 +115,30 @@ describe('Preview detection', () => {
     expect(findLocalUrl('  - Local:        http://localhost:3000')).toBe('http://127.0.0.1:3000/');
     expect(findLocalUrl('Listening on http://0.0.0.0:8080/app')).toBe('http://127.0.0.1:8080/app');
     expect(findLocalUrl('see https://vitejs.dev for docs')).toBeUndefined();
+  });
+
+  it('opens a server that only listens on IPv6 as localhost', async () => {
+    const { createServer } = await import('node:net');
+    const v6 = createServer((c) => c.end());
+    const port = await new Promise<number>((ok, fail) => {
+      v6.once('error', fail);
+      v6.listen(0, '::1', () => ok((v6.address() as { port: number }).port));
+    }).catch(() => undefined);
+    if (!port) return; // no IPv6 loopback on this machine
+    try {
+      expect(await reachableUrl(`http://127.0.0.1:${port}/`)).toBe(`http://localhost:${port}/`);
+    } finally {
+      v6.close();
+    }
+    const v4 = createServer((c) => c.end());
+    const port4 = await new Promise<number>((ok) =>
+      v4.listen(0, '127.0.0.1', () => ok((v4.address() as { port: number }).port)),
+    );
+    try {
+      expect(await reachableUrl(`http://127.0.0.1:${port4}/x`)).toBe(`http://127.0.0.1:${port4}/x`);
+    } finally {
+      v4.close();
+    }
   });
 });
 

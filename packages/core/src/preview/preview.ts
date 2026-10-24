@@ -8,7 +8,7 @@ import {
   statSync,
 } from 'node:fs';
 import { createServer as createHttpServer, type Server } from 'node:http';
-import { createServer as createNetServer } from 'node:net';
+import { connect, createServer as createNetServer } from 'node:net';
 import { extname, join, resolve, sep } from 'node:path';
 import { killTree } from '../process.js';
 
@@ -136,6 +136,35 @@ export function findLocalUrl(output: string): string | undefined {
   return m ? `http://127.0.0.1:${m[1]}${m[2] ?? '/'}` : undefined;
 }
 
+/** Whether something accepts connections on host:port, within `ms`. */
+function listening(host: string, port: number, ms = 1000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ host, port });
+    const end = (ok: boolean) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(ms, () => end(false));
+    socket.once('connect', () => end(true));
+    socket.once('error', () => end(false));
+  });
+}
+
+/**
+ * The address to open for a dev server that printed `url` (as 127.0.0.1). Some bind only IPv6
+ * "localhost" (Vite on Windows): then it's opened as localhost, which browsers try on ::1 too.
+ */
+export async function reachableUrl(url: string): Promise<string> {
+  const u = new URL(url);
+  const port = Number(u.port);
+  if (await listening('127.0.0.1', port)) return url;
+  if (await listening('::1', port)) {
+    u.hostname = 'localhost';
+    return u.href;
+  }
+  return url;
+}
+
 /**
  * A live preview of one folder. Static previews are served by Conclave itself on 127.0.0.1 and run
  * no project code. Command previews run the project's own dev server, which you allowed first.
@@ -240,7 +269,10 @@ export class PreviewServer {
           const url = findLocalUrl(this.output);
           if (url) {
             this.url = url;
-            done();
+            void reachableUrl(url).then((open) => {
+              this.url = open;
+              done();
+            });
           }
         }
       };

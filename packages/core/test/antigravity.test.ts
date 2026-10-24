@@ -150,3 +150,22 @@ describe('Antigravity and shell commands', () => {
     );
   });
 });
+
+describe('antigravityArgs with screenshots', () => {
+  it('lets the reviewer read the screenshot folders, and refuses anything but PNGs', () => {
+    const dir = process.platform === 'win32' ? 'C:\\shots\\n_1' : '/shots/n_1';
+    const sep = process.platform === 'win32' ? '\\' : '/';
+    const { args } = antigravityArgs({
+      prompt: 'x',
+      cwd: '.',
+      role: 'reviewer',
+      readOnly: true,
+      images: [`${dir}${sep}home-phone-dark.png`, `${dir}${sep}home-desktop-light.png`],
+    });
+    expect(args.filter((_a, i) => args[i - 1] === '--add-dir')).toEqual([dir]);
+    expect(() => antigravityArgs({ prompt: 'x', cwd: '.', images: ['relative.png'] })).toThrow(
+      /Not a screenshot/,
+    );
+    expect(new AntigravityAdapter().capabilities.vision).toBe('files');
+  });
+});
