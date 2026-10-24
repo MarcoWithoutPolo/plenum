@@ -90,11 +90,37 @@ for (const scheme of ['light', 'dark'] as const) {
       await shot('preview-approval');
       await ask.getByRole('button', { name: 'Allow for this project' }).click();
       const frame = pane.frameLocator('iframe');
-      await expect(
-        frame.getByRole('heading', { name: 'Served by its own dev server' }),
-      ).toBeVisible({
-        timeout: 60_000,
-      });
+      await expect(frame.getByRole('heading', { name: 'Served by its own dev server' }))
+        .toBeVisible({
+          timeout: 60_000,
+        })
+        .catch(async (err: unknown) => {
+          // What the pane said, and the server's own output, for a failure on CI.
+          console.log('PANE', await pane.innerText().catch(() => '(gone)'));
+          console.log(
+            'SRC',
+            await pane
+              .locator('iframe')
+              .getAttribute('src')
+              .catch(() => null),
+          );
+          console.log(
+            'LOGS',
+            await page.evaluate(async () => {
+              const w = window as unknown as {
+                conclave: {
+                  projects: {
+                    list(): Promise<{ project: { id: string } }[]>;
+                    previewLogs(id: string): Promise<string>;
+                  };
+                };
+              };
+              const [p] = await w.conclave.projects.list();
+              return p ? w.conclave.projects.previewLogs(p.project.id) : '(no project)';
+            }),
+          );
+          throw err;
+        });
       await expect(pane).toContainText('Running the project’s own dev server on this computer.');
       await pane.getByText('Server output').click();
       await expect(pane).toContainText('Ready on http://localhost:');

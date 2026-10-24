@@ -2084,3 +2084,20 @@ describe('Merge queue status', () => {
     expect(seen).toEqual(['building', 'verifying', 'reviewing', 'merging', 'merged']);
   });
 });
+
+describe('createProject', () => {
+  it('keeps the settings you chose, including the team order switch', async () => {
+    const store = new Store(':memory:');
+    const seats: { provider: ProviderId }[] = [{ provider: 'claude' }, { provider: 'codex' }];
+    const off = await createProject(store, seats, {
+      repoPath: makeRepo(),
+      goal: 'g',
+      adaptiveTeam: false,
+      visualReview: false,
+      maxParallel: 3,
+    });
+    expect(off).toMatchObject({ adaptiveTeam: false, visualReview: false, maxParallel: 3 });
+    const on = await createProject(store, seats, { repoPath: makeRepo(), goal: 'g' });
+    expect(on).toMatchObject({ adaptiveTeam: true, visualReview: true, maxParallel: 1 });
+  });
+});

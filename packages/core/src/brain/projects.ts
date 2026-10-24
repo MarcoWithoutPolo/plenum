@@ -39,6 +39,8 @@ export interface CreateProjectInput {
   maxParallel?: number;
   /** An AI that can see reviews the screenshots too (web projects). On unless set to false. */
   visualReview?: boolean;
+  /** Reorder the team from measured speed, reliability and quota. On unless set to false. */
+  adaptiveTeam?: boolean;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -79,6 +81,7 @@ export async function createProject(
     ...(input.maxAttempts !== undefined && { maxAttempts: input.maxAttempts }),
     ...(input.maxParallel !== undefined && { maxParallel: input.maxParallel }),
     ...(input.visualReview !== undefined && { visualReview: input.visualReview }),
+    ...(input.adaptiveTeam !== undefined && { adaptiveTeam: input.adaptiveTeam }),
     ...(input.retryStrategy && { retryStrategy: input.retryStrategy }),
     ...(input.askPolicy && { askPolicy: input.askPolicy }),
     ...(input.permissions && { permissions: input.permissions }),

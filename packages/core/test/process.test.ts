@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isNotFound, runCommand, streamProcess, type ProcessChunk } from '../src/index.js';
 
@@ -44,6 +47,42 @@ describe('streamProcess', () => {
     const exit = chunks.at(-1);
     expect(exit?.kind === 'exit' && exit.error).toBe('Cancelled');
   });
+
+  // A CLI started through an npm .cmd shim, running a shell of its own: on Windows, stopping
+  // it must take the whole tree down, or the shell keeps the worktree locked (live scenario 9).
+  it.skipIf(process.platform !== 'win32')(
+    'kills what the process started too, when aborted',
+    async () => {
+      const controller = new AbortController();
+      // Like an npm-installed CLI: a .cmd shim (cmd.exe) that runs node, which prints its pid.
+      const dir = mkdtempSync(join(tmpdir(), 'conclave-shim-'));
+      writeFileSync(join(dir, 'cli.js'), 'console.log(process.pid);setTimeout(()=>{},60000)');
+      writeFileSync(join(dir, 'cli.cmd'), `@"${node}" "%~dp0cli.js" %*\r\n`);
+      let grandchild = 0;
+      for await (const c of streamProcess({
+        command: join(dir, 'cli.cmd'),
+        args: [],
+        signal: controller.signal,
+      })) {
+        if (c.kind === 'line' && !grandchild) {
+          grandchild = Number(c.line);
+          controller.abort();
+        }
+      }
+      expect(grandchild).toBeGreaterThan(0);
+      const alive = () => {
+        try {
+          process.kill(grandchild, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const end = Date.now() + 5000;
+      while (alive() && Date.now() < end) await new Promise((r) => setTimeout(r, 100));
+      expect(alive()).toBe(false);
+    },
+  );
 });
 
 describe('runCommand', () => {

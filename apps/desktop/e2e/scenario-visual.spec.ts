@@ -356,7 +356,9 @@ test('scenario 11: the review time budget', async () => {
     const p = await api<{ id: string }>('projects.create', {
       repoPath: repo('11', name, { 'package.json': pkg(name), 'README.md': `# ${name}\n` }),
       name,
-      goal: 'A dependency-free Node.js module src/units.js that converts between at least 40 units of length, mass, volume and temperature, table-driven, with convert(value, from, to) and a list() of units, plus node:test tests in test/ that cover every unit. npm test runs node --test.',
+      // A web page: Antigravity's review then reads screenshots too, which makes it slow
+      // (98 s in scenario 9), past the 90 s budget.
+      goal: 'A static unit converter web page: index.html, style.css and app.js at the top of the repo, no build step and no dependencies. Convert between at least 30 units of length, mass, volume and temperature, picked from two dropdowns, updating as you type, with a swap button. Light and dark themes that follow the system setting, a layout that works on a 390px-wide phone without sideways scrolling, readable contrast and controls at least 44px tall. The conversion table and convert(value, from, to) live in units.js, which works both in the page and in node:test tests in test/ covering every unit. npm test runs node --test.',
       // Antigravity reviews first, in the order you set; Claude is the faster backup.
       routing: {
         planner: [{ provider: 'claude' }],
@@ -490,6 +492,18 @@ test('scenario 13: skip a running task from the chat', async () => {
       maxParallel: 2,
       askPolicy: 'decide',
     });
+    // Three independent tasks, so two lanes build at once (a goal this small plans as one).
+    for (const [mod, fns] of [
+      ['case', 'camelCase, snakeCase and kebabCase'],
+      ['pad', 'padLeft, padRight and center'],
+      ['count', 'countWords, countLines and countChars'],
+    ]) {
+      await api('projects.addTask', p.id, {
+        title: `Add src/${mod}.js`,
+        spec: `Create src/${mod}.js exporting ${fns}, with thorough node:test tests in test/${mod}.test.js (edge cases: empty strings, unicode, invalid input).`,
+        after: [],
+      });
+    }
     await api('projects.start', p.id);
     await openProject(page, name);
     // Wait for two tasks building at once, then ask the chat to skip one of them.

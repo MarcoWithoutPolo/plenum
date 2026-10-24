@@ -44,7 +44,10 @@ export async function* streamProcess(opts: ProcessOptions): AsyncGenerator<Proce
   const kill = (reason: string) => {
     if (child.exitCode !== null || child.killed) return;
     killedReason = reason;
-    child.kill();
+    // On Windows the child is often an npm .cmd shim: killing it alone leaves the CLI and the
+    // shells it started running (and holding the worktree). Take the whole tree down.
+    if (process.platform === 'win32') void killTree(child);
+    else child.kill();
   };
   const onAbort = () => kill('Cancelled');
   opts.signal?.addEventListener('abort', onAbort, { once: true });

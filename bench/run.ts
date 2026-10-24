@@ -54,6 +54,8 @@ const { values } = parseArgs({
     level: { type: 'string', default: '3' },
     /** Screenshots and the free visual checks for web projects (needs Chrome or Edge). */
     shots: { type: 'string', default: 'on' },
+    /** A reviewer that can see also looks at the screenshots (web projects; needs --shots on). */
+    visual: { type: 'string', default: 'on' },
     runs: { type: 'string', default: '1' },
     'timeout-min': { type: 'string', default: '40' },
     nudges: { type: 'string', default: '2' },
@@ -280,6 +282,7 @@ async function runConclave(
     goal,
     askPolicy: 'decide',
     maxParallel: parallel,
+    visualReview: values.visual !== 'off',
     ...(team && { routing: team }),
     permissions: {
       level: Number(values.level) as 1 | 2 | 3 | 4 | 5,
@@ -299,7 +302,11 @@ async function runConclave(
   try {
     const chrome = values.shots === 'off' ? null : findChrome();
     snapshotter = chrome ? new ChromeSnapshotter(chrome) : undefined;
-    notes.push(snapshotter ? 'screenshots and visual checks on' : 'screenshots off');
+    notes.push(
+      snapshotter
+        ? `screenshots and visual checks on, visual review ${values.visual === 'off' ? 'off' : 'on'}`
+        : 'screenshots off',
+    );
     const brain = new Brain(engine, projectRow.id, { home, ...(snapshotter && { snapshotter }) });
     const outcome = await brain.run({ signal: controller.signal, maxRounds: 400 });
     ok = outcome.kind === 'done';
@@ -317,7 +324,7 @@ async function runConclave(
   const rows = db
     .prepare(
       `SELECT provider, role, COUNT(*) AS runs, SUM(input_tokens) AS inp, SUM(output_tokens) AS outp,
-         SUM(duration_ms) AS ms
+         SUM(duration_ms) AS ms, SUM(image_tokens) AS img, SUM(cancelled) AS cancelled
        FROM agent_runs GROUP BY provider, role ORDER BY provider, role`,
     )
     .all() as {
@@ -327,7 +334,19 @@ async function runConclave(
     inp: number;
     outp: number;
     ms: number;
+    img: number;
+    cancelled: number;
   }[];
+  const img = rows.reduce((n, r) => n + (r.img ?? 0), 0);
+  const inp = rows.reduce((n, r) => n + (r.inp ?? 0), 0);
+  if (img) {
+    notes.push(
+      `visual review: ~${img} image tokens, ${((img / Math.max(1, inp)) * 100).toFixed(1)}% of input`,
+    );
+  }
+  const backups = rows.reduce((n, r) => n + (r.cancelled ?? 0), 0);
+  if (backups)
+    notes.push(`review time budget: ${backups} review(s) stopped after a faster verdict`);
   const questions = engine.store.projects
     .approvals(projectRow.id)
     .filter((a) => a.kind === 'question').length;

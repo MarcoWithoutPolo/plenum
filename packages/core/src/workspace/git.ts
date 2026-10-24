@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { runCommand, type CommandResult } from '../process.js';
+import { removeDir, runCommand, type CommandResult } from '../process.js';
 
 export class GitError extends Error {
   constructor(
@@ -150,7 +150,9 @@ export class Workspace {
     const path = this.taskPath(taskId);
     if (existsSync(path)) {
       await git(this.repo, ['worktree', 'remove', '--force', path], true);
-      if (existsSync(path)) rmSync(path, { recursive: true, force: true });
+      // Windows keeps a folder locked for a moment after the last process in it exits; a
+      // leftover folder never stops the project (git prunes the worktree either way).
+      if (existsSync(path)) await removeDir(path, 20);
     }
     await git(this.repo, ['worktree', 'prune'], true);
     await git(this.repo, ['branch', '-D', this.taskBranch(taskId)], true);
