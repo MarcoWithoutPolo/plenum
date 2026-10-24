@@ -67,8 +67,17 @@ describe('Preview detection', () => {
     expect(detectPreview(vite)).toEqual({
       kind: 'command',
       command: 'npm run dev',
+      runs: 'vite',
       readyTimeoutMs: 60_000,
     });
+    // What it runs includes its pre-script, which npm runs first.
+    const prepped = folder({
+      'package.json': pkg({
+        scripts: { predev: 'node prep.js', dev: 'vite' },
+        devDependencies: { vite: '7' },
+      }),
+    });
+    expect(detectPreview(prepped)).toMatchObject({ runs: 'node prep.js && vite' });
     const next = folder({
       'package.json': pkg({ scripts: { start: 'next start' } }),
       'next.config.mjs': '',
@@ -151,6 +160,7 @@ http.createServer((q, s) => s.end('dev page')).listen(port, '127.0.0.1', () => {
     const server = new PreviewServer(dir, {
       kind: 'command',
       command: 'node server.js',
+      runs: 'node server.js',
       readyTimeoutMs: 20_000,
     });
     servers.push(server);
@@ -169,6 +179,7 @@ http.createServer((q, s) => s.end('dev page')).listen(port, '127.0.0.1', () => {
     const slow = new PreviewServer(quiet, {
       kind: 'command',
       command: 'node server.js',
+      runs: 'node server.js',
       readyTimeoutMs: 1500,
     });
     servers.push(slow);
@@ -181,6 +192,7 @@ http.createServer((q, s) => s.end('dev page')).listen(port, '127.0.0.1', () => {
     const crash = new PreviewServer(broken, {
       kind: 'command',
       command: 'node server.js',
+      runs: 'node server.js',
       readyTimeoutMs: 20_000,
     });
     servers.push(crash);
@@ -233,14 +245,32 @@ describe('BrainManager.preview', () => {
     expect(await brains.preview(project.id)).toEqual({
       kind: 'needs_approval',
       command: 'npm run dev',
+      runs: 'node server.js',
     });
     brains.allowPreviewCommand(project.id, 'npm run dev');
-    expect(store.projects.get(project.id)?.previewCommand).toBe('npm run dev');
-    expect(store.decisions.list(project.id).map((d) => d.answer)).toEqual(['npm run dev']);
+    expect(store.projects.get(project.id)?.previewCommand).toBe('npm run dev → node server.js');
+    expect(store.decisions.list(project.id).map((d) => d.answer)).toEqual([
+      'npm run dev → node server.js',
+    ]);
     const result = await brains.preview(project.id);
     expect(result).toMatchObject({ kind: 'ready', static: false });
     if (result.kind === 'ready') expect(await (await fetch(result.url)).text()).toBe('ok');
     await brains.stopPreviews();
+
+    // Same script name, different code (an agent edited package.json): it asks again.
+    writeFileSync(
+      join(project.repoPath, 'package.json'),
+      pkg({ scripts: { dev: 'node server.js --other' } }),
+    );
+    expect(await brains.preview(project.id)).toEqual({
+      kind: 'needs_approval',
+      command: 'npm run dev',
+      runs: 'node server.js --other',
+    });
+    // Only what's detected now can be allowed.
+    expect(() => brains.allowPreviewCommand(project.id, 'npm run start')).toThrow(
+      /no longer matches/,
+    );
   });
 
   it('says plainly when there is nothing to preview', async () => {

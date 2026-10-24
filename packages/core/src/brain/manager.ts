@@ -12,7 +12,12 @@ import type {
 import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
 import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
-import { PreviewServer, detectPreview } from '../preview/preview.js';
+import {
+  PreviewServer,
+  detectPreview,
+  previewAllowed,
+  previewApproval,
+} from '../preview/preview.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import type { Governor } from '../governor/governor.js';
 import { IN_FLIGHT } from '@conclave/shared';
@@ -446,18 +451,14 @@ export class BrainManager {
   async preview(projectId: string, opts: { taskId?: string } = {}): Promise<PreviewResult> {
     const project = this.ctx.store.projects.get(projectId);
     if (!project) throw new Error('No such project.');
-    const workspace = projectWorkspace(this.home, project);
-    let dir: string;
-    if (opts.taskId) {
-      dir = workspace.taskPath(opts.taskId);
-      if (!existsSync(dir)) return { kind: 'none', reason: 'This task has no worktree right now.' };
-    } else {
-      dir = existsSync(workspace.integrationPath) ? workspace.integrationPath : project.repoPath;
+    const dir = this.previewDir(project, opts.taskId);
+    if (opts.taskId && !existsSync(dir)) {
+      return { kind: 'none', reason: 'This task has no worktree right now.' };
     }
     const plan = detectPreview(dir);
     if (plan.kind === 'none') return { kind: 'none', reason: plan.reason };
-    if (plan.kind === 'command' && project.previewCommand !== plan.command) {
-      return { kind: 'needs_approval', command: plan.command };
+    if (plan.kind === 'command' && !previewAllowed(project.previewCommand, plan)) {
+      return { kind: 'needs_approval', command: plan.command, runs: plan.runs };
     }
     const key = previewKey(projectId, opts.taskId);
     let server = this.previews.get(key);
@@ -484,16 +485,34 @@ export class BrainManager {
     }
   }
 
-  /** You allowed this dev-server command for this project's previews: kept as your decision. */
-  allowPreviewCommand(projectId: string, command: string): Project {
+  /** What a preview shows: one task's worktree, or what's merged so far (the repo before that). */
+  private previewDir(project: Project, taskId?: string): string {
+    const workspace = projectWorkspace(this.home, project);
+    if (taskId) return workspace.taskPath(taskId);
+    return existsSync(workspace.integrationPath) ? workspace.integrationPath : project.repoPath;
+  }
+
+  /**
+   * You allowed the dev-server command this preview showed you (the project's, or one task's):
+   * kept as your decision, bound to what the script runs. If package.json changes it, you're
+   * asked again.
+   */
+  allowPreviewCommand(projectId: string, command: string, opts: { taskId?: string } = {}): Project {
     const project = this.ctx.store.projects.get(projectId);
     if (!project) throw new Error('No such project.');
-    const next = this.ctx.store.projects.update(projectId, { previewCommand: command })!;
+    const plan = detectPreview(this.previewDir(project, opts.taskId));
+    if (plan.kind !== 'command' || plan.command !== command) {
+      throw new Error(
+        'That preview command no longer matches the project. Open the preview again.',
+      );
+    }
+    const approval = previewApproval(plan);
+    const next = this.ctx.store.projects.update(projectId, { previewCommand: approval })!;
     this.ctx.store.decisions.add({
       projectId,
       kind: 'decision',
       question: 'Which command may start live previews?',
-      answer: command,
+      answer: approval,
       source: 'you',
     });
     this.notify(() =>
@@ -565,6 +584,6 @@ const previewKey = (projectId: string, taskId?: string) =>
 /** What opening a preview gave: a URL, a command to allow first, nothing to preview, or why it failed. */
 export type PreviewResult =
   | { kind: 'ready'; url: string; static: boolean }
-  | { kind: 'needs_approval'; command: string }
+  | { kind: 'needs_approval'; command: string; runs: string }
   | { kind: 'none'; reason: string }
   | { kind: 'failed'; error: string; logs: string };

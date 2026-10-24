@@ -121,8 +121,9 @@ export function PreviewPane({
       {state.kind === 'needs_approval' && (
         <PreviewApproval
           command={state.command}
+          runs={state.runs}
           onAllow={async () => {
-            await api().projects.allowPreview(projectId, state.command);
+            await api().projects.allowPreview(projectId, state.command, taskId);
             await open();
           }}
           onCancel={onClose}
@@ -226,10 +227,13 @@ function ScaledFrame({
 /** The one-time question before a project's own dev server runs on your computer. */
 export function PreviewApproval({
   command,
+  runs,
   onAllow,
   onCancel,
 }: {
   command: string;
+  /** What the script runs, from package.json. */
+  runs: string;
   onAllow: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -240,9 +244,10 @@ export function PreviewApproval({
       <p className="text-[14px] font-semibold">
         Start a preview with <span className="font-mono text-[13px]">{command}</span>?
       </p>
-      <p className="mt-1 max-w-2xl text-[13px] text-muted">
+      <p className="mt-1 font-mono text-[12px] text-muted">Runs: {runs}</p>
+      <p className="mt-1.5 max-w-2xl text-[13px] text-muted">
         It runs the project’s own code on your computer, in this project’s folder, outside any
-        agent’s sandbox. You’ll be asked again if the command changes.
+        agent’s sandbox. You’ll be asked again if package.json changes what it runs.
       </p>
       {error && <p className="mt-2 text-[12.5px] text-danger">{error}</p>}
       <div className="mt-4 flex gap-2">

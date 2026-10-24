@@ -341,7 +341,7 @@ describe('snapshotTask', () => {
     expect(await snapshotTask({ ...base, snapshotter: snap })).toEqual({
       kind: 'skipped',
       reason:
-        'Screenshots need a preview: allow npm run dev for this project in its Preview first.',
+        'Screenshots need a preview: allow npm run dev (vite) for this project in its Preview first.',
     });
     const site = await project({ 'index.html': '<p>x</p>' });
     const stuck = new FakeSnapshotter(() => new Promise<never>(() => undefined));

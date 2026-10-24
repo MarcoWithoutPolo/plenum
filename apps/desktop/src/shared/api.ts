@@ -312,7 +312,8 @@ export interface ConclaveApi {
     dismissSteering(messageId: string): Promise<SteeringMessage>;
     /** A live preview of the integration branch, or of one task's worktree. */
     preview(projectId: string, taskId?: string): Promise<PreviewResult>;
-    allowPreview(projectId: string, command: string): Promise<Project>;
+    /** Allow the dev-server command a preview showed (that task's, with `taskId`). */
+    allowPreview(projectId: string, command: string, taskId?: string): Promise<Project>;
     stopPreview(projectId: string, taskId?: string): Promise<void>;
     previewLogs(projectId: string, taskId?: string): Promise<string>;
     snapshots(projectId: string, taskId: string): Promise<TaskSnapshots>;

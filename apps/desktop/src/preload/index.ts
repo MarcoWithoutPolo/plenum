@@ -58,7 +58,8 @@ const api: ConclaveApi = {
     applySteering: (messageId, indexes) => invoke(IPC.projectsApplySteering, messageId, indexes),
     dismissSteering: (messageId) => invoke(IPC.projectsDismissSteering, messageId),
     preview: (projectId, taskId) => invoke(IPC.projectsPreview, projectId, taskId),
-    allowPreview: (projectId, command) => invoke(IPC.projectsAllowPreview, projectId, command),
+    allowPreview: (projectId, command, taskId) =>
+      invoke(IPC.projectsAllowPreview, projectId, command, taskId),
     stopPreview: (projectId, taskId) => invoke(IPC.projectsStopPreview, projectId, taskId),
     previewLogs: (projectId, taskId) => invoke(IPC.projectsPreviewLogs, projectId, taskId),
     snapshots: (projectId, taskId) => invoke(IPC.projectsSnapshots, projectId, taskId),

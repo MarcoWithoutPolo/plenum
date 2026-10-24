@@ -15,8 +15,22 @@ import { killTree } from '../process.js';
 /** What a live preview of a folder would run. */
 export type PreviewPlan =
   | { kind: 'static'; root: string }
-  | { kind: 'command'; command: string; readyTimeoutMs: number }
+  /** `runs`: what npm runs for it, from package.json (its pre-script too). */
+  | { kind: 'command'; command: string; runs: string; readyTimeoutMs: number }
   | { kind: 'none'; reason: string };
+
+/**
+ * What you allow for a project's previews: the command and what it runs. Bound to the script's
+ * text, so an agent editing package.json can't change what runs without asking you again.
+ */
+export function previewApproval(plan: Extract<PreviewPlan, { kind: 'command' }>): string {
+  return `${plan.command} → ${plan.runs}`;
+}
+
+/** Whether `previewCommand` (a project's stored approval) allows this plan. */
+export function previewAllowed(previewCommand: string | null, plan: PreviewPlan): boolean {
+  return plan.kind === 'command' && previewCommand === previewApproval(plan);
+}
 
 const FRAMEWORK_DEPS = [
   'vite',
@@ -58,7 +72,10 @@ export function detectPreview(dir: string): PreviewPlan {
   const html = STATIC_ROOTS.find((r) => existsSync(join(dir, r, 'index.html')));
   const script = ['dev', 'start', 'preview'].find((s) => typeof scripts[s] === 'string');
   if (script && (framework || html !== undefined)) {
-    return { kind: 'command', command: `npm run ${script}`, readyTimeoutMs: 60_000 };
+    const runs = [scripts[`pre${script}`], scripts[script]]
+      .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
+      .join(' && ');
+    return { kind: 'command', command: `npm run ${script}`, runs, readyTimeoutMs: 60_000 };
   }
   if (html !== undefined) return { kind: 'static', root: join(dir, html) };
   if (framework) {

@@ -41,6 +41,7 @@ import {
   Governor,
   routingInsights,
   detectPreview,
+  previewAllowed,
 } from '@conclave/core';
 import {
   IPC,
@@ -163,7 +164,7 @@ export function registerProjectIpc(
       return {
         kind: 'command',
         command: plan.command,
-        allowed: project.previewCommand === plan.command,
+        allowed: previewAllowed(project.previewCommand, plan),
       };
     }
     return null;
@@ -368,17 +369,13 @@ export function registerProjectIpc(
   handle(IPC.projectsPreview, (projectId: string, taskId?: unknown) =>
     manager.preview(mustGet(projectId).id, { ...(optId(taskId) && { taskId: optId(taskId)! }) }),
   );
-  handle(IPC.projectsAllowPreview, async (projectId: string, command: unknown) => {
-    const project = mustGet(projectId);
-    // Only the command Conclave detected and showed you can be allowed, never one sent from the page.
-    const shown = await manager.preview(project.id);
-    if (shown.kind !== 'needs_approval' || shown.command !== command) {
-      throw new Error(
-        'That preview command no longer matches the project. Open the preview again.',
-      );
-    }
-    return manager.allowPreviewCommand(project.id, shown.command);
-  });
+  handle(IPC.projectsAllowPreview, (projectId: string, command: unknown, taskId?: unknown) =>
+    // Only what Conclave detects in that folder right now can be allowed (the manager checks),
+    // never a command sent from the page.
+    manager.allowPreviewCommand(mustGet(projectId).id, text(command, 200), {
+      ...(optId(taskId) && { taskId: optId(taskId)! }),
+    }),
+  );
   handle(IPC.projectsStopPreview, (projectId: string, taskId?: unknown) =>
     manager.stopPreview(mustGet(projectId).id, optId(taskId)),
   );

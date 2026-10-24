@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { Project } from '@conclave/shared';
 import type { Store } from '../store/store.js';
 import type { SnapshotSet } from '../store/snapshots.js';
-import { PreviewServer, detectPreview } from './preview.js';
+import { PreviewServer, detectPreview, previewAllowed } from './preview.js';
 import {
   diffShots,
   shotPlan,
@@ -47,10 +47,10 @@ export async function snapshotTask(input: {
   const { store, project } = input;
   const plan = detectPreview(input.afterDir);
   if (plan.kind === 'none') return { kind: 'skipped', reason: plan.reason };
-  if (plan.kind === 'command' && project.previewCommand !== plan.command) {
+  if (plan.kind === 'command' && !previewAllowed(project.previewCommand, plan)) {
     return {
       kind: 'skipped',
-      reason: `Screenshots need a preview: allow ${plan.command} for this project in its Preview first.`,
+      reason: `Screenshots need a preview: allow ${plan.command} (${plan.runs}) for this project in its Preview first.`,
     };
   }
   const deadline = Date.now() + (input.deadlineMs ?? 60_000);
@@ -100,8 +100,7 @@ export async function snapshotTask(input: {
     let before = store.snapshots.forCommit(project.id, input.beforeCommit) ?? null;
     const beforePlan = detectPreview(input.beforeDir);
     const beforeOk =
-      beforePlan.kind === 'static' ||
-      (beforePlan.kind === 'command' && project.previewCommand === beforePlan.command);
+      beforePlan.kind === 'static' || previewAllowed(project.previewCommand, beforePlan);
     if (!before && beforeOk) {
       const id = store.snapshots.newId();
       before = store.snapshots.save({
