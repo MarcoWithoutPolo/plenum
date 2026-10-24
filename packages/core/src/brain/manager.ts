@@ -15,6 +15,7 @@ import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
 import { PreviewServer, detectPreview } from '../preview/preview.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import type { Governor } from '../governor/governor.js';
+import { IN_FLIGHT } from '@conclave/shared';
 import { seatStats, withPriors } from '../governor/rank.js';
 import { teamCheck, type StartCheck } from '../governor/startcheck.js';
 import { seatLabel } from '../chat/transcript.js';
@@ -146,12 +147,27 @@ export async function taskChanges(
 export class BrainManager {
   private readonly running = new Map<
     string,
-    { controller: AbortController; done: Promise<RoundOutcome> }
+    { controller: AbortController; done: Promise<RoundOutcome>; brain: Brain }
   >();
   private readonly listeners = new Set<(event: BrainEvent) => void>();
 
   /** One governor for every project, so they share each AI's limits and cooldowns (C4). */
   private readonly governor: Governor;
+  /** Sleeping brains (waiting for usage, quiet hours, a cap); wake() ends their sleep now. */
+  private readonly sleepers = new Set<() => void>();
+  private readonly sleep = (ms: number, signal?: AbortSignal) =>
+    new Promise<void>((resolve) => {
+      const timer = setTimeout(done, ms);
+      const sleepers = this.sleepers;
+      function done() {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', done);
+        sleepers.delete(done);
+        resolve();
+      }
+      signal?.addEventListener('abort', done, { once: true });
+      sleepers.add(done);
+    });
 
   constructor(
     private readonly ctx: EngineContext,
@@ -164,6 +180,14 @@ export class BrainManager {
   onEvent(listener: (event: BrainEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /**
+   * Settings changed (Pause everything off, quiet hours, caps): every waiting project looks again
+   * now instead of at the end of its sleep. A scheduled start still waits for its time.
+   */
+  wake(): void {
+    for (const done of [...this.sleepers]) done();
   }
 
   isRunning(projectId: string): boolean {
@@ -234,6 +258,7 @@ export class BrainManager {
     const done = brain
       .run({
         signal: controller.signal,
+        sleep: this.sleep,
         ...(later && {
           startAt: {
             at: later,
@@ -249,7 +274,7 @@ export class BrainManager {
         return { kind: 'stopped', reason: message } as RoundOutcome;
       })
       .finally(() => this.running.delete(projectId));
-    this.running.set(projectId, { controller, done });
+    this.running.set(projectId, { controller, done, brain });
   }
 
   /** Stop now: the agent or test in flight is cancelled and its task returns to the queue. */
@@ -295,8 +320,22 @@ export class BrainManager {
     return task;
   }
 
+  /**
+   * Skip a task. One that's building, testing or in review stops right away: only its lane is
+   * cancelled, its worktree discarded, and the lane is free again. A task left mid-step by a
+   * closed app is simply skipped.
+   */
   skip(taskId: string): Task {
-    return this.notify(() => skipTask(this.ctx.store.projects, taskId));
+    return this.notify(() => this.skipNow(taskId));
+  }
+
+  private skipNow(taskId: string): Task {
+    const task = this.ctx.store.projects.getTask(taskId);
+    const run = task && this.running.get(task.projectId);
+    const live = task && IN_FLIGHT.includes(task.status) && task.status !== 'merging';
+    const next = skipTask(this.ctx.store.projects, taskId, { running: Boolean(live) });
+    if (live && run) run.brain.abortTask(taskId);
+    return next;
   }
 
   /* ── Steering (C5) ─────────────────────────────────────────────────── */
@@ -328,7 +367,9 @@ export class BrainManager {
   }
 
   applySteering(messageId: string, indexes: number[]): SteeringMessage {
-    const message = this.notify(() => applySteering(this.ctx, messageId, indexes));
+    const message = this.notify(() =>
+      applySteering(this.ctx, messageId, indexes, (id) => this.skipNow(id)),
+    );
     if (message.outcome?.some((o) => o.startsWith('Added '))) this.reopen(message.projectId);
     return message;
   }

@@ -18,7 +18,14 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import type { BrainEvent, BrainEventKind, Project, Seat, Task } from '@conclave/shared';
+import {
+  IN_FLIGHT,
+  type BrainEvent,
+  type BrainEventKind,
+  type Project,
+  type Seat,
+  type Task,
+} from '@conclave/shared';
 import { providerName, useApp } from '@/lib/store';
 import { ProviderDot } from './bits';
 import { modelLabel } from './SeatPicker';
@@ -147,7 +154,7 @@ export function RoleLine({ label, seats }: { label: string; seats: Seat[] }) {
 
 /* ── Tasks ───────────────────────────────────────────────────────────── */
 
-export const ACTIVE: Task['status'][] = ['building', 'verifying', 'reviewing'];
+export const ACTIVE: readonly Task['status'][] = IN_FLIGHT;
 
 export function taskVerb(task: Task): string {
   switch (task.status) {
@@ -157,6 +164,8 @@ export function taskVerb(task: Task): string {
       return 'Running tests';
     case 'reviewing':
       return 'In review';
+    case 'merging':
+      return 'Waiting to merge';
     case 'merged':
       return 'Merged';
     case 'failed':

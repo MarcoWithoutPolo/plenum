@@ -9,6 +9,7 @@ import {
   RetryStrategy,
   Routing,
   Seat,
+  IN_FLIGHT,
   taskProgress,
   type Project,
 } from '@conclave/shared';
@@ -113,7 +114,7 @@ export function registerProjectIpc(
         running: manager.isRunning(project.id),
         counts: {
           queued: count('queued'),
-          active: count('building', 'verifying', 'reviewing'),
+          active: count(...IN_FLIGHT),
           merged: count('merged'),
           failed: count('failed'),
           // Replaced and skipped work leaves the total, so failures never inflate it.

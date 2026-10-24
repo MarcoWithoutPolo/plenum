@@ -1,5 +1,11 @@
 import { existsSync } from 'node:fs';
-import { SteeringAction, type Project, type SteeringMessage, type Task } from '@conclave/shared';
+import {
+  IN_FLIGHT,
+  SteeringAction,
+  type Project,
+  type SteeringMessage,
+  type Task,
+} from '@conclave/shared';
 import { collect } from '../collect.js';
 import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
@@ -76,7 +82,7 @@ export function editTask(
     ...(patch.title?.trim() && { title: patch.title.trim().slice(0, 200) }),
     ...(patch.spec?.trim() && { spec: patch.spec.trim() }),
   });
-  const live = ['building', 'verifying', 'reviewing'].includes(task.status);
+  const live = IN_FLIGHT.includes(task.status);
   projects.log({
     projectId: task.projectId,
     taskId: task.id,
@@ -143,7 +149,7 @@ Reply with ONLY one JSON object:
 Actions (only what the user asked for; [] when they only asked a question):
 - {"type": "add_task", "title": "short imperative", "spec": "what to do and how it's checked", "after": ["task ids it waits for"]}
 - {"type": "edit_task", "id": "k_…", "title": "…", "spec": "…"}  (only queued or failed tasks, or a running one for its next attempt)
-- {"type": "skip_task", "id": "k_…"}  (queued, waiting or failed tasks)
+- {"type": "skip_task", "id": "k_…"}  (queued, waiting, failed or running tasks; a running one stops)
 - {"type": "move_task", "id": "k_…", "before": "k_… or null for last"}  (queued tasks)
 - {"type": "decision", "question": "…", "answer": "…"}  (something the user decided, for every agent to follow)
 - {"type": "pause"}  (stop starting new steps; running ones finish)
@@ -234,6 +240,8 @@ export function applySteering(
   ctx: EngineContext,
   messageId: string,
   indexes: number[],
+  /** How to skip a task; the manager's also stops one that's running. */
+  skip: (taskId: string) => Task = (id) => skipTask(ctx.store.projects, id),
 ): SteeringMessage {
   const store = ctx.store;
   const message = store.steering.get(messageId);
@@ -250,7 +258,7 @@ export function applySteering(
         case 'edit_task':
           return `Edited “${editTask(store.projects, a.id, a).title}”`;
         case 'skip_task':
-          return `Skipped “${skipTask(store.projects, a.id).title}”`;
+          return `Skipped “${skip(a.id).title}”`;
         case 'move_task':
           return `Moved “${placeTask(store.projects, a.id, a.before).title}”`;
         case 'decision':

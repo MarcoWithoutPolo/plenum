@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -14,6 +14,7 @@ import {
   createProject,
   decideApproval,
   isProjectRunning,
+  projectRoot,
   taskChanges,
 } from '../src/index.js';
 
@@ -110,6 +111,54 @@ describe('BrainManager', () => {
     expect(task?.attempts).toBe(0);
     expect(store.projects.get(project.id)?.status).toBe('stopped');
     expect(manager.isRunning(project.id)).toBe(false);
+  });
+
+  it('skips a task mid-build: only its lane stops, and the project goes on', async () => {
+    const { store, project, manager, home } = await setup({
+      reply: 'working '.repeat(400),
+      delayMs: 20,
+      act: writeHello,
+    });
+    manager.start(project.id);
+    await until(() => store.projects.listTasks(project.id)[0]?.status === 'building');
+    const [building] = store.projects.listTasks(project.id);
+    expect(manager.skip(building!.id).status).toBe('skipped');
+
+    // The planner's next round says the goal is met; nothing was built or merged.
+    await until(() => !manager.isRunning(project.id));
+    const [task] = store.projects.listTasks(project.id);
+    expect(task).toMatchObject({ status: 'skipped', attempts: 0, mergeCommit: null });
+    const messages = store.projects.events(project.id).map((e) => e.message);
+    expect(messages).toContain('Stopped work on Add hello: you skipped it');
+    expect(existsSync(join(projectRoot(home, project.id), 'tasks', task!.id))).toBe(false);
+    // The stopped build is no failure of Codex's.
+    const runs = store.db
+      .prepare("SELECT ok, cancelled FROM agent_runs WHERE role = 'builder'")
+      .all() as { ok: number; cancelled: number }[];
+    expect(runs).toEqual([{ ok: 0, cancelled: 1 }]);
+  });
+
+  it("won't skip a task that is merging", async () => {
+    const { store, project, manager } = await setup();
+    const [task] = store.projects.addTasks(project.id, [{ title: 'T', spec: 'S' }]);
+    store.projects.updateTask(task!.id, { status: 'merging' });
+    expect(() => manager.skip(task!.id)).toThrow(/merging right now/);
+    // A merge cut short by a closed app goes back to the queue like any other step.
+    expect(store.projects.requeueInterrupted(project.id).map((t) => t.id)).toEqual([task!.id]);
+    expect(store.projects.getTask(task!.id)?.status).toBe('queued');
+  });
+
+  it('wakes a waiting project as soon as settings change', async () => {
+    const { store, project, manager } = await setup();
+    store.settings.update({ limits: { pauseAll: true } });
+    manager.start(project.id);
+    await until(() => store.projects.get(project.id)?.status === 'waiting');
+    // Without wake() it would sleep for minutes; with it, it looks again right away.
+    store.settings.update({ limits: { pauseAll: false } });
+    const woke = Date.now();
+    manager.wake();
+    await until(() => store.projects.get(project.id)?.status === 'done', 10_000);
+    expect(Date.now() - woke).toBeLessThan(5_000);
   });
 
   it('waits to start until the time asked, says why, and Stop ends the wait', async () => {

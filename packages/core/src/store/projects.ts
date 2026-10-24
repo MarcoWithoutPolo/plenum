@@ -18,6 +18,7 @@ import {
   type Routing,
   type Task,
   type TaskStatus,
+  IN_FLIGHT,
 } from '@conclave/shared';
 import { transaction } from './db.js';
 import { newId } from './ids.js';
@@ -379,9 +380,7 @@ export class ProjectStore {
 
   /** After a crash, tasks caught mid-step go back to the queue (the attempt doesn't count). */
   requeueInterrupted(projectId: string): Task[] {
-    const stuck = this.listTasks(projectId).filter((t) =>
-      (['building', 'verifying', 'reviewing'] as TaskStatus[]).includes(t.status),
-    );
+    const stuck = this.listTasks(projectId).filter((t) => IN_FLIGHT.includes(t.status));
     for (const t of stuck) this.updateTask(t.id, { status: 'queued' });
     return stuck;
   }

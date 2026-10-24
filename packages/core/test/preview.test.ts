@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { request } from 'node:http';
 import { join } from 'node:path';
@@ -12,14 +12,15 @@ import {
   createProject,
   detectPreview,
   findLocalUrl,
+  removeDir,
 } from '../src/index.js';
 
 const dirs: string[] = [];
 const servers: PreviewServer[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((s) => s.stop()));
-  for (const d of dirs.splice(0))
-    rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  // Windows can hold a stopped dev server's folder for a few seconds after taskkill returns.
+  for (const d of dirs.splice(0)) await removeDir(d, 20);
 });
 
 function folder(files: Record<string, string>): string {

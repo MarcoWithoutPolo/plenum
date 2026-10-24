@@ -13,7 +13,7 @@ import type {
   Task,
   TaskFailure,
 } from '@conclave/shared';
-import { visualIssueLine } from '@conclave/shared';
+import { IN_FLIGHT, visualIssueLine } from '@conclave/shared';
 import { looksLikeLimit } from '../adapters/cli.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
@@ -156,6 +156,8 @@ export class Brain {
   private gaps: string[] = [];
   /** Set while run() is going; aborting it interrupts the agent or test in flight. */
   private signal: AbortSignal | undefined;
+  /** Each running task's own abort, so one lane can stop (a task skipped mid-run). */
+  private readonly taskAborts = new Map<string, AbortController>();
 
   constructor(
     private readonly ctx: EngineContext,
@@ -284,10 +286,11 @@ export class Brain {
         this.log('wait', options.startAt.reason, {
           data: { until: options.startAt.at, scheduled: true },
         });
-        await (options.sleep ?? interruptibleSleep)(
-          options.startAt.at - Date.now(),
-          options.signal,
-        );
+        // A wake-up (a settings change) doesn't start it early: sleep again until the time.
+        const sleep = options.sleep ?? interruptibleSleep;
+        while (Date.now() < options.startAt.at && !options.signal?.aborted) {
+          await sleep(options.startAt.at - Date.now(), options.signal);
+        }
         if (options.signal?.aborted) {
           if (this.project().status !== 'stopped') this.stop('Stopped by you');
           return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
@@ -485,7 +488,7 @@ export class Brain {
         t = byId.get(t.replacedBy);
       return !t || ['merged', 'failed', 'skipped'].includes(t.status);
     };
-    const active = tasks.filter((t) => ['building', 'verifying', 'reviewing'].includes(t.status));
+    const active = tasks.filter((t) => IN_FLIGHT.includes(t.status));
     const busy = active.flatMap((t) => t.estimate?.files ?? []);
     return tasks.find(
       (t) =>
@@ -506,8 +509,39 @@ export class Brain {
     return this.signal?.aborted === true;
   }
 
+  /** The project was stopped, or this one task was skipped while it ran. */
+  private cut(task: Task): boolean {
+    return this.interrupted || this.taskAborts.get(task.id)?.signal.aborted === true;
+  }
+
+  /** The project's signal, joined with the running task's own (skipping a task mid-build). */
+  private signalFor(task?: Task): AbortSignal | undefined {
+    const own = task && this.taskAborts.get(task.id)?.signal;
+    if (own && this.signal) return AbortSignal.any([this.signal, own]);
+    return own ?? this.signal;
+  }
+
+  /**
+   * Skip a task while it runs: only its lane stops. Its agent or test is cancelled, its worktree
+   * discarded, and the lane is free for the next task. Work it merged earlier stays.
+   */
+  abortTask(taskId: string): boolean {
+    const own = this.taskAborts.get(taskId);
+    if (!own) return false;
+    own.abort();
+    return true;
+  }
+
   /** Stopped mid-step: the task goes back to the queue untouched, as if the step never ran. */
   private async halt(task?: Task): Promise<RoundOutcome> {
+    if (task && !this.interrupted && this.taskAborts.get(task.id)?.signal.aborted) {
+      // Skipped by you while it ran: it stays skipped (even if a step moved it on meanwhile);
+      // only this lane stopped.
+      await this.workspace.removeTaskTree(task.id);
+      const now = this.projects.updateTask(task.id, { status: 'skipped', blockedBy: null });
+      this.log('task', `Stopped work on ${task.title}: you skipped it`, { task: now });
+      return { kind: 'retry', task: now, reason: 'You skipped it' };
+    }
     if (task) {
       this.projects.updateTask(task.id, { status: 'queued' });
       await this.workspace.removeTaskTree(task.id);
@@ -730,7 +764,17 @@ export class Brain {
 
   /* ── One task: build → test → review → merge ───────────────────────── */
 
+  /** One task's attempt, with its own abort for skipping it mid-run. */
   private async work(project: Project, task: Task): Promise<RoundOutcome> {
+    this.taskAborts.set(task.id, new AbortController());
+    try {
+      return await this.attempt(project, task);
+    } finally {
+      this.taskAborts.delete(task.id);
+    }
+  }
+
+  private async attempt(project: Project, task: Task): Promise<RoundOutcome> {
     project = this.expirePermissions(project);
     const permissions = builderPermissions(project.permissions, {
       ...(task.grants?.network && { grantNetwork: true }),
@@ -785,9 +829,9 @@ export class Brain {
       const ran = await runShell(install, {
         cwd,
         timeoutMs: this.testTimeout,
-        ...(this.signal && { signal: this.signal }),
+        ...(this.signalFor(task) && { signal: this.signalFor(task) }),
       });
-      if (this.interrupted) return this.halt(task);
+      if (this.cut(task)) return this.halt(task);
       const tail = ran.output.trim().slice(-3000);
       this.log('agent', `Ran ${install} (approved by you)`, { task, data: { output: tail } });
       // Never commit what a package manager downloads.
@@ -823,7 +867,7 @@ export class Brain {
         grants: Object.keys(rest).length ? rest : null,
       });
     }
-    if (this.interrupted) return this.halt(task);
+    if (this.cut(task)) return this.halt(task);
     if (built.rateLimited) {
       // Not the task's fault: back to the queue for whoever has headroom.
       this.projects.updateTask(task.id, {
@@ -901,9 +945,9 @@ export class Brain {
       const run = await runShell(testCommand, {
         cwd,
         timeoutMs: this.testTimeout,
-        ...(this.signal && { signal: this.signal }),
+        ...(this.signalFor(task) && { signal: this.signalFor(task) }),
       });
-      if (this.interrupted) return this.halt(task);
+      if (this.cut(task)) return this.halt(task);
       const tail = run.output.trim().slice(-4000);
       if (run.code !== 0) {
         this.log('verify', run.timedOut ? 'Tests timed out' : `Tests failed (exit ${run.code})`, {
@@ -927,7 +971,7 @@ export class Brain {
     // Web projects: screenshots and the free visual checks, before any AI reviews.
     if (this.opts.snapshotter) {
       const shots = await this.screenshots(project, task, cwd, commit);
-      if (this.interrupted) return this.halt(task);
+      if (this.cut(task)) return this.halt(task);
       if (shots?.kind === 'taken' && shots.checks.sendBack.length) {
         const found = shots.checks.sendBack;
         return this.sendBack(project, task, {
@@ -1076,7 +1120,7 @@ export class Brain {
           !tried.includes(s.provider),
       );
       const outcome = await this.reviewWithBudget(task, reviewer, backups, run);
-      if (this.interrupted) return this.halt(task);
+      if (this.cut(task)) return this.halt(task);
       ({ seat: reviewer, result, verdict } = outcome);
       if (verdict) break;
       tried.push(reviewer.provider, ...outcome.alsoTried);
@@ -1148,12 +1192,16 @@ export class Brain {
       provider: reviewer.provider,
     });
 
+    // Skipped just now? Then it never merges.
+    if (this.cut(task)) return this.halt(task);
+    // In the merge queue: merges go one at a time, so a lane can wait here for its turn.
+    this.projects.updateTask(task.id, { status: 'merging' });
     const merged = await this.workspace.mergeTask(
       task.id,
       `conclave: merge "${task.title}"`,
       testCommandOf(project) ? (cwd) => this.runTests(project, cwd) : undefined,
     );
-    if (this.interrupted) return this.halt(task);
+    if (this.cut(task)) return this.halt(task);
     if (!merged.ok && merged.kind === 'conflict') {
       this.log('merge', 'Merge conflict with newer work; rebuilding on the latest code', {
         task,
@@ -1374,7 +1422,7 @@ export class Brain {
   ): { merged: string[]; doneWhen: string | null } | undefined {
     const tasks = this.projects.listTasks(this.projectId).filter((t) => t.id !== task.id);
     const open = tasks.some((t) =>
-      ['queued', 'blocked', 'failed', 'building', 'verifying', 'reviewing'].includes(t.status),
+      ['queued', 'blocked', 'failed', ...IN_FLIGHT].includes(t.status),
     );
     if (open || this.openQuestions().length) return undefined;
     return {
@@ -1737,7 +1785,8 @@ export class Brain {
     if (!adapter) throw new Error(`Provider not available: ${seat.provider}`);
     const seen = new Set<string>();
     // The project's stop, and this run's own (a review that lost the race).
-    const signals = [this.signal, extra.signal].filter((s): s is AbortSignal => Boolean(s));
+    const own = task && this.taskAborts.get(task.id)?.signal;
+    const signals = [this.signal, own, extra.signal].filter((s): s is AbortSignal => Boolean(s));
     const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
     const result = await collect(
       adapter.run({
@@ -1782,8 +1831,9 @@ export class Brain {
     if (!result.ok && !result.rateLimited && looksLikeLimit(result.errors.join(' '))) {
       result.rateLimited = { message: result.errors[0] ?? 'usage limit reached' };
     }
-    // Stopped because another run answered first: not the provider's failure.
-    const cancelled = !result.ok && extra.signal?.aborted === true && !this.signal?.aborted;
+    // Stopped because another review answered first, or you skipped the task: not a failure.
+    const cancelled =
+      !result.ok && (extra.signal?.aborted || own?.aborted) === true && !this.signal?.aborted;
     // Screenshots are counted on their own, so Usage can say what visual review costs.
     const pictures = (extra.images ?? []).reduce((n, path) => {
       try {

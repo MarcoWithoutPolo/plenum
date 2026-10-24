@@ -8,7 +8,13 @@ import {
   SendHorizontal,
   SkipForward,
 } from 'lucide-react';
-import type { Project, SteeringAction, SteeringMessage, Task } from '@conclave/shared';
+import {
+  IN_FLIGHT,
+  type Project,
+  type SteeringAction,
+  type SteeringMessage,
+  type Task,
+} from '@conclave/shared';
 import { Button, ProviderDot } from './bits';
 import { Dialog } from './Dialog';
 import { Popover } from './Popover';
@@ -23,7 +29,10 @@ const menuItem =
 
 /* ── Board actions ───────────────────────────────────────────────────── */
 
-/** ⋯ on a task row: move it, edit it or skip it. Only for tasks that haven't started (edit also for failed ones). */
+/**
+ * ⋯ on a task row: move it, edit it or skip it. Moving is for tasks that haven't started; a
+ * running task can be edited (for its next attempt) or stopped and skipped, unless it's merging.
+ */
 export function TaskMenu({
   task,
   tasks,
@@ -41,7 +50,9 @@ export function TaskMenu({
   const at = waiting.findIndex((t) => t.id === task.id);
   const canMove = at >= 0;
   const canEdit = !['merged', 'skipped', 'replaced'].includes(task.status);
-  const canSkip = ['queued', 'blocked', 'failed'].includes(task.status);
+  const live = IN_FLIGHT.includes(task.status);
+  const canSkip =
+    ['queued', 'blocked', 'failed'].includes(task.status) || (live && task.status !== 'merging');
   if (!canEdit) return null;
   const run = async (action: () => Promise<unknown>) => {
     try {
@@ -109,13 +120,20 @@ export function TaskMenu({
             <button
               type="button"
               disabled={!canSkip}
+              title={
+                task.status === 'merging'
+                  ? 'It’s merging right now; revert it once it lands.'
+                  : live
+                    ? 'Stops its agent now and discards the work in progress. Earlier merged work stays.'
+                    : undefined
+              }
               onClick={() => {
                 close();
                 void run(() => api().projects.skip(task.id));
               }}
               className={menuItem}
             >
-              <SkipForward className="size-3.5" /> Skip
+              <SkipForward className="size-3.5" /> {live ? 'Stop and skip' : 'Skip'}
             </button>
           </div>
         )}
@@ -125,7 +143,7 @@ export function TaskMenu({
         onClose={() => setEditing(false)}
         title="Edit task"
         description={
-          ['building', 'verifying', 'reviewing'].includes(task.status)
+          IN_FLIGHT.includes(task.status)
             ? 'It’s running now; the change applies from its next attempt.'
             : undefined
         }
@@ -144,9 +162,7 @@ export function AddTask({ projectId, tasks }: { projectId: string; tasks: Task[]
   const showToast = useApp((s) => s.showToast);
   const toast = (text: string) => showToast('error', text);
   const [open, setOpen] = useState(false);
-  const waiting = tasks.filter((t) =>
-    [...WAITING, 'building', 'verifying', 'reviewing'].includes(t.status),
-  );
+  const waiting = tasks.filter((t) => [...WAITING, ...IN_FLIGHT].includes(t.status));
   return (
     <>
       <button

@@ -4,6 +4,7 @@ import {
   ExternalLink,
   Eye,
   FlaskConical,
+  GitMerge,
   GitBranch,
   Hourglass,
   MoreHorizontal,
@@ -567,8 +568,29 @@ function NowStrip({
   );
 }
 
+/** 2nd, 3rd, 4th: places in the merge queue. */
+const ordinal = (n: number) =>
+  `${n}${n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : n % 10 === 1 && n % 100 !== 11 ? 'st' : 'th'}`;
+
 /** Who is doing what on one task in flight, and since when. */
-function laneLine(task: Task, events: BrainEvent[]) {
+function laneLine(task: Task, events: BrainEvent[], queue: Task[] = []) {
+  if (task.status === 'merging') {
+    // Merges go one at a time, oldest approval first.
+    const place = queue
+      .filter((t) => t.status === 'merging')
+      .sort((a, b) => a.updatedAt - b.updatedAt)
+      .findIndex((t) => t.id === task.id);
+    const icon = <GitMerge className="size-4 text-accent" aria-hidden />;
+    const line = (
+      <>
+        <span className="font-medium">
+          {place > 0 ? `Waiting to merge (${ordinal(place + 1)} in line)` : 'Merging'}
+        </span>{' '}
+        <span className="text-muted">“{task.title}”</span>
+      </>
+    );
+    return { icon, line, since: task.updatedAt };
+  }
   const who =
     task.status === 'reviewing' ? (task.reviewedBy ?? lastProvider(events, task.id)) : task.builtBy;
   const since = [...events]
@@ -619,7 +641,7 @@ function LanesStrip({
       </div>
       <ul className="flex flex-col gap-2">
         {tasks.map((task) => {
-          const { icon, line, since } = laneLine(task, events);
+          const { icon, line, since } = laneLine(task, events, tasks);
           return (
             <li
               key={task.id}
@@ -659,7 +681,8 @@ function lastProvider(events: BrainEvent[], taskId: string) {
 /* ── Tasks ───────────────────────────────────────────────────────────── */
 
 const GROUPS: { title: string; match: (t: Task) => boolean; empty?: string }[] = [
-  { title: 'In progress', match: (t) => ACTIVE.includes(t.status) },
+  { title: 'In progress', match: (t) => ACTIVE.includes(t.status) && t.status !== 'merging' },
+  { title: 'Waiting to merge', match: (t) => t.status === 'merging' },
   { title: 'Up next', match: (t) => t.status === 'queued' },
   { title: 'Merged', match: (t) => t.status === 'merged' },
   { title: 'Needs you', match: (t) => t.status === 'blocked' },

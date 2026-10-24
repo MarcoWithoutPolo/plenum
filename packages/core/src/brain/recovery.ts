@@ -164,11 +164,22 @@ export function retryTask(
   return next;
 }
 
-/** Leave a task out: it no longer counts toward progress and the planner won't redo it. */
-export function skipTask(projects: ProjectStore, taskId: string): Task {
+/**
+ * Leave a task out: it no longer counts toward progress and the planner won't redo it.
+ * `running`: the task is building, testing or in review, and its lane will be stopped.
+ */
+export function skipTask(
+  projects: ProjectStore,
+  taskId: string,
+  opts: { running?: boolean } = {},
+): Task {
   const task = projects.getTask(taskId);
   if (!task) throw new Error(`No such task: ${taskId}`);
-  if (!['failed', 'queued', 'blocked'].includes(task.status)) {
+  if (task.status === 'merging') {
+    throw new Error('It’s merging right now; it can’t be skipped. Revert it once it lands.');
+  }
+  const live = ['building', 'verifying', 'reviewing'].includes(task.status);
+  if (!['failed', 'queued', 'blocked'].includes(task.status) && !(live && opts.running)) {
     throw new Error(
       `Only failed, queued or waiting tasks can be skipped (this one is ${task.status}).`,
     );

@@ -2070,3 +2070,17 @@ describe('Review time budget', () => {
     expect(messages(store, project.id)).toContain('Claude approved; Gemini gave no verdict');
   });
 });
+
+describe('Merge queue status', () => {
+  it('shows an approved task as merging until it lands', async () => {
+    const { store, brain } = await setup();
+    const seen: string[] = [];
+    const update = store.projects.updateTask.bind(store.projects);
+    store.projects.updateTask = (id, patch) => {
+      if (patch.status) seen.push(patch.status);
+      return update(id, patch);
+    };
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(seen).toEqual(['building', 'verifying', 'reviewing', 'merging', 'merged']);
+  });
+});

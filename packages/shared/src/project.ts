@@ -112,6 +112,8 @@ export const TaskStatus = z.enum([
   'building',
   'verifying',
   'reviewing',
+  /** Approved, in the merge queue: merges go one at a time and are re-tested (lanes). */
+  'merging',
   'merged',
   'failed',
   /** Waiting on you: a question or an approval (`blockedBy`). */
@@ -122,6 +124,9 @@ export const TaskStatus = z.enum([
   'replaced',
 ]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
+
+/** A task some agent or the merge queue is working on right now. */
+export const IN_FLIGHT: readonly TaskStatus[] = ['building', 'verifying', 'reviewing', 'merging'];
 
 /** What kind of problem stopped an attempt, and so whose problem it is. */
 export const FailureKind = z.enum([
