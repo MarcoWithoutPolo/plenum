@@ -11,8 +11,8 @@ test.skip(process.env.CONCLAVE_TRAILER !== '1', 'set CONCLAVE_TRAILER=1 to recor
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'screenshots', 'trailer');
-const W = 1440;
-const H = 900;
+const W = 1280;
+const H = 800;
 
 /** Captions and a cursor, drawn over the app so the recording shows what matters. */
 const OVERLAY = `

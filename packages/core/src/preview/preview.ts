@@ -10,6 +10,7 @@ import {
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { extname, join, resolve, sep } from 'node:path';
+import { killTree } from '../process.js';
 
 /** What a live preview of a folder would run. */
 export type PreviewPlan =
@@ -255,24 +256,6 @@ export class PreviewServer {
     if (http) await new Promise<void>((r) => http.close(() => r()));
     const child = this.child;
     this.child = undefined;
-    if (!child || child.pid === undefined || child.exitCode !== null) return;
-    const exited = new Promise<void>((r) => child.once('exit', () => r()));
-    if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-    } else {
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
-      setTimeout(() => {
-        try {
-          process.kill(-child.pid!, 'SIGKILL');
-        } catch {
-          // already gone
-        }
-      }, 3000).unref();
-    }
-    await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
+    if (child) await killTree(child);
   }
 }

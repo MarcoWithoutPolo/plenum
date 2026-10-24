@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { killTree, removeDir } from '../process.js';
 import { delimiter, join } from 'node:path';
 import {
   captureWithCdp,
@@ -123,7 +124,8 @@ export class ChromeSnapshotter implements Snapshotter {
           ...(process.platform === 'linux' && process.env.CI ? ['--no-sandbox'] : []),
           'about:blank',
         ],
-        { windowsHide: true },
+        // Its own process group on macOS and Linux, so close() takes Chrome's helpers down too.
+        { windowsHide: true, detached: process.platform !== 'win32' },
       );
       this.child = child;
       let err = '';
@@ -169,15 +171,9 @@ export class ChromeSnapshotter implements Snapshotter {
     await page?.then((p) => p.close()).catch(() => undefined);
     const child = this.child;
     this.child = undefined;
-    if (child?.pid !== undefined && child.exitCode === null) {
-      const gone = new Promise((r) => child.once('exit', r));
-      if (process.platform === 'win32')
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-      else child.kill('SIGKILL');
-      await Promise.race([gone, new Promise((r) => setTimeout(r, 5000))]);
-    }
-    if (this.profile)
-      rmSync(this.profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    if (child) await killTree(child);
+    // Chrome's helpers can still be letting go of the profile for a moment.
+    if (this.profile) await removeDir(this.profile);
     this.profile = undefined;
   }
 }

@@ -1,4 +1,5 @@
-import { spawn as nodeSpawn } from 'node:child_process';
+import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import spawn from 'cross-spawn';
 
 export interface ProcessOptions {
@@ -132,6 +133,43 @@ export function isNotFound(result: CommandResult): boolean {
   return /ENOENT|command not found|is not recognized as an internal or external command/i.test(
     `${result.error ?? ''} ${result.stderr}`,
   );
+}
+
+/**
+ * Kill a process and everything it started, and wait until they're gone: taskkill /T on Windows
+ * (waiting for taskkill itself), the whole process group elsewhere (start the child `detached`).
+ */
+export async function killTree(child: ChildProcess, timeoutMs = 8000): Promise<void> {
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise<void>((r) => child.once('exit', () => r()));
+  if (process.platform === 'win32') {
+    const killer = nodeSpawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+      windowsHide: true,
+    });
+    await new Promise<void>((r) => {
+      killer.once('exit', () => r());
+      killer.once('error', () => r());
+    });
+  } else {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      child.kill('SIGKILL');
+    }
+  }
+  await Promise.race([exited, new Promise((r) => setTimeout(r, timeoutMs))]);
+}
+
+/** Remove a folder a just-stopped process may still be letting go of; never throws. */
+export async function removeDir(path: string, attempts = 10): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
 }
 
 export interface ShellResult {
