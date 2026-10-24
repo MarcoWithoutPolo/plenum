@@ -887,6 +887,11 @@ export class Brain {
 
   private async review(project: Project, task: Task, tests: string): Promise<RoundOutcome> {
     const avoid = task.builtBy ? [task.builtBy] : [];
+    // Never the builder's own AI, unless the team has no other reviewer at all: when no other
+    // AI is free, the task waits for one instead of being waved through by its author.
+    const team = project.routing.reviewer.some((s) => s.provider !== task.builtBy)
+      ? project.routing.reviewer.filter((s) => s.provider !== task.builtBy)
+      : project.routing.reviewer;
     // A reviewer that crashes or gives no verdict isn't the task's fault: ask the next one.
     const tried: ProviderId[] = [];
     let problem: { seat: Seat; detail: string } | undefined;
@@ -898,7 +903,7 @@ export class Brain {
     for (;;) {
       const seats = this.ranked(
         'reviewer',
-        project.routing.reviewer.filter((s) => !tried.includes(s.provider)),
+        team.filter((s) => !tried.includes(s.provider)),
       );
       const pick = this.governor.pick(seats, avoid);
       if (!pick.seat) {
@@ -915,16 +920,13 @@ export class Brain {
         }
         this.projects.updateTask(task.id, { status: 'queued' });
         await this.workspace.removeTaskTree(task.id);
-        return this.waiting(
-          'reviewer',
-          tried.length ? this.governor.pick(project.routing.reviewer, avoid) : pick,
-        );
+        return this.waiting('reviewer', tried.length ? this.governor.pick(team, avoid) : pick);
       }
       reviewer = pick.seat;
       const sameProvider = task.builtBy === reviewer.provider;
       this.log(
         'review',
-        `Reviewing with ${seatLabel(reviewer)}${sameProvider ? ' (no other provider free)' : ''}`,
+        `Reviewing with ${seatLabel(reviewer)}${sameProvider ? ' (the only reviewer on this team)' : ''}`,
         { task, provider: reviewer.provider },
       );
       const diff = await this.workspace.taskDiff(task.id);
@@ -1436,7 +1438,11 @@ export class Brain {
     pick: { until: number | null; reasons: string[] } | { seat: Seat },
   ): RoundOutcome {
     const info = 'reasons' in pick ? pick : { until: null, reasons: [] };
-    const reason = `No ${role} has headroom (${info.reasons.join('; ') || 'none configured'})`;
+    const paused =
+      info.reasons.length > 0 && info.reasons.every((r) => r.endsWith('you paused everything'));
+    const reason = paused
+      ? 'Paused: you paused everything in Settings'
+      : `No ${role} has headroom (${info.reasons.join('; ') || 'none configured'})`;
     this.log(
       'wait',
       info.until ? `${reason}; next reset ${new Date(info.until).toLocaleString()}` : reason,

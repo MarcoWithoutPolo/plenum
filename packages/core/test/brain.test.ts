@@ -112,6 +112,8 @@ const APPROVE = '{"approve": true, "issues": [], "summary": "Looks right"}';
 interface Setup {
   claude?: ConstructorParameters<typeof FakeAdapter>[0];
   codex?: ConstructorParameters<typeof FakeAdapter>[0];
+  /** A third AI on the team, for tests that need another reviewer. */
+  gemini?: ConstructorParameters<typeof FakeAdapter>[0];
   maxAttempts?: number;
   retryStrategy?: 'same' | 'escalate' | 'ask';
   askPolicy?: 'ask' | 'decide' | 'council';
@@ -134,8 +136,13 @@ async function setup(opts: Setup = {}) {
     id: 'codex',
     efforts: ['low', 'medium', 'high', 'xhigh'],
   });
-  const adapters = adapterMap([claude, codex]);
-  const ready = [{ provider: 'claude' as ProviderId }, { provider: 'codex' as ProviderId }];
+  const gemini = opts.gemini ? new FakeAdapter(opts.gemini, { id: 'gemini' }) : undefined;
+  const adapters = adapterMap([claude, codex, ...(gemini ? [gemini] : [])]);
+  const ready = [
+    { provider: 'claude' as ProviderId },
+    { provider: 'codex' as ProviderId },
+    ...(gemini ? [{ provider: 'gemini' as ProviderId }] : []),
+  ];
   const project = await createProject(store, ready, {
     repoPath: repo,
     goal: 'Ship a working sum function',
@@ -145,7 +152,7 @@ async function setup(opts: Setup = {}) {
     ...(opts.retryStrategy && { retryStrategy: opts.retryStrategy }),
   });
   const brain = new Brain({ store, adapters, cwd: home }, project.id, { home });
-  return { repo, home, store, claude, codex, project, brain };
+  return { repo, home, store, claude, codex, gemini, project, brain };
 }
 
 describe('Brain', () => {
@@ -305,15 +312,38 @@ describe('Brain', () => {
         },
       },
     });
-    const outcome = await brain.run({ maxRounds: 10 });
-    expect(outcome.kind).toBe('done');
+    const outcome = await brain.run({ maxRounds: 4, sleep: async () => undefined });
     expect(codex.requests).toHaveLength(1);
     expect(claude.requests.map((r) => r.role)).toContain('builder');
     const [task] = store.projects.listTasks(project.id);
     expect(task?.builtBy).toBe('claude');
-    // Nobody else was free, so Claude also reviewed its own work, and said so.
+    // Claude built it, so Claude may not review it: the task waits for Codex instead.
+    expect(claude.requests.map((r) => r.role)).not.toContain('reviewer');
+    expect(outcome.kind).toBe('waiting');
+    expect(task?.status).toBe('queued');
     expect(
-      store.projects.events(project.id).some((e) => e.message.includes('no other provider free')),
+      store.projects
+        .events(project.id)
+        .some((e) => /No reviewer has headroom \(codex: Codex weekly limit\)/.test(e.message)),
+    ).toBe(true);
+  });
+
+  it('lets the builder review only when the team has no other reviewer', async () => {
+    const { store, brain, project, codex } = await setup({
+      codex: {
+        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'Created sum.js'),
+        act: writeSum('a + b'),
+      },
+    });
+    store.projects.update(project.id, {
+      routing: { ...project.routing, reviewer: [{ provider: 'codex' }] },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(codex.requests.map((r) => r.role)).toEqual(['builder', 'reviewer']);
+    expect(
+      store.projects
+        .events(project.id)
+        .some((e) => e.message.includes('the only reviewer on this team')),
     ).toBe(true);
   });
 
@@ -321,6 +351,7 @@ describe('Brain', () => {
     let plans = 0;
     const { store, brain, project } = await setup({
       codex: { reply: '', fail: 'You hit your spend cap set by the owner of your workspace.' },
+      gemini: { reply: APPROVE },
       claude: {
         reply: (req) =>
           req.role === 'planner'
@@ -337,7 +368,13 @@ describe('Brain', () => {
     });
     expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
     const [task] = store.projects.listTasks(project.id);
-    expect(task).toMatchObject({ status: 'merged', builtBy: 'claude', attempts: 0 });
+    // Claude built it, so the other free AI reviewed it, never Claude itself.
+    expect(task).toMatchObject({
+      status: 'merged',
+      builtBy: 'claude',
+      reviewedBy: 'gemini',
+      attempts: 0,
+    });
     // Nothing failed, so the banner comes from the limit itself, until Codex works again.
     expect(activeLimits(store, project.id)).toEqual([
       expect.objectContaining({ provider: 'codex', message: expect.stringContaining('spend cap') }),
@@ -571,12 +608,21 @@ describe('Brain', () => {
   });
 
   it('reviews with a faster reviewer once runs show the first choice is much slower', async () => {
-    const { store, brain, claude, codex, project } = await setup();
-    // Claude has been a slow reviewer lately; Codex a fast one.
+    const { store, brain, claude, codex, gemini, project } = await setup({
+      gemini: { reply: APPROVE },
+    });
+    store.projects.update(project.id, {
+      routing: {
+        ...project.routing,
+        builder: [{ provider: 'codex' }],
+        reviewer: [{ provider: 'claude' }, { provider: 'codex' }, { provider: 'gemini' }],
+      },
+    });
+    // Claude has been a slow reviewer lately; Gemini a fast one.
     for (let i = 0; i < 6; i++) {
       for (const [provider, durationMs] of [
         ['claude', 90_000],
-        ['codex', 9_000],
+        ['gemini', 9_000],
       ] as const)
         store.usage.record({
           seat: { provider },
@@ -589,11 +635,12 @@ describe('Brain', () => {
     const notes = store.projects.events(project.id).map((e) => e.message);
     expect(notes).toContainEqual(
       expect.stringMatching(
-        /^Reviewer order adjusted: Claude reviews take about 1\.5 min \(Codex about 9 s\) here/,
+        /^Reviewer order adjusted: Claude reviews take about 1\.5 min \(Gemini about 9 s\) here/,
       ),
     );
-    // Codex built, so it can't review its own work; Claude still reviews. Ranking never breaks the cross-AI rule.
-    expect(claude.requests.map((r) => r.role)).toContain('reviewer');
+    expect(gemini!.requests.map((r) => r.role)).toEqual(['reviewer']);
+    expect(claude.requests.map((r) => r.role)).not.toContain('reviewer');
+    // Codex built, so it never reviews its own work, whatever the ranking says.
     expect(codex.requests.map((r) => r.role)).toEqual(['builder']);
   });
 
@@ -817,27 +864,28 @@ describe('Failure recovery', () => {
 describe('Reviewers that give no verdict', () => {
   it('asks the next reviewer instead of charging the task', async () => {
     let plans = 0;
-    const { store, brain, project, codex } = await setup({
+    const { store, brain, project, codex, gemini } = await setup({
       claude: {
         reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? PLAN : DONE) : ''),
       },
-      codex: {
-        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'Created sum.js'),
-        act: (req) => {
-          if (req.role === 'builder') writeSum('a + b')(req);
-        },
-      },
+      gemini: { reply: APPROVE },
     });
     store.projects.update(project.id, {
-      routing: { ...project.routing, reviewer: [{ provider: 'claude' }, { provider: 'codex' }] },
+      routing: {
+        ...project.routing,
+        builder: [{ provider: 'codex' }],
+        reviewer: [{ provider: 'claude' }, { provider: 'codex' }, { provider: 'gemini' }],
+      },
     });
     expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
     expect(store.projects.listTasks(project.id)[0]).toMatchObject({
       status: 'merged',
       attempts: 0,
-      reviewedBy: 'codex',
+      reviewedBy: 'gemini',
     });
-    expect(codex.requests.some((r) => r.role === 'reviewer')).toBe(true);
+    // Codex built it, so it was skipped as a reviewer even though it was next in line.
+    expect(codex.requests.some((r) => r.role === 'reviewer')).toBe(false);
+    expect(gemini!.requests.some((r) => r.role === 'reviewer')).toBe(true);
     expect(
       store.projects
         .events(project.id)
