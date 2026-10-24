@@ -39,6 +39,8 @@ import {
 import type { ProviderId } from '@conclave/shared';
 
 silenceSqliteWarning();
+// Browser-based hidden tests (kanban) load Playwright and Electron from the repo.
+process.env.BENCH_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const here = dirname(fileURLToPath(import.meta.url));
 const { values } = parseArgs({
   options: {
@@ -138,7 +140,7 @@ interface Result {
   run: number;
   ok: boolean;
   wallMs: number;
-  hidden: { pass: number; fail: number; total: number };
+  hidden: { pass: number; fail: number; total: number; failed?: string[] };
   ownTests: 'pass' | 'fail' | 'none';
   interventions: number;
   /** A usage limit cut the run short (single tool) or forced a fallback (Conclave). */
@@ -177,19 +179,26 @@ async function score(project: string, codeDir: string): Promise<Result['hidden']
   }
   mkdirSync(join(dir, '.hidden'));
   const hiddenDir = join(here, 'projects', project, 'hidden');
-  const files = readdirSync(hiddenDir);
-  for (const f of files) cpSync(join(hiddenDir, f), join(dir, '.hidden', f));
+  for (const f of readdirSync(hiddenDir)) cpSync(join(hiddenDir, f), join(dir, '.hidden', f));
+  // Only *.test.cjs files are tests; others are helpers (kanban's Electron window).
+  const files = readdirSync(hiddenDir).filter((f) => f.endsWith('.test.cjs'));
   const r = await runShell(`node --test ${files.map((f) => `.hidden/${f}`).join(' ')}`, {
     cwd: dir,
     timeoutMs: 5 * 60_000,
   });
   const pass = Number(/ℹ pass (\d+)/.exec(r.output)?.[1] ?? 0);
   const fail = Number(/ℹ fail (\d+)/.exec(r.output)?.[1] ?? 0);
-  const total = Number(
-    /\/\/ (\d+) tests?/.exec(r.output)?.[1] ?? countTests(join(hiddenDir, files[0]!)),
-  );
+  const total = files.reduce((n, f) => n + countTests(join(hiddenDir, f)), 0);
+  // Which hidden checks failed, by name: "✖ name (12ms)" in node:test's spec output.
+  const failed = [
+    ...new Set(
+      [...r.output.matchAll(/^\s*✖ (.+?)(?: \([\d.]+m?s\))?$/gm)]
+        .map((m) => m[1]!.trim())
+        .filter((name) => name !== 'failing tests:'),
+    ),
+  ];
   rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
-  return { pass, fail, total };
+  return { pass, fail, total, ...(failed.length && { failed }) };
 }
 
 function countTests(file: string): number {
@@ -400,6 +409,7 @@ for (const project of projects) {
         `  hidden ${result.hidden.pass}/${result.hidden.total}${result.limited ? ' (limited)' : ''} · own tests ${result.ownTests} · ${(wallMs / 60_000).toFixed(1)} min · ${tokens.toLocaleString()} tokens · interventions ${result.interventions}`,
       );
       for (const n of result.notes) console.log(`  · ${n}`);
+      for (const f of result.hidden.failed ?? []) console.log(`  ✗ ${f}`);
     }
   }
 }
