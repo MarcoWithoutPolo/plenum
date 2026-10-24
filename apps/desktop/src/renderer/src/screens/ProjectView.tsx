@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronLeft,
   ExternalLink,
+  Eye,
   FlaskConical,
   GitBranch,
   Hourglass,
@@ -54,6 +55,7 @@ import { relative } from '@/components/PlanUsage';
 import { api } from '@/lib/api';
 import { QUESTION_KINDS, useProjects } from '@/lib/projects';
 import { providerName, useApp } from '@/lib/store';
+import { PreviewPane } from '@/components/Preview';
 import { TaskDrawer } from './TaskDrawer';
 
 export function useNow(active: boolean, every = 1000): number {
@@ -72,6 +74,8 @@ export function ProjectView({ projectId }: { projectId: string }) {
   const open = useApp((s) => s.open);
   const [selected, setSelected] = useState<string | null>(null);
   const [settings, setSettings] = useState(false);
+  // The preview pane: what's merged so far (true), or one task's change (its id).
+  const [preview, setPreview] = useState<boolean | string>(false);
 
   useEffect(() => {
     void load(projectId).then((d) => {
@@ -102,7 +106,25 @@ export function ProjectView({ projectId }: { projectId: string }) {
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-8 pt-2 pb-16">
-          <Header project={project} running={running} onSettings={() => setSettings(true)} />
+          <Header
+            project={project}
+            running={running}
+            onSettings={() => setSettings(true)}
+            onPreview={detail.preview ? () => setPreview((v) => v !== true) : undefined}
+            previewing={preview === true}
+          />
+          {preview && detail.preview && (
+            <PreviewPane
+              projectId={project.id}
+              taskId={typeof preview === 'string' ? preview : undefined}
+              title={
+                typeof preview === 'string'
+                  ? (tasks.find((t) => t.id === preview)?.title ?? 'this task')
+                  : 'what’s merged so far'
+              }
+              onClose={() => setPreview(false)}
+            />
+          )}
           {project.status === 'draft' && <DraftBanner project={project} />}
           <NeedsYou questions={questions} tasks={tasks} />
           {pending && (
@@ -141,9 +163,22 @@ export function ProjectView({ projectId }: { projectId: string }) {
           tasks={tasks}
           approvals={approvals}
           onClose={() => setSelected(null)}
+          onPreview={
+            detail.preview
+              ? () => {
+                  setPreview(task.id);
+                  setSelected(null);
+                }
+              : undefined
+          }
         />
       )}
-      <ProjectSettingsDialog project={project} open={settings} onClose={() => setSettings(false)} />
+      <ProjectSettingsDialog
+        project={project}
+        web={detail.preview !== null}
+        open={settings}
+        onClose={() => setSettings(false)}
+      />
     </div>
   );
 }
@@ -154,10 +189,15 @@ function Header({
   project,
   running,
   onSettings,
+  onPreview,
+  previewing,
 }: {
   project: Project;
   running: boolean;
   onSettings: () => void;
+  /** Set when the project can be previewed (a web page, or a dev server). */
+  onPreview?: () => void;
+  previewing: boolean;
 }) {
   const start = useProjects((s) => s.start);
   const stop = useProjects((s) => s.stop);
@@ -166,8 +206,13 @@ function Header({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
+  // An idle project that stopped for a reason says "Ready to resume", so its button says so too.
   const startLabel =
-    project.status === 'idle' ? 'Start' : project.status === 'done' ? 'Keep improving' : 'Resume';
+    project.status === 'idle' && !project.statusReason
+      ? 'Start'
+      : project.status === 'done'
+        ? 'Keep improving'
+        : 'Resume';
   const level = project.permissions.level;
 
   return (
@@ -178,6 +223,11 @@ function Header({
         </h1>
         <StatusPill status={project.status} running={running} reason={project.statusReason} />
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {onPreview && (
+            <Button onClick={onPreview} aria-pressed={previewing}>
+              <Eye className="size-3.5" /> Preview
+            </Button>
+          )}
           {running ? (
             <Button onClick={() => void stop(project.id)} disabled={busy}>
               <Square className="size-3 fill-current" /> {busy ? 'Stopping…' : 'Stop'}

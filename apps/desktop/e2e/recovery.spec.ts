@@ -40,6 +40,7 @@ test('a provider that keeps failing is called out, and Retry all hands the work 
     await page.getByRole('button', { name: 'New project' }).click();
     const dialog = page.getByRole('dialog', { name: 'New project' });
     await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+    await expect(dialog.getByLabel('Ready')).toBeVisible();
     await dialog.getByRole('button', { name: 'Next' }).click();
     await dialog
       .getByRole('textbox', { name: 'Goal' })
@@ -116,6 +117,7 @@ test('review issues are a checklist; an unticked one becomes a decision', async 
     await page.getByRole('button', { name: 'New project' }).click();
     const dialog = page.getByRole('dialog', { name: 'New project' });
     await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+    await expect(dialog.getByLabel('Ready')).toBeVisible();
     await dialog.getByRole('button', { name: 'Next' }).click();
     await dialog.getByRole('textbox', { name: 'Goal' }).fill('Add a greet() helper.');
     await dialog

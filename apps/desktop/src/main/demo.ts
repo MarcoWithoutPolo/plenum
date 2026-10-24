@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   FakeAdapter,
@@ -9,8 +9,74 @@ import {
   type RunRequest,
 } from '@conclave/core';
 
+interface DemoTask {
+  title: string;
+  spec: string;
+  file: string;
+  body: string;
+  /** More files the builder writes. */
+  more?: Record<string, string>;
+  /** What the builder writes once a reviewer sent it back (CONCLAVE_DEMO_VISUAL). */
+  fixed?: string;
+}
+
+/** CONCLAVE_DEMO_WEB=1: a small web page, so the preview and the screenshots have something. */
+const page = (align: 'left' | 'center') =>
+  [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<meta name="color-scheme" content="light dark">',
+    '<title>Counter</title>',
+    '<link rel="stylesheet" href="style.css">',
+    '</head>',
+    '<body>',
+    '<main>',
+    '<h1>Counter</h1>',
+    `<p id="count" style="text-align: ${align}">0</p>`,
+    '<button type="button" id="add">Add one</button>',
+    '</main>',
+    '<script>',
+    'const n = document.getElementById("count");',
+    'document.getElementById("add").onclick = () => (n.textContent = String(Number(n.textContent) + 1));',
+    '</script>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n');
+
+const STYLE = [
+  ':root { --bg: #ffffff; --ink: #1b1b1f; --accent: #4b3fd6; }',
+  '@media (prefers-color-scheme: dark) { :root { --bg: #15151a; --ink: #f2f2f5; --accent: #9d94ff; } }',
+  'body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.5 system-ui, sans-serif; }',
+  'main { max-width: 32rem; margin: 0 auto; padding: 3rem 1.25rem; text-align: center; }',
+  '#count { font-size: 4rem; font-weight: 700; margin: 1rem 0; }',
+  'button { min-height: 48px; padding: 0 1.5rem; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: inherit; }',
+  '@media (prefers-color-scheme: dark) { button { color: #15151a; } }',
+  '',
+].join('\n');
+
+const WEB_TASKS: DemoTask[] = [
+  {
+    title: 'Build the counter page',
+    spec: 'Create index.html and style.css: a title, the count, and an "Add one" button, in light and dark.',
+    file: 'index.html',
+    body: page('left'),
+    more: { 'style.css': STYLE },
+    fixed: page('center'),
+  },
+  {
+    title: 'Document the page in USAGE.md',
+    spec: 'Add a Usage section: open index.html, press "Add one".',
+    file: 'USAGE.md',
+    body: ['# Usage', '', 'Open index.html and press "Add one".', ''].join('\n'),
+  },
+];
+
 /** Demo project work: a two-task plan, builders that write real files, reviewers that approve. */
-const DEMO_TASKS = [
+const GREET_TASKS: DemoTask[] = [
   {
     title: 'Add a greet() helper',
     spec: 'Create greet.js exporting greet(name) that returns "Hello, <name>!".',
@@ -33,6 +99,34 @@ const DEMO_TASKS = [
   },
 ];
 
+const web = () => process.env.CONCLAVE_DEMO_WEB === '1';
+const demoTasks = () => (web() ? WEB_TASKS : GREET_TASKS);
+
+/**
+ * CONCLAVE_DEMO_VISUAL=1: a reviewer that can see sends the page back once: the count sits at
+ * the left on a phone. The builder centers it, and the next review approves.
+ */
+function visualReply(req: RunRequest): string | undefined {
+  if (process.env.CONCLAVE_DEMO_VISUAL !== '1' || !req.images?.length) return undefined;
+  const html = join(req.cwd, 'index.html');
+  if (!existsSync(html) || readFileSync(html, 'utf8').includes('text-align: center')) {
+    return undefined;
+  }
+  const shot = /^- (after: .+?\)): /m.exec(req.prompt)?.[1] ?? 'after: / (phone, dark)';
+  return JSON.stringify({
+    approve: false,
+    issues: [],
+    summary: 'The count is off-center.',
+    visual: [
+      {
+        shot,
+        issue: 'The count sits at the left edge, away from the title and button; center it',
+        box: shot.includes('phone') ? [16, 150, 120, 260] : [384, 150, 520, 260],
+      },
+    ],
+  });
+}
+
 /**
  * CONCLAVE_DEMO_ASK=1: the second task's builder asks a question before it builds;
  * CONCLAVE_DEMO_ASK=install: it asks to install a package instead.
@@ -48,7 +142,7 @@ function asksFirst(req: RunRequest): boolean {
   return (
     (process.env.CONCLAVE_DEMO_ASK === '1' || process.env.CONCLAVE_DEMO_ASK === 'install') &&
     req.role === 'builder' &&
-    req.prompt.includes(`YOUR TASK: ${DEMO_TASKS[1]!.title}`) &&
+    req.prompt.includes(`YOUR TASK: ${GREET_TASKS[1]!.title}`) &&
     !/The user answered|Assumption made|Settled by/.test(req.prompt)
   );
 }
@@ -75,7 +169,7 @@ function projectReply(req: RunRequest): string | undefined {
       tasks:
         process.env.CONCLAVE_DEMO_LANES === '1'
           ? []
-          : DEMO_TASKS.map(({ title, spec }) => ({ title, spec })),
+          : demoTasks().map(({ title, spec }) => ({ title, spec })),
       test_command: null,
     });
   }
@@ -111,7 +205,7 @@ function projectReply(req: RunRequest): string | undefined {
     });
   }
   if (req.role === 'planner') {
-    const todo = DEMO_TASKS.filter((t) => !existsSync(join(req.cwd, t.file)));
+    const todo = demoTasks().filter((t) => !existsSync(join(req.cwd, t.file)));
     // CONCLAVE_DEMO_LANES=1: the tasks are independent and touch different files, so they run at once.
     const lanes = process.env.CONCLAVE_DEMO_LANES === '1';
     return todo.length
@@ -126,9 +220,16 @@ function projectReply(req: RunRequest): string | undefined {
             }),
           })),
         })
-      : JSON.stringify({ done: true, reason: 'greet.js and its usage notes are in place.' });
+      : JSON.stringify({
+          done: true,
+          reason: web()
+            ? 'The counter page and its usage notes are in place.'
+            : 'greet.js and its usage notes are in place.',
+        });
   }
   if (req.role === 'reviewer') {
+    const visual = visualReply(req);
+    if (visual) return visual;
     // CONCLAVE_DEMO_REJECT=1: reviewers always ask for changes, to show the issue checklist.
     if (process.env.CONCLAVE_DEMO_REJECT === '1') {
       return JSON.stringify({
@@ -155,8 +256,12 @@ async function projectAct(req: RunRequest): Promise<void> {
     await new Promise((r) => setTimeout(r, ms));
   }
   if (asksFirst(req)) return;
-  const task = DEMO_TASKS.find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`));
-  if (task) writeFileSync(join(req.cwd, task.file), task.body);
+  const task = demoTasks().find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`));
+  if (!task) return;
+  const sentBack = task.fixed && /The count sits at the left edge/.test(req.prompt);
+  writeFileSync(join(req.cwd, task.file), sentBack ? task.fixed! : task.body);
+  for (const [file, body] of Object.entries(task.more ?? {}))
+    writeFileSync(join(req.cwd, file), body);
 }
 
 /** A GitHub CLI stand-in for demo mode: signed in, two repositories, two issues. */
@@ -270,6 +375,8 @@ export function demoAdapters(): Adapter[] {
       {
         id: 'claude',
         displayName: 'Claude Code',
+        // Like the real CLIs: Claude reads screenshot files, Codex takes them attached.
+        vision: 'files',
         resume: true,
         efforts: levels,
         status: { version: '2.1.302', detail: 'claude.ai, max plan' },
@@ -304,6 +411,7 @@ export function demoAdapters(): Adapter[] {
       {
         id: 'codex',
         displayName: 'OpenAI Codex',
+        vision: 'native',
         resume: true,
         status: { version: '0.163.0', detail: 'Logged in using ChatGPT' },
         models: {
@@ -344,6 +452,7 @@ export function demoAdapters(): Adapter[] {
       {
         id: 'antigravity',
         displayName: 'Antigravity',
+        vision: 'none',
         resume: true,
         efforts: levels,
         status: { version: '1.4.6', detail: 'Google account · 6 models' },

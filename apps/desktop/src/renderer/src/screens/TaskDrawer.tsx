@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CircleDot, Pin, RefreshCw, RotateCcw, X, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleDot, Eye, Pin, RefreshCw, RotateCcw, X, XCircle } from 'lucide-react';
 import type { Approval, BrainEvent, Project, Seat, Task } from '@conclave/shared';
 import { DiffView } from '@/components/DiffView';
 import { FailureCard } from '@/components/FailureCard';
 import { Markdown } from '@/components/Markdown';
 import { QuestionCard } from '@/components/QuestionCard';
-import { ProviderDot, Thinking } from '@/components/bits';
+import { TaskScreenshots } from '@/components/Shots';
+import { Button, ProviderDot, Thinking } from '@/components/bits';
 import { ACTIVE, TaskStatusIcon, taskVerb } from '@/components/project-bits';
 import { api } from '@/lib/api';
 import { providerName } from '@/lib/store';
@@ -18,6 +19,7 @@ export function TaskDrawer({
   tasks,
   approvals,
   onClose,
+  onPreview,
 }: {
   task: Task;
   project: Project;
@@ -25,6 +27,8 @@ export function TaskDrawer({
   tasks: Task[];
   approvals: Approval[];
   onClose: () => void;
+  /** Set when the project can be previewed: opens this task's change in the preview. */
+  onPreview?: () => void;
 }) {
   const earlier = tasks.filter((t) => t.replacedBy === task.id);
   const question = task.blockedBy
@@ -111,6 +115,11 @@ export function TaskDrawer({
                 <span className="font-mono">{task.mergeCommit.slice(0, 8)}</span>
               )}
             </div>
+            {onPreview && ACTIVE.includes(task.status) && (
+              <Button size="sm" className="mt-2.5" onClick={onPreview}>
+                <Eye className="size-3.5" /> Preview this change
+              </Button>
+            )}
           </div>
           <button
             type="button"
@@ -221,6 +230,8 @@ export function TaskDrawer({
             )}
           </Section>
 
+          <ScreenshotsSection projectId={project.id} taskId={task.id} refresh={task.status} />
+
           <Section title="Activity">
             {mine.length ? (
               <ol>
@@ -293,6 +304,22 @@ function attemptHistory(events: BrainEvent[], taskId: string): AttemptRow[] {
     }
   }
   return rows;
+}
+
+function ScreenshotsSection(props: { projectId: string; taskId: string; refresh: unknown }) {
+  // TaskScreenshots renders nothing for a task without screenshots, and so does the section.
+  return (
+    <section aria-label="Screenshots" className="mb-6 last:mb-0 has-[>div:empty]:hidden">
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-[11.5px] font-semibold tracking-wide text-faint uppercase">
+          Screenshots
+        </h3>
+      </div>
+      <div>
+        <TaskScreenshots {...props} />
+      </div>
+    </section>
+  );
 }
 
 function Section({

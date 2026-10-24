@@ -19,6 +19,8 @@ export interface PageMetrics {
   scrollHeight: number;
   textLength: number;
   images: number;
+  /** Visible controls and drawings: buttons, fields, canvas, svg, video, frames. */
+  controls?: number;
   /** Visible text below WCAG AA contrast (4.5:1, or 3:1 for large text) against its background. */
   lowContrast: { el: string; ratio: number; needed: number }[];
   /** Visible buttons and links smaller than 44 × 44 px. */
@@ -80,6 +82,7 @@ export const PAGE_PROBE = `(() => {
     scrollHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
     textLength: document.body ? document.body.innerText.trim().length : 0,
     images: document.images.length,
+    controls: [...document.querySelectorAll('button, input, select, textarea, canvas, svg, video, iframe, [role=button]')].filter(visible).length,
     lowContrast,
     smallTargets,
   };
@@ -411,8 +414,10 @@ export function visualChecks(
     for (const r of s.failedRequests) {
       if (!b?.failedRequests.includes(r)) sendBack.add(`Failed request on ${s.page}: ${r}`);
     }
-    if (s.metrics.textLength < 20 && s.metrics.images === 0 && !(b && b.metrics.textLength < 20)) {
-      sendBack.add(`${where(s)} looks blank: almost no text and no images`);
+    // A tiny page with a button is not blank (a counter says "Counter 0 Add one").
+    const empty = (m: PageMetrics) => m.textLength < 20 && m.images === 0 && !m.controls;
+    if (empty(s.metrics) && !(b && empty(b.metrics))) {
+      sendBack.add(`${where(s)} looks blank: almost no text, images or controls`);
     }
     const oldLow = new Set(b?.metrics.lowContrast.map((l) => l.el));
     for (const l of s.metrics.lowContrast) {

@@ -61,6 +61,8 @@ const api: ConclaveApi = {
     allowPreview: (projectId, command) => invoke(IPC.projectsAllowPreview, projectId, command),
     stopPreview: (projectId, taskId) => invoke(IPC.projectsStopPreview, projectId, taskId),
     previewLogs: (projectId, taskId) => invoke(IPC.projectsPreviewLogs, projectId, taskId),
+    snapshots: (projectId, taskId) => invoke(IPC.projectsSnapshots, projectId, taskId),
+    shot: (path) => invoke(IPC.projectsShot, path),
     retryFailed: (projectId, filter, opts) =>
       invoke(IPC.projectsRetryFailed, projectId, filter, opts),
     permissionGaps: (permissions) => invoke(IPC.projectsPermissionGaps, permissions),

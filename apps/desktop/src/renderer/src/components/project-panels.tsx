@@ -353,7 +353,7 @@ export function PullRequestCard({ project }: { project: Project }) {
                     setFixing(c.name);
                     try {
                       await api().github.fixCheck(project.id, c);
-                      toast('info', 'A fix is queued. Start the project to build it.');
+                      toast('info', 'A fix is queued. Resume the project to build it.');
                       await load(project.id);
                     } catch (err) {
                       toast('error', errorText(err));
@@ -569,10 +569,13 @@ function sourceText(d: ProjectDecision): string {
 
 export function ProjectSettingsDialog({
   project,
+  web,
   open,
   onClose,
 }: {
   project: Project;
+  /** A web project: show the screenshot settings. */
+  web: boolean;
   open: boolean;
   onClose: () => void;
 }) {
@@ -588,6 +591,8 @@ export function ProjectSettingsDialog({
   const [strategy, setStrategy] = useState<RetryStrategy>(project.retryStrategy);
   const [askPolicy, setAskPolicy] = useState<AskPolicy>(project.askPolicy);
   const [permissions, setPermissions] = useState<Permissions>(project.permissions);
+  const [visual, setVisual] = useState(project.visualReview);
+  const [pages, setPages] = useState(project.pages.join(' '));
   const [gaps, setGaps] = useState<PermissionGaps>({});
   const [saving, setSaving] = useState(false);
 
@@ -604,11 +609,15 @@ export function ProjectSettingsDialog({
     setStrategy(project.retryStrategy);
     setAskPolicy(project.askPolicy);
     setPermissions(project.permissions);
+    setVisual(project.visualReview);
+    setPages(project.pages.join(' '));
   }, [open]);
+  const pageList = pages.split(/[\s,]+/).filter(Boolean);
+  const badPage = pageList.find((p) => !p.startsWith('/'));
 
   const missing = (['planner', 'builder', 'reviewer'] as const).find((r) => !routing[r].length);
   const save = async () => {
-    if (missing || !goal.trim()) return;
+    if (missing || !goal.trim() || badPage) return;
     setSaving(true);
     const ok = await update(project.id, {
       goal: goal.trim(),
@@ -622,6 +631,7 @@ export function ProjectSettingsDialog({
       retryStrategy: strategy,
       askPolicy,
       permissions,
+      ...(web && { visualReview: visual, pages: pageList.length ? pageList : ['/'] }),
     });
     setSaving(false);
     if (ok) onClose();
@@ -639,7 +649,7 @@ export function ProjectSettingsDialog({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={saving || Boolean(missing) || !goal.trim()}
+            disabled={saving || Boolean(missing) || !goal.trim() || Boolean(badPage)}
             onClick={() => void save()}
           >
             {saving ? 'Saving…' : 'Save'}
@@ -742,6 +752,43 @@ export function ProjectSettingsDialog({
             options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
           />
         </Field>
+        {web && (
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Screenshots">
+              <label className="flex items-start gap-2.5 rounded-xl border border-line px-3 py-2.5 text-[12.5px]">
+                <input
+                  type="checkbox"
+                  checked={visual}
+                  onChange={(e) => setVisual(e.target.checked)}
+                  aria-label="Visual review"
+                  className="mt-0.5 accent-[var(--color-accent)]"
+                />
+                <span>
+                  <span className="font-medium">Visual review</span>
+                  <span className="block text-[11.5px] text-faint">
+                    A reviewer that can see also looks at up to four screenshots of each change.
+                    About 1 to 3% more tokens per task. Screenshots and the free checks (contrast,
+                    touch targets, overflow, console errors) run either way.
+                  </span>
+                </span>
+              </label>
+            </Field>
+            <Field
+              label="Pages to check"
+              hint="Up to five paths, separated by spaces. Each is shot at desktop and phone width, light and dark."
+              error={badPage ? `Paths start with "/": ${badPage}` : undefined}
+            >
+              <input
+                value={pages}
+                onChange={(e) => setPages(e.target.value)}
+                placeholder="/"
+                aria-label="Pages to check"
+                spellCheck={false}
+                className={`${inputClass} font-mono text-[12.5px]`}
+              />
+            </Field>
+          </div>
+        )}
       </div>
     </Dialog>
   );

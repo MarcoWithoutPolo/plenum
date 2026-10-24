@@ -1,5 +1,5 @@
 import type { AppSettings, SteeringMessage } from '@conclave/shared';
-import type { PreviewResult } from '@conclave/core';
+import type { PreviewResult, SnapshotSet } from '@conclave/core';
 import type {
   AgentRun,
   ClarifyResult,
@@ -121,6 +121,14 @@ export interface ProjectDetail {
   problems: ProviderProblem[];
   /** AIs on this team that are out of usage right now (limits never fail tasks). */
   limits: LimitNotice[];
+  /** How the project can be previewed: Conclave serves it (static), or its own dev server. */
+  preview: { kind: 'static' } | { kind: 'command'; command: string; allowed: boolean } | null;
+}
+
+/** A task's latest screenshots and the integration shots they were compared with. */
+export interface TaskSnapshots {
+  after: SnapshotSet | null;
+  before: SnapshotSet | null;
 }
 
 export interface LimitNotice {
@@ -187,6 +195,10 @@ export interface ProjectSettings {
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
+  /** Web projects: an AI that can see reviews the screenshots too. */
+  visualReview?: boolean;
+  /** Web projects: the pages to screenshot, like "/" and "/settings" (up to 5). */
+  pages?: string[];
 }
 
 /** Per role: the reasons the brain would change the order (empty when it keeps yours). */
@@ -208,9 +220,18 @@ export interface ApprovalItem {
 export interface UsageReport {
   day: ProviderTotals[];
   week: ProviderTotals[];
+  /** Screenshots shown to reviewers (visual review), per range. */
+  images: { day: ImageUsage; week: ImageUsage };
   daily: DailyActivity[];
   recent: AgentRun[];
   quotas: QuotaInfo[];
+}
+
+export interface ImageUsage {
+  tokens: number;
+  runs: number;
+  /** Share of all input tokens, 0 to 1. */
+  share: number;
 }
 
 export interface InstallLog {
@@ -294,6 +315,9 @@ export interface ConclaveApi {
     allowPreview(projectId: string, command: string): Promise<Project>;
     stopPreview(projectId: string, taskId?: string): Promise<void>;
     previewLogs(projectId: string, taskId?: string): Promise<string>;
+    snapshots(projectId: string, taskId: string): Promise<TaskSnapshots>;
+    /** One screenshot as a data URL (only files from Conclave's own screenshot folders). */
+    shot(path: string): Promise<string>;
     retryFailed(
       projectId: string,
       filter: { provider?: ProviderId; kind?: FailureKind },
@@ -405,6 +429,8 @@ export const IPC = {
   projectsAllowPreview: 'projects:allow-preview',
   projectsStopPreview: 'projects:stop-preview',
   projectsPreviewLogs: 'projects:preview-logs',
+  projectsSnapshots: 'projects:snapshots',
+  projectsShot: 'projects:shot',
   decisionsAdd: 'decisions:add',
   decisionsKeep: 'decisions:keep',
   decisionsChange: 'decisions:change',

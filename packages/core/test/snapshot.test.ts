@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
+import { parseVisualIssue, visualIssueLine } from '@conclave/shared';
 import {
   Brain,
   ChromeSnapshotter,
@@ -235,7 +236,13 @@ describe('Free visual checks', () => {
   it('calls a page blank when it shows almost nothing', () => {
     expect(
       visualChecks([shot('home-desktop-light', { metrics: metrics({ textLength: 3 }) })]).sendBack,
-    ).toEqual(['/ (desktop, light) looks blank: almost no text and no images']);
+    ).toEqual(['/ (desktop, light) looks blank: almost no text, images or controls']);
+    // A small page with something to press is a page.
+    expect(
+      visualChecks([
+        shot('home-desktop-light', { metrics: metrics({ textLength: 17, controls: 1 }) }),
+      ]).sendBack,
+    ).toEqual([]);
   });
 });
 
@@ -612,6 +619,25 @@ describe('Visual review', () => {
       .prepare("SELECT SUM(image_tokens) AS t FROM agent_runs WHERE role = 'reviewer'")
       .get() as { t: number };
     expect(used.t).toBeGreaterThan(0);
+    // The Usage screen's line: the same tokens, and their share of all input.
+    const images = store.usage.images(0);
+    expect(images).toMatchObject({ tokens: used.t, runs: 2 });
+    expect(images.share).toBeGreaterThan(0);
+    expect(store.usage.images(Date.now() + 60_000)).toEqual({ tokens: 0, runs: 0, share: 0 });
+    // The app reads the failure back: the issue, the shot, the region and the file.
+    const task = store.projects.listTasks(project.id)[0]!;
+    const line = codex.requests[1]!.prompt.split('\n').find((l) =>
+      l.startsWith('- The slider label'),
+    )!;
+    const parsed = parseVisualIssue(line.slice(2));
+    expect(parsed).toMatchObject({
+      issue: 'The slider label is dark grey on black',
+      shot: 'after: / (phone, dark)',
+      box: [20, 300, 370, 340],
+    });
+    expect(parsed.path).toMatch(/home-phone-dark\.png$/);
+    expect(readFileSync(parsed.path!).length).toBeGreaterThan(0);
+    expect(task.status).toBe('merged');
   });
 
   it('reviews the code only when no reviewer can see, and says so', async () => {
@@ -640,5 +666,37 @@ describe('Visual review', () => {
         .events(project.id)
         .some((e) => e.message.startsWith('Screenshots: 4 of 1 page')),
     ).toBe(true);
+  });
+});
+
+describe('Visual issue lines', () => {
+  it('round-trips labels with colons, paths with spaces and regions', () => {
+    const cases = [
+      {
+        issue: 'Text is cut off',
+        shot: 'after: /settings (desktop, light)',
+        box: [0, 10, 200, 40] as [number, number, number, number],
+        path: 'C:\\Users\\Ana Lee\\.conclave\\projects\\p1\\shots\\s1\\settings-desktop-light.png',
+      },
+      {
+        issue: 'Overlaps [the header]',
+        shot: 'before: / (phone, dark)',
+        path: '/home/a/shots/x.png',
+      },
+      {
+        issue: 'Odd spacing',
+        shot: 'after: / (phone, light)',
+        box: [1, 2, 3, 4] as [number, number, number, number],
+      },
+      { issue: 'Reviewer made up a label', shot: 'the dark one' },
+      { issue: 'No screenshot named' },
+    ];
+    for (const c of cases) expect(parseVisualIssue(visualIssueLine(c))).toEqual(c);
+  });
+
+  it('keeps an unrelated line whole', () => {
+    expect(parseVisualIssue('Use a darker grey for the hint')).toEqual({
+      issue: 'Use a darker grey for the hint',
+    });
   });
 });

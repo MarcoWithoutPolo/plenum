@@ -13,6 +13,7 @@ import type {
   Task,
   TaskFailure,
 } from '@conclave/shared';
+import { visualIssueLine } from '@conclave/shared';
 import { looksLikeLimit } from '../adapters/cli.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
@@ -901,9 +902,9 @@ export class Brain {
         const found = shots.checks.sendBack;
         return this.sendBack(project, task, {
           failure: this.failureOf(
-            'tests',
+            'visual',
             `The visual checks found ${found.length} problem${found.length === 1 ? '' : 's'}`,
-            found.join('\n'),
+            found.map((f) => `- ${f}`).join('\n'),
             builder,
           ),
           feedback: `The page has problems this change introduced, found by the visual checks (screenshots at desktop and phone width, light and dark). Fix them:\n${found.map((f) => `- ${f}`).join('\n')}`,
@@ -1059,11 +1060,10 @@ export class Brain {
     if (!verdict.approve && verdict.visual?.length) {
       // What the reviewer saw: each problem with its screenshot, so the builder can open it.
       const byLabel = new Map(shots?.files.map((f) => [f.label, f.path]));
-      const visual = verdict.visual.map((v) => {
-        const path = byLabel.get(v.shot);
-        const where = v.box ? ` (region ${v.box.join(', ')})` : '';
-        return `- ${v.issue}${v.shot ? ` [${v.shot}${where}${path ? `: ${path}` : ''}]` : ''}`;
-      });
+      const visual = verdict.visual.map(
+        (v) =>
+          `- ${visualIssueLine({ issue: v.issue, shot: v.shot || undefined, box: v.box, path: byLabel.get(v.shot) })}`,
+      );
       const code = verdict.issues.map((i) => `- ${i}`);
       this.log(
         'review',

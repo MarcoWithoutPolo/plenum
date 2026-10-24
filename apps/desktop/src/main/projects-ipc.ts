@@ -1,5 +1,5 @@
-import { mkdirSync, rmSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { basename, join, resolve, sep } from 'node:path';
 import { dialog, ipcMain, type BrowserWindow } from 'electron';
 import {
   AskPolicy,
@@ -39,6 +39,7 @@ import {
   clampParallel,
   Governor,
   routingInsights,
+  detectPreview,
 } from '@conclave/core';
 import {
   IPC,
@@ -47,6 +48,7 @@ import {
   type NewProjectInput,
   type PermissionGaps,
   type TeamInsights,
+  type TaskSnapshots,
   type ProjectDetail,
   type ProjectSettings,
   type ProjectSummary,
@@ -145,7 +147,43 @@ export function registerProjectIpc(
           (s) => s.provider === l.provider,
         ),
       ),
+      preview: previewOf(project),
     };
+  });
+
+  /** What the project would preview: what's merged so far, or the repo before the first run. */
+  const previewOf = (project: Project): ProjectDetail['preview'] => {
+    const ws = projectWorkspace(engine.home, project);
+    const plan = detectPreview(
+      existsSync(ws.integrationPath) ? ws.integrationPath : project.repoPath,
+    );
+    if (plan.kind === 'static') return { kind: 'static' };
+    if (plan.kind === 'command') {
+      return {
+        kind: 'command',
+        command: plan.command,
+        allowed: project.previewCommand === plan.command,
+      };
+    }
+    return null;
+  };
+
+  handle(IPC.projectsSnapshots, (projectId: string, taskId: string): TaskSnapshots => {
+    const project = mustGet(projectId);
+    const after = engine.store.snapshots.forTask(project.id, id(taskId)) ?? null;
+    const before = after?.beforeId ? (engine.store.snapshots.get(after.beforeId) ?? null) : null;
+    return { after, before };
+  });
+
+  // Screenshots are read only from Conclave's own projects folder, and only PNGs.
+  handle(IPC.projectsShot, (path: unknown): string => {
+    const base = realpathSync.native(join(engine.home, 'projects'));
+    const file = typeof path === 'string' ? resolve(path) : '';
+    if (!file.toLowerCase().endsWith('.png') || !existsSync(file))
+      throw new Error('No such screenshot.');
+    const real = realpathSync.native(file);
+    if (!real.startsWith(base + sep)) throw new Error('No such screenshot.');
+    return `data:image/png;base64,${readFileSync(real).toString('base64')}`;
   });
 
   handle(IPC.projectsPickRepo, async (): Promise<string | null> => {
@@ -238,6 +276,13 @@ export function registerProjectIpc(
       }),
       ...(settings.askPolicy && { askPolicy: AskPolicy.parse(settings.askPolicy) }),
       ...(settings.permissions && { permissions: checkPermissions(settings.permissions) }),
+      ...(settings.visualReview !== undefined && { visualReview: Boolean(settings.visualReview) }),
+      // The store keeps up to five, each starting with "/".
+      ...(Array.isArray(settings.pages) && {
+        pages: settings.pages
+          .filter((p): p is string => typeof p === 'string')
+          .map((p) => text(p, 200)),
+      }),
     })!;
     projects.log({
       projectId: project.id,
@@ -523,6 +568,10 @@ export function registerProjectIpc(
     return {
       day: engine.store.usage.totals(now - DAY),
       week: engine.store.usage.totals(now - 7 * DAY),
+      images: {
+        day: engine.store.usage.images(now - DAY),
+        week: engine.store.usage.images(now - 7 * DAY),
+      },
       daily: engine.store.usage.daily(14, now),
       recent: engine.store.usage.recent(40),
       quotas: engine.store.listQuotas(),

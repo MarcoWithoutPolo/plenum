@@ -229,7 +229,7 @@ export const useProjects = create<ProjectsState>((set, get) => {
     async retry(projectId, taskId, opts) {
       try {
         await api().projects.retry(taskId, opts);
-        toast('Back in the queue. Start the project to build it.', 'info');
+        toast('Back in the queue. Resume the project to build it.', 'info');
         return true;
       } catch (err) {
         toast(errorText(err));

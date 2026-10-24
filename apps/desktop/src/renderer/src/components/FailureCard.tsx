@@ -23,6 +23,7 @@ import { SeatPicker, modelLabel } from './SeatPicker';
 import { strongerModel } from '@/lib/models';
 import { Button, ProviderDot } from './bits';
 import { Field, textareaClass } from './form';
+import { VisualIssues, parseVisualIssues } from './Shots';
 import { useProjects } from '@/lib/projects';
 import { providerName, readyProviders, useApp } from '@/lib/store';
 
@@ -47,7 +48,7 @@ const KINDS: Record<FailureKind, { icon: LucideIcon; title: string; whose: strin
   visual: {
     icon: Eye,
     title: 'Looks wrong',
-    whose: 'A reviewer found visual problems in the screenshots. The task goes back with them.',
+    whose: 'The screenshots showed problems this change introduced. The task goes back with them.',
   },
   combined_tests: {
     icon: GitMerge,
@@ -108,6 +109,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
   const detail = failure?.detail ?? task.feedback?.split('\n').slice(1).join('\n').trim();
 
   // Review issues as a checklist: untick the ones you disagree with before retrying.
+  const visual = failure?.kind === 'visual' ? parseVisualIssues(failure.detail ?? '') : [];
   const issues =
     failure?.kind === 'review'
       ? (failure.detail ?? '')
@@ -115,7 +117,13 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
           .filter((l) => l.startsWith('- '))
           .map((l) => l.slice(2).trim())
           .filter(Boolean)
-      : [];
+      : // A reviewer's issues (they name screenshots). The free checks name none, and run
+        // again on every attempt anyway, so there is nothing to untick.
+        visual.some((v) => v.shot)
+        ? visual.map((v) => v.line)
+        : [];
+  // What a visual issue says, without the screenshot reference the builder still gets.
+  const said = (i: number) => visual[i]?.issue ?? issues[i]!;
 
   /** Retry, sending only the issues you kept; each one you untick is saved as a decision. */
   const retryWith = async (opts: RetryOptions = {}) => {
@@ -124,7 +132,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
     for (const i of declined) {
       await addDecision(
         project.id,
-        `Reviewer's request: ${issues[i]}`,
+        `Reviewer's request: ${said(i)}`,
         "Declined by you; don't ask for it.",
       );
     }
@@ -184,7 +192,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
                       className="mt-0.5 accent-[var(--accent)]"
                     />
                     <span className={`selectable ${on ? '' : 'text-faint line-through'}`}>
-                      {issue}
+                      {said(i)}
                     </span>
                   </label>
                 </li>
@@ -198,6 +206,11 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
           )}
         </fieldset>
       )}
+      {visual.length > 0 && (
+        <div className="px-4 pt-3">
+          <VisualIssues issues={visual} withText={!(failed && issues.length > 0)} />
+        </div>
+      )}
       {detail && !(failed && issues.length > 0) && (
         <div className="px-4 pt-2">
           <button
@@ -209,7 +222,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             <ChevronDown className={`size-3.5 transition ${details ? '' : '-rotate-90'}`} />
             {failure?.kind === 'tests'
               ? 'Test output'
-              : failure?.kind === 'review'
+              : failure?.kind === 'review' || failure?.kind === 'visual'
                 ? 'Issues'
                 : 'Details'}
           </button>

@@ -109,6 +109,27 @@ export class UsageStore {
     }));
   }
 
+  /**
+   * Screenshots sent to reviewers that can see: their estimated tokens since a time, and their
+   * share of all input tokens in that time.
+   */
+  images(since: number): { tokens: number; runs: number; share: number } {
+    const r = this.db
+      .prepare(
+        `SELECT SUM(image_tokens) AS images, SUM(CASE WHEN image_tokens > 0 THEN 1 ELSE 0 END) AS runs,
+           SUM(input_tokens) AS input
+         FROM agent_runs WHERE at >= ?`,
+      )
+      .get(since) as Row;
+    const tokens = Number(r.images ?? 0);
+    const input = Number(r.input ?? 0);
+    return {
+      tokens,
+      runs: Number(r.runs ?? 0),
+      share: input > 0 ? Math.min(1, tokens / input) : 0,
+    };
+  }
+
   /** Runs and tokens per provider per local day, oldest first. */
   daily(days: number, now = Date.now()): DailyActivity[] {
     const start = new Date(now);

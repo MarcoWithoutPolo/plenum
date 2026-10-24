@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Gauge, RefreshCw, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, Gauge, RefreshCw, XCircle } from 'lucide-react';
 import type { ProviderId } from '@conclave/shared';
 import type { AgentRun, DailyActivity, ProviderTotals } from '@conclave/core';
 import type { QuotaInfo } from '../../../shared/api';
@@ -95,6 +95,19 @@ export function UsageScreen() {
               />
             ))}
           </div>
+
+          {usage && usage.images[range].runs > 0 && (
+            <p className="mt-4 flex items-center gap-2 text-[12.5px] text-muted">
+              <Eye className="size-3.5 shrink-0 text-faint" aria-hidden />
+              <span>
+                Visual review: about {usage.images[range].tokens.toLocaleString()} tokens of
+                screenshots in {usage.images[range].runs} review
+                {usage.images[range].runs === 1 ? '' : 's'},{' '}
+                {(usage.images[range].share * 100).toFixed(usage.images[range].share < 0.1 ? 1 : 0)}
+                % of all input. Turn it off per project in its settings.
+              </span>
+            </p>
+          )}
 
           <ActivityChart daily={usage?.daily ?? []} series={shown} />
           <RecentRuns runs={usage?.recent ?? []} />

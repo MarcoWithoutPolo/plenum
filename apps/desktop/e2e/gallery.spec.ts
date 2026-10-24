@@ -201,6 +201,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'New project' }).click();
       const dialog = page.getByRole('dialog', { name: 'New project' });
       await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+      await expect(dialog.getByLabel('Ready')).toBeVisible();
       await dialog.getByRole('button', { name: 'Next' }).click();
       await dialog
         .getByRole('textbox', { name: 'Goal' })
@@ -264,6 +265,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'New project' }).click();
       const dialog = page.getByRole('dialog', { name: 'New project' });
       await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+      await expect(dialog.getByLabel('Ready')).toBeVisible();
       await dialog.getByRole('button', { name: 'Next' }).click();
       await dialog
         .getByRole('textbox', { name: 'Goal' })
@@ -321,6 +323,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'New project' }).click();
       const dialog = page.getByRole('dialog', { name: 'New project' });
       await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+      await expect(dialog.getByLabel('Ready')).toBeVisible();
       await dialog.getByRole('button', { name: 'Next' }).click();
       await dialog
         .getByRole('textbox', { name: 'Goal' })

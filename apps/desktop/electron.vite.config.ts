@@ -25,6 +25,8 @@ const csp = {
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: https:",
         "font-src 'self' data:",
+        // The live preview: only pages served on this computer (Conclave's server or a dev server).
+        'frame-src http://127.0.0.1:* http://localhost:*',
         "connect-src 'self'",
         "object-src 'none'",
         "base-uri 'none'",

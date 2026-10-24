@@ -161,6 +161,7 @@ test('scenario 6: publish, issue, clone, pull request, CI', async () => {
     await page.getByRole('button', { name: 'New project' }).click();
     let dialog = page.getByRole('dialog', { name: 'New project' });
     await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+    await expect(dialog.getByLabel('Ready')).toBeVisible();
     await dialog.getByRole('button', { name: 'Next' }).click();
     await dialog
       .getByRole('textbox', { name: 'Goal' })

@@ -109,6 +109,7 @@ test('scenario 4: level 2, then 3 mid-run; checks run only at 3', async () => {
     await page.getByRole('button', { name: 'New project' }).click();
     const dialog = page.getByRole('dialog', { name: 'New project' });
     await dialog.getByRole('button', { name: 'Choose a folder' }).click();
+    await expect(dialog.getByLabel('Ready')).toBeVisible();
     await dialog.getByRole('button', { name: 'Next' }).click();
     await dialog
       .getByRole('textbox', { name: 'Goal' })
