@@ -1,4 +1,5 @@
 import type { AppSettings, SteeringMessage } from '@conclave/shared';
+import type { PreviewResult } from '@conclave/core';
 import type {
   AgentRun,
   ClarifyResult,
@@ -288,6 +289,11 @@ export interface ConclaveApi {
     ): Promise<{ you: SteeringMessage; planner: SteeringMessage }>;
     applySteering(messageId: string, indexes: number[]): Promise<SteeringMessage>;
     dismissSteering(messageId: string): Promise<SteeringMessage>;
+    /** A live preview of the integration branch, or of one task's worktree. */
+    preview(projectId: string, taskId?: string): Promise<PreviewResult>;
+    allowPreview(projectId: string, command: string): Promise<Project>;
+    stopPreview(projectId: string, taskId?: string): Promise<void>;
+    previewLogs(projectId: string, taskId?: string): Promise<string>;
     retryFailed(
       projectId: string,
       filter: { provider?: ProviderId; kind?: FailureKind },
@@ -395,6 +401,10 @@ export const IPC = {
   projectsSteer: 'projects:steer',
   projectsApplySteering: 'projects:apply-steering',
   projectsDismissSteering: 'projects:dismiss-steering',
+  projectsPreview: 'projects:preview',
+  projectsAllowPreview: 'projects:allow-preview',
+  projectsStopPreview: 'projects:stop-preview',
+  projectsPreviewLogs: 'projects:preview-logs',
   decisionsAdd: 'decisions:add',
   decisionsKeep: 'decisions:keep',
   decisionsChange: 'decisions:change',

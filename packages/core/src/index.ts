@@ -15,6 +15,7 @@ export * from './store/store.js';
 export * from './store/projects.js';
 export * from './store/settings.js';
 export * from './store/steering.js';
+export * from './preview/preview.js';
 export * from './store/usage.js';
 export * from './store/decisions.js';
 export * from './chat/transcript.js';

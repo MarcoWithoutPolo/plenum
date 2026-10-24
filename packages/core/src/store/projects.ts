@@ -36,6 +36,8 @@ export interface NewProject {
   maxAttempts?: number;
   maxParallel?: number;
   adaptiveTeam?: boolean;
+  pages?: string[];
+  visualReview?: boolean;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -55,6 +57,9 @@ type ProjectPatch = Partial<
     | 'maxAttempts'
     | 'maxParallel'
     | 'adaptiveTeam'
+    | 'previewCommand'
+    | 'pages'
+    | 'visualReview'
     | 'name'
     | 'retryStrategy'
     | 'askPolicy'
@@ -107,6 +112,9 @@ export class ProjectStore {
       maxAttempts: input.maxAttempts ?? 3,
       maxParallel: clampParallel(input.maxParallel ?? 1),
       adaptiveTeam: input.adaptiveTeam ?? true,
+      previewCommand: null,
+      pages: cleanPages(input.pages ?? ['/']),
+      visualReview: input.visualReview ?? true,
       retryStrategy: input.retryStrategy ?? 'escalate',
       askPolicy: input.askPolicy ?? 'ask',
       permissions: input.permissions ?? DEFAULT_PERMISSIONS,
@@ -122,8 +130,9 @@ export class ProjectStore {
       .prepare(
         `INSERT INTO projects (id, name, repo_path, goal, done_when, test_command, base_branch,
            integration_branch, routing, max_attempts, retry_strategy, ask_policy, permissions,
-           design_direction, github, status, max_parallel, adaptive_team, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           design_direction, github, status, max_parallel, adaptive_team, pages, visual_review,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         project.id,
@@ -144,6 +153,8 @@ export class ProjectStore {
         project.status,
         project.maxParallel,
         project.adaptiveTeam ? 1 : 0,
+        JSON.stringify(project.pages),
+        project.visualReview ? 1 : 0,
         now,
         now,
       );
@@ -186,7 +197,8 @@ export class ProjectStore {
         `UPDATE projects SET name = ?, goal = ?, done_when = ?, test_command = ?, routing = ?,
            max_attempts = ?, retry_strategy = ?, ask_policy = ?, permissions = ?,
            design_direction = ?, proposed_test_command = ?, github = ?, max_parallel = ?,
-           adaptive_team = ?, updated_at = ? WHERE id = ?`,
+           adaptive_team = ?, preview_command = ?, pages = ?, visual_review = ?, updated_at = ?
+           WHERE id = ?`,
       )
       .run(
         next.name,
@@ -203,10 +215,13 @@ export class ProjectStore {
         next.github && JSON.stringify(next.github),
         clampParallel(next.maxParallel),
         next.adaptiveTeam ? 1 : 0,
+        next.previewCommand,
+        JSON.stringify(cleanPages(next.pages)),
+        next.visualReview ? 1 : 0,
         next.updatedAt,
         id,
       );
-    return { ...next, maxParallel: clampParallel(next.maxParallel) };
+    return { ...next, maxParallel: clampParallel(next.maxParallel), pages: cleanPages(next.pages) };
   }
 
   /* ── Tasks ─────────────────────────────────────────────────────────── */
@@ -521,6 +536,9 @@ function toProject(r: Row): Project {
     maxAttempts: r.max_attempts as number,
     maxParallel: clampParallel((r.max_parallel as number | null) ?? 1),
     adaptiveTeam: r.adaptive_team !== 0,
+    previewCommand: (r.preview_command as string | null) ?? null,
+    pages: cleanPages((parse(r.pages) as string[] | null) ?? ['/']),
+    visualReview: r.visual_review !== 0,
     retryStrategy: ((r.retry_strategy as string | null) ?? 'same') as RetryStrategy,
     askPolicy: ((r.ask_policy as string | null) ?? 'ask') as AskPolicy,
     permissions: {
@@ -535,6 +553,18 @@ function toProject(r: Row): Project {
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };
+}
+
+/** Up to 5 site paths, each starting with "/"; "/" when none are left. */
+export function cleanPages(pages: string[]): string[] {
+  const clean = [
+    ...new Set(
+      pages
+        .map((p) => String(p).trim())
+        .filter((p) => p.startsWith('/') && !p.startsWith('//') && p.length <= 200),
+    ),
+  ];
+  return clean.length ? clean.slice(0, 5) : ['/'];
 }
 
 /** Lanes run 1 to 4 tasks at once. */

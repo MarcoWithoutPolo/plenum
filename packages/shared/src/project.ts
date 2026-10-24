@@ -86,6 +86,12 @@ export const Project = z.object({
   maxParallel: z.number(),
   /** Let the brain reorder the team from measured speed, reliability and quota. */
   adaptiveTeam: z.boolean(),
+  /** The dev-server command you allowed for previews, or null (static previews need none). */
+  previewCommand: z.string().nullable(),
+  /** Pages the screenshots and visual review check, like "/" and "/settings". */
+  pages: z.array(z.string()),
+  /** An AI with vision reviews the screenshots too (web projects; screenshots themselves are free). */
+  visualReview: z.boolean(),
   retryStrategy: RetryStrategy,
   askPolicy: AskPolicy,
   permissions: Permissions,

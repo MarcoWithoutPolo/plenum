@@ -220,6 +220,12 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   );
   CREATE INDEX IF NOT EXISTS steering_by_project ON steering_messages(project_id, created_at);
   `,
+  // v12: see it. Previews, the pages to check, and visual review.
+  (db) => {
+    addColumn(db, 'projects', 'preview_command', 'TEXT');
+    addColumn(db, 'projects', 'pages', 'TEXT');
+    addColumn(db, 'projects', 'visual_review', 'INTEGER NOT NULL DEFAULT 1');
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

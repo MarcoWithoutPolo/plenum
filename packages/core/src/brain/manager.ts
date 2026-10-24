@@ -12,6 +12,7 @@ import type {
 import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
 import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
+import { PreviewServer, detectPreview } from '../preview/preview.js';
 import type { Governor } from '../governor/governor.js';
 import { QUESTION_KINDS, answerQuestion, decidePermission } from './answers.js';
 import { GitHub } from '../github/gh.js';
@@ -352,5 +353,140 @@ export class BrainManager {
 
   async stopAll(reason: string): Promise<void> {
     await Promise.all([...this.running.keys()].map((id) => this.stop(id, reason)));
+    await this.stopPreviews();
+  }
+
+  /* ── Live preview (v0.8 C1) ────────────────────────────────────────── */
+
+  private readonly previews = new Map<string, PreviewServer>();
+  private sweep: ReturnType<typeof setInterval> | undefined;
+
+  /**
+   * Preview a project's integration branch, or one task's worktree. Static sites start at once;
+   * a dev server starts only once you've allowed exactly that command for this project.
+   */
+  async preview(projectId: string, opts: { taskId?: string } = {}): Promise<PreviewResult> {
+    const project = this.ctx.store.projects.get(projectId);
+    if (!project) throw new Error('No such project.');
+    const workspace = projectWorkspace(this.home, project);
+    let dir: string;
+    if (opts.taskId) {
+      dir = workspace.taskPath(opts.taskId);
+      if (!existsSync(dir)) return { kind: 'none', reason: 'This task has no worktree right now.' };
+    } else {
+      dir = existsSync(workspace.integrationPath) ? workspace.integrationPath : project.repoPath;
+    }
+    const plan = detectPreview(dir);
+    if (plan.kind === 'none') return { kind: 'none', reason: plan.reason };
+    if (plan.kind === 'command' && project.previewCommand !== plan.command) {
+      return { kind: 'needs_approval', command: plan.command };
+    }
+    const key = previewKey(projectId, opts.taskId);
+    let server = this.previews.get(key);
+    if (server && (server.dir !== dir || JSON.stringify(server.plan) !== JSON.stringify(plan))) {
+      await server.stop();
+      server = undefined;
+    }
+    if (!server) {
+      if (opts.taskId) await this.trimTaskPreviews();
+      server = new PreviewServer(dir, plan);
+      this.previews.set(key, server);
+    }
+    try {
+      const { url } = await server.start();
+      this.watchIdle();
+      return { kind: 'ready', url, static: plan.kind === 'static' };
+    } catch (err) {
+      this.previews.delete(key);
+      return {
+        kind: 'failed',
+        error: err instanceof Error ? err.message.split('\n')[0]! : String(err),
+        logs: server.logs(),
+      };
+    }
+  }
+
+  /** You allowed this dev-server command for this project's previews: kept as your decision. */
+  allowPreviewCommand(projectId: string, command: string): Project {
+    const project = this.ctx.store.projects.get(projectId);
+    if (!project) throw new Error('No such project.');
+    const next = this.ctx.store.projects.update(projectId, { previewCommand: command })!;
+    this.ctx.store.decisions.add({
+      projectId,
+      kind: 'decision',
+      question: 'Which command may start live previews?',
+      answer: command,
+      source: 'you',
+    });
+    this.notify(() =>
+      this.ctx.store.projects.log({
+        projectId,
+        kind: 'decision',
+        message: `You allowed previews with ${command}`,
+      }),
+    );
+    return next;
+  }
+
+  previewLogs(projectId: string, taskId?: string): string {
+    return this.previews.get(previewKey(projectId, taskId))?.logs() ?? '';
+  }
+
+  async stopPreview(projectId: string, taskId?: string): Promise<void> {
+    const key = previewKey(projectId, taskId);
+    const server = this.previews.get(key);
+    this.previews.delete(key);
+    await server?.stop();
+  }
+
+  async stopPreviews(): Promise<void> {
+    const all = [...this.previews.values()];
+    this.previews.clear();
+    if (this.sweep) clearInterval(this.sweep);
+    this.sweep = undefined;
+    await Promise.all(all.map((s) => s.stop()));
+  }
+
+  /** At most two task previews at once; the least recently used one stops first. */
+  private async trimTaskPreviews(): Promise<void> {
+    const tasks = [...this.previews.entries()]
+      .filter(([k]) => k.includes(':'))
+      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+    while (tasks.length >= MAX_TASK_PREVIEWS) {
+      const [key, server] = tasks.shift()!;
+      this.previews.delete(key);
+      await server.stop();
+    }
+  }
+
+  /** Previews nobody has looked at for 30 minutes stop by themselves. */
+  private watchIdle(): void {
+    if (this.sweep) return;
+    this.sweep = setInterval(() => {
+      const cutoff = Date.now() - PREVIEW_IDLE_MS;
+      for (const [key, server] of this.previews) {
+        if (server.lastUsed < cutoff) {
+          this.previews.delete(key);
+          void server.stop();
+        }
+      }
+      if (this.previews.size === 0 && this.sweep) {
+        clearInterval(this.sweep);
+        this.sweep = undefined;
+      }
+    }, 60_000);
+    this.sweep.unref?.();
   }
 }
+
+const MAX_TASK_PREVIEWS = 2;
+const PREVIEW_IDLE_MS = 30 * 60_000;
+const previewKey = (projectId: string, taskId?: string) =>
+  taskId ? `${projectId}:${taskId}` : projectId;
+
+/** What opening a preview gave: a URL, a command to allow first, nothing to preview, or why it failed. */
+export type PreviewResult =
+  | { kind: 'ready'; url: string; static: boolean }
+  | { kind: 'needs_approval'; command: string }
+  | { kind: 'none'; reason: string }
+  | { kind: 'failed'; error: string; logs: string };
