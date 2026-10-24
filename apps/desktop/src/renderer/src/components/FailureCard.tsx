@@ -4,6 +4,7 @@ import {
   ChevronDown,
   FileQuestion,
   FlaskConical,
+  Eye,
   GitMerge,
   Hourglass,
   MessageCircleQuestion,
@@ -42,6 +43,11 @@ const KINDS: Record<FailureKind, { icon: LucideIcon; title: string; whose: strin
     icon: GitMerge,
     title: 'Merge conflict',
     whose: 'Newer work changed the same lines. Rebuilds are free.',
+  },
+  visual: {
+    icon: Eye,
+    title: 'Looks wrong',
+    whose: 'A reviewer found visual problems in the screenshots. The task goes back with them.',
   },
   combined_tests: {
     icon: GitMerge,

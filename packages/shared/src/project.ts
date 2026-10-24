@@ -132,6 +132,8 @@ export const FailureKind = z.enum([
   'conflict',
   /** Passed alone, but the tests fail once combined with work merged meanwhile (lanes). */
   'combined_tests',
+  /** A reviewer that can see found visual problems in the screenshots. */
+  'visual',
   'crash',
   'question',
 ]);

@@ -87,6 +87,8 @@ export interface ReviewReply {
   approve: boolean;
   issues: string[];
   summary: string;
+  /** Problems a reviewer saw in the screenshots, each pinned to one. */
+  visual?: { shot: string; issue: string; box?: [number, number, number, number] }[];
   /** Only when asked for a goal check. */
   goalMet?: boolean;
   goalGaps?: string[];
@@ -102,6 +104,23 @@ export function parseReview(text: string): ReviewReply | undefined {
     approve: json.approve,
     issues,
     summary: typeof json.summary === 'string' ? json.summary : '',
+    ...(Array.isArray(json.visual) && {
+      visual: json.visual
+        .filter(isObj)
+        .filter((v) => typeof v.issue === 'string' && v.issue.trim())
+        .map((v) => {
+          const box =
+            Array.isArray(v.box) && v.box.length === 4 && v.box.every((n) => typeof n === 'number')
+              ? (v.box.map((n) => Math.round(n as number)) as [number, number, number, number])
+              : undefined;
+          return {
+            shot: typeof v.shot === 'string' ? v.shot : '',
+            issue: (v.issue as string).trim(),
+            ...(box && { box }),
+          };
+        })
+        .slice(0, 10),
+    }),
     ...(typeof json.goal_met === 'boolean' && { goalMet: json.goal_met }),
     ...(Array.isArray(json.goal_gaps) && {
       goalGaps: json.goal_gaps.filter(

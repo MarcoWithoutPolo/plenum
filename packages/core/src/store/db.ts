@@ -240,6 +240,11 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   );
   CREATE INDEX IF NOT EXISTS snapshots_by_task ON snapshot_sets(project_id, task_id, created_at);
   `,
+  // v14: visual review. Image tokens per run, and which "before" set a task's shots compare with.
+  (db) => {
+    addColumn(db, 'agent_runs', 'image_tokens', 'INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'snapshot_sets', 'before_id', 'TEXT');
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

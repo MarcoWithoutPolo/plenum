@@ -15,6 +15,9 @@ import {
   decodePng,
   diffShots,
   findChrome,
+  imageTokens,
+  parseReview,
+  pickReviewShots,
   pageSlug,
   shotPlan,
   snapshotTask,
@@ -24,6 +27,7 @@ import {
   type Shot,
   type Snapshot,
   type Snapshotter,
+  type SnapshotSet,
   type View,
 } from '../src/index.js';
 
@@ -249,7 +253,7 @@ class FakeSnapshotter implements Snapshotter {
     this.calls.push({ url, view });
     const r = await this.report(url, view, this.calls.length);
     return {
-      png: png(4, 4, () => [255, 255, 255, 255]),
+      png: png(64, 64, () => [255, 255, 255, 255]),
       consoleErrors: [],
       failedRequests: [],
       metrics: metrics(),
@@ -453,4 +457,188 @@ describe('Headless Chrome snapshots', () => {
     },
     120_000,
   );
+});
+
+describe('Visual review', () => {
+  const set = (shots: Shot[], extra: Partial<SnapshotSet> = {}): SnapshotSet => ({
+    id: 'n_1',
+    projectId: 'p',
+    taskId: 'k',
+    commit: 'c',
+    shots,
+    diff: null,
+    checks: null,
+    createdAt: 0,
+    ...extra,
+  });
+  const names = ['home-desktop-light', 'home-desktop-dark', 'home-phone-light', 'home-phone-dark'];
+
+  it('shows the reviewer what changed most, plus how it looked before', () => {
+    const after = set(
+      names.map((n) => shot(n, { path: `/a/${n}.png` })),
+      {
+        diff: [
+          { name: 'home-desktop-light', changed: 0.002, boxes: [] },
+          { name: 'home-phone-light', changed: 0.3, boxes: [] },
+        ],
+      },
+    );
+    const before = set(
+      names.map((n) => shot(n, { path: `/b/${n}.png` })),
+      { taskId: null },
+    );
+    expect(pickReviewShots(after, before).map((s) => s.label)).toEqual([
+      'after: / (phone, light)',
+      'after: / (phone, dark)',
+      'after: / (desktop, light)',
+      'before: / (phone, light)',
+    ]);
+    // Nothing changed noticeably: four "after" shots, phone-dark and desktop-light first.
+    const quiet = set(names.map((n) => shot(n, { path: `/a/${n}.png` })));
+    expect(pickReviewShots(quiet, before).map((s) => s.label)).toEqual([
+      'after: / (phone, dark)',
+      'after: / (desktop, light)',
+      'after: / (phone, light)',
+      'after: / (desktop, dark)',
+    ]);
+  });
+
+  it('estimates what a screenshot costs in tokens', () => {
+    expect(imageTokens(png(390, 844, () => [255, 255, 255, 255]))).toBe(439);
+    expect(imageTokens(png(1280, 2400, () => [255, 255, 255, 255]))).toBe(1600);
+  });
+
+  it('reads visual problems from a verdict', () => {
+    expect(
+      parseReview(
+        '{"approve": false, "issues": [], "summary": "s", "visual": [{"shot": "after: / (phone, dark)", "issue": "Button text invisible", "box": [10.4, 600, 380, 660.6]}, {"issue": "   "}, {"shot": "x", "issue": "Cut off"}]}',
+      )?.visual,
+    ).toEqual([
+      { shot: 'after: / (phone, dark)', issue: 'Button text invisible', box: [10, 600, 380, 661] },
+      { shot: 'x', issue: 'Cut off' },
+    ]);
+  });
+
+  async function webProject(opts: {
+    reviewers: { id: 'claude' | 'antigravity'; vision: 'files' | 'none' }[];
+    visualReview?: boolean;
+    replies: string[];
+  }) {
+    const repo = temp();
+    const git = (...a: string[]) =>
+      execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e', ...a], { cwd: repo });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(join(repo, 'index.html'), '<h1>Tip calculator</h1>');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'init');
+    const home = temp();
+    const store = new Store(':memory:');
+    let plans = 0;
+    let reviews = 0;
+    const reviewers = opts.reviewers.map(
+      (r) =>
+        new FakeAdapter(
+          {
+            reply: (req) =>
+              req.role === 'planner'
+                ? plans++ === 0
+                  ? JSON.stringify({
+                      done: false,
+                      tasks: [{ title: 'Add a tip slider', spec: 'A slider.' }],
+                    })
+                  : '{"done": true, "reason": "ok"}'
+                : opts.replies[Math.min(reviews++, opts.replies.length - 1)]!,
+          },
+          { id: r.id, vision: r.vision },
+        ),
+    );
+    let builds = 0;
+    const codex = new FakeAdapter(
+      {
+        reply: 'Done',
+        act: (req: RunRequest) =>
+          writeFileSync(join(req.cwd, 'index.html'), `<h1>Tip calculator</h1><p>v${++builds}</p>`),
+      },
+      { id: 'codex', vision: 'native' },
+    );
+    const project = await createProject(
+      store,
+      [...opts.reviewers.map((r) => ({ provider: r.id })), { provider: 'codex' as const }],
+      {
+        repoPath: repo,
+        goal: 'A tip calculator',
+        routing: {
+          planner: [{ provider: opts.reviewers[0]!.id }],
+          builder: [{ provider: 'codex' }],
+          reviewer: opts.reviewers.map((r) => ({ provider: r.id })),
+        },
+        ...(opts.visualReview === false && { visualReview: false }),
+      },
+    );
+    const brain = new Brain(
+      { store, adapters: adapterMap([...reviewers, codex]), cwd: home },
+      project.id,
+      { home, snapshotter: new FakeSnapshotter(() => ({})) },
+    );
+    const outcome = await brain.run({ maxRounds: 12 });
+    return { store, project, outcome, reviewers, codex, builds: () => builds };
+  }
+
+  const LOOKS_WRONG =
+    '{"approve": false, "issues": [], "summary": "The slider is unreadable in dark mode", "visual": [{"shot": "after: / (phone, dark)", "issue": "The slider label is dark grey on black", "box": [20, 300, 370, 340]}]}';
+  const FINE = '{"approve": true, "issues": [], "summary": "Looks right in every shot"}';
+
+  it('sends back what the reviewer saw, with the screenshot, then merges the fix', async () => {
+    const { store, project, outcome, reviewers, codex, builds } = await webProject({
+      reviewers: [{ id: 'claude', vision: 'files' }],
+      replies: [LOOKS_WRONG, FINE],
+    });
+    expect(outcome.kind).toBe('done');
+    expect(builds()).toBe(2);
+    const review = reviewers[0]!.requests.find((r) => r.role === 'reviewer')!;
+    expect(review.images).toHaveLength(4);
+    expect(review.images!.every((p) => p.endsWith('.png'))).toBe(true);
+    expect(review.prompt).toContain('Open each file with your Read tool');
+    expect(review.prompt).toMatch(/- after: \/ \(phone, dark\): .+home-phone-dark\.png/);
+    // The builder got the issue, the region and the file to open.
+    expect(codex.requests[1]!.prompt).toMatch(
+      /The slider label is dark grey on black \[after: \/ \(phone, dark\) \(region 20, 300, 370, 340\): .+home-phone-dark\.png\]/,
+    );
+    const failures = store.projects
+      .events(project.id)
+      .filter((e) => /found visual problems/.test(e.message));
+    expect(failures).toHaveLength(1);
+    const used = store.db
+      .prepare("SELECT SUM(image_tokens) AS t FROM agent_runs WHERE role = 'reviewer'")
+      .get() as { t: number };
+    expect(used.t).toBeGreaterThan(0);
+  });
+
+  it('reviews the code only when no reviewer can see, and says so', async () => {
+    const { store, project, outcome, reviewers } = await webProject({
+      reviewers: [{ id: 'antigravity', vision: 'none' }],
+      replies: [FINE],
+    });
+    expect(outcome.kind).toBe('done');
+    const review = reviewers[0]!.requests.find((r) => r.role === 'reviewer')!;
+    expect(review.images).toBeUndefined();
+    expect(review.prompt).not.toContain('SCREENSHOTS');
+    expect(store.projects.events(project.id).map((e) => e.message)).toContain(
+      'No reviewer on the team can see images, so the screenshots are skipped',
+    );
+  });
+
+  it('keeps screenshots and the free checks, but no image review, when visual review is off', async () => {
+    const { store, project, reviewers } = await webProject({
+      reviewers: [{ id: 'claude', vision: 'files' }],
+      visualReview: false,
+      replies: [FINE],
+    });
+    expect(reviewers[0]!.requests.find((r) => r.role === 'reviewer')!.images).toBeUndefined();
+    expect(
+      store.projects
+        .events(project.id)
+        .some((e) => e.message.startsWith('Screenshots: 4 of 1 page')),
+    ).toBe(true);
+  });
 });

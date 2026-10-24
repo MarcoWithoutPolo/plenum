@@ -163,6 +163,8 @@ When you are done, reply with a short summary of what you changed.`;
 export interface ReviewExtras extends PromptExtras {
   /** This is the last queued task: also judge whether the whole goal is met. */
   goalCheck?: { merged: string[]; doneWhen: string | null };
+  /** Screenshots to judge, and the free checks' notes; attached (native) or as files to open. */
+  shots?: { files: { label: string; path: string }[]; attached: boolean; notes: string[] };
 }
 
 export function reviewerPrompt(
@@ -193,8 +195,8 @@ ${diff.diff}
 
 Approve unless there is a real problem: a bug, a missed requirement from the task, broken or missing tests, a security issue, changes unrelated to the task, or a change that contradicts a decision above (cite the decision). Style nits alone are not a reason to reject.
 
-${extras.goalCheck ? goalCheckSection(extras.goalCheck) : ''}Reply with ONLY one JSON object and nothing else:
-{"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"${extras.goalCheck ? ', "goal_met": true or false, "goal_gaps": ["what is still missing from the goal"]' : ''}}
+${extras.shots ? shotsSection(extras.shots, project.designDirection) : ''}${extras.goalCheck ? goalCheckSection(extras.goalCheck) : ''}Reply with ONLY one JSON object and nothing else:
+{"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"${extras.shots ? ', "visual": [{"shot": "the screenshot label", "issue": "what looks wrong and how to fix it", "box": [x1, y1, x2, y2]}]' : ''}${extras.goalCheck ? ', "goal_met": true or false, "goal_gaps": ["what is still missing from the goal"]' : ''}}
 If the change hinges on a product decision only the user can make, add "question": "...", "options": ["...", "..."], "recommended": "..." and set "approve": false.`;
 }
 
@@ -204,5 +206,19 @@ ${check.doneWhen ? `\nDONE WHEN\n${check.doneWhen}\n` : ''}
 ALREADY MERGED
 ${check.merged.length ? check.merged.map((t) => `- ${t}`).join('\n') : '- none'}
 
+`;
+}
+
+function shotsSection(
+  shots: { files: { label: string; path: string }[]; attached: boolean; notes: string[] },
+  design: string | null,
+): string {
+  const list = shots.files
+    .map((f, i) => `- ${f.label}${shots.attached ? ` (image ${i + 1})` : `: ${f.path}`}`)
+    .join('\n');
+  return `SCREENSHOTS of this change (taken by the system after the tests passed${shots.files.some((f) => f.label.startsWith('before')) ? '; "before" is the same page without this change' : ''}):
+${list}
+${shots.attached ? 'They are attached to this message, in this order.' : 'Open each file with your Read tool and look at it.'} Check that the pages look right for the goal${design ? ' and the design direction' : ''}: the layout at each width, readable text and contrast in both themes, nothing cut off, overlapping, broken or missing. Report real visual problems in "visual", each with the screenshot label and, if you can, the region [x1, y1, x2, y2] in that image's pixels. A visual problem is a reason to reject, like a bug; taste alone is not.
+${shots.notes.length ? `\nTHE AUTOMATIC CHECKS NOTED\n${shots.notes.map((n) => `- ${n}`).join('\n')}\n` : ''}
 `;
 }

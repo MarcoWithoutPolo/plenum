@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import type { AgentEvent, ProviderStatus } from '@conclave/shared';
 import { runCommand, isNotFound } from '../process.js';
 import {
@@ -36,6 +37,8 @@ export class CodexAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: false,
+    // codex exec --image attaches pictures to the prompt.
+    vision: 'native',
   };
   private readonly command: string;
   private readonly exec: Exec;
@@ -140,6 +143,9 @@ export function codexArgs(request: RunRequest): string[] {
     if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
     args.push('resume', request.sessionId);
   }
+  // Before the other flags, so a multi-value --image never swallows them.
+  if (!request.sessionId)
+    for (const img of request.images ?? []) args.push('--image', safeImage(img));
   args.push('--json', '--skip-git-repo-check', '--color', 'never');
   // resume inherits the original session's sandbox, so only set it on new sessions.
   if (!request.sessionId) args.push(...sandboxArgs(request));
@@ -272,4 +278,12 @@ function unwrapApiError(raw: string | undefined): string | undefined {
     // not JSON, use as is
   }
   return raw;
+}
+
+/** An image path from Conclave's own data folder: absolute, a PNG, nothing a shell could misread. */
+function safeImage(path: string): string {
+  if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
+    throw new Error(`Not a screenshot path: ${path}`);
+  }
+  return path;
 }

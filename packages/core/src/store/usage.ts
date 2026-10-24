@@ -56,13 +56,15 @@ export class UsageStore {
     refId?: string | null;
     taskId?: string | null;
     result: Pick<RunResult, 'ok' | 'rateLimited' | 'usage' | 'durationMs' | 'model'>;
+    /** Estimated tokens spent on screenshots (part of the input tokens). */
+    imageTokens?: number;
   }): void {
     const u = input.result.usage;
     this.db
       .prepare(
         `INSERT INTO agent_runs (provider, model, effort, role, source, ref_id, task_id, ok, rate_limited,
-           input_tokens, cached_tokens, output_tokens, cost_usd, duration_ms, at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           input_tokens, cached_tokens, output_tokens, cost_usd, duration_ms, at, image_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.seat.provider,
@@ -80,6 +82,7 @@ export class UsageStore {
         u.costUsd ?? null,
         input.result.durationMs,
         Date.now(),
+        Math.round(input.imageTokens ?? 0),
       );
   }
 

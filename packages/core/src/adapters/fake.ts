@@ -29,6 +29,8 @@ export interface FakeOptions {
   models?: ModelList;
   /** Report these from limits(), like a CLI that logs plan usage. */
   limits?: { window: string; utilization: number; resetsAt?: number }[];
+  /** What it can see (default: image files). */
+  vision?: 'native' | 'files' | 'none';
   /** Override what detect() reports, e.g. to show a signed-out provider. */
   status?: Partial<Omit<ProviderStatus, 'provider'>>;
 }
@@ -63,6 +65,7 @@ export class FakeAdapter implements Adapter {
       readOnly: true,
       resume: opts.resume ?? false,
       streaming: true,
+      vision: opts.vision ?? 'files',
       ...(opts.efforts && { efforts: opts.efforts }),
     };
   }

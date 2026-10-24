@@ -37,6 +37,8 @@ export interface CreateProjectInput {
   maxAttempts?: number;
   /** Lanes: how many tasks may build at once (1 to 4). */
   maxParallel?: number;
+  /** An AI that can see reviews the screenshots too (web projects). On unless set to false. */
+  visualReview?: boolean;
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -76,6 +78,7 @@ export async function createProject(
     routing,
     ...(input.maxAttempts !== undefined && { maxAttempts: input.maxAttempts }),
     ...(input.maxParallel !== undefined && { maxParallel: input.maxParallel }),
+    ...(input.visualReview !== undefined && { visualReview: input.visualReview }),
     ...(input.retryStrategy && { retryStrategy: input.retryStrategy }),
     ...(input.askPolicy && { askPolicy: input.askPolicy }),
     ...(input.permissions && { permissions: input.permissions }),

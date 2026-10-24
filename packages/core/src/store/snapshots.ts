@@ -12,6 +12,8 @@ export interface SnapshotSet {
   shots: Shot[];
   diff: ShotDiff[] | null;
   checks: { sendBack: string[]; notes: string[] } | null;
+  /** The integration set this task's shots were compared with. */
+  beforeId?: string | null;
   createdAt: number;
 }
 
@@ -29,8 +31,8 @@ export class SnapshotStore {
     const full = { ...set, createdAt: Date.now() };
     this.db
       .prepare(
-        `INSERT INTO snapshot_sets (id, project_id, task_id, commit_sha, shots, diff, checks, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO snapshot_sets (id, project_id, task_id, commit_sha, shots, diff, checks, before_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         full.id,
@@ -40,6 +42,7 @@ export class SnapshotStore {
         JSON.stringify(full.shots),
         full.diff && JSON.stringify(full.diff),
         full.checks && JSON.stringify(full.checks),
+        full.beforeId ?? null,
         full.createdAt,
       );
     return full;
@@ -88,6 +91,7 @@ function toSet(r: Row): SnapshotSet {
     shots: json<Shot[]>(r.shots, []),
     diff: json<ShotDiff[] | null>(r.diff, null),
     checks: json<SnapshotSet['checks']>(r.checks, null),
+    beforeId: (r.before_id as string | null) ?? null,
     createdAt: r.created_at as number,
   };
 }

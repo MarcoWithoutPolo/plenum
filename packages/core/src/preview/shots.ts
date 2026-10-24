@@ -126,6 +126,7 @@ export async function snapshotTask(input: {
       shots,
       diff: diffs,
       checks,
+      beforeId: before?.id ?? null,
     });
     return { kind: 'taken', before, after, diffs, checks };
   } catch (err) {
@@ -134,4 +135,55 @@ export async function snapshotTask(input: {
       reason: `Screenshots couldn't be taken: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`,
     };
   }
+}
+
+/** One screenshot shown to a reviewer, labelled the way the prompt refers to it. */
+export interface ReviewShot {
+  label: string;
+  path: string;
+}
+
+const PREFERRED = ['phone-dark', 'desktop-light', 'phone-light', 'desktop-dark'];
+
+/**
+ * At most `max` screenshots for a reviewer: the pages that changed most first, phone-dark and
+ * desktop-light before the rest, and the "before" of the most changed page when it changed more
+ * than 1%, so the reviewer can see what this change did.
+ */
+export function pickReviewShots(
+  after: SnapshotSet,
+  before: SnapshotSet | undefined,
+  max = 4,
+): ReviewShot[] {
+  // Under 1% is noise (anti-aliasing, a blinking caret), not a change worth showing first.
+  const changed = new Map(
+    (after.diff ?? []).map((d) => [d.name, d.changed > 0.01 ? d.changed : 0]),
+  );
+  const rank = (s: Shot) => PREFERRED.findIndex((p) => s.name.endsWith(p));
+  const sorted = [...after.shots].sort(
+    (a, b) => (changed.get(b.name) ?? 0) - (changed.get(a.name) ?? 0) || rank(a) - rank(b),
+  );
+  const top = sorted[0];
+  const was =
+    top && (changed.get(top.name) ?? 0) > 0.01
+      ? before?.shots.find((s) => s.name === top.name)
+      : undefined;
+  const label = (s: Shot, when: string) => `${when}: ${s.page} (${s.size}, ${s.view.scheme})`;
+  const picks = sorted
+    .slice(0, was ? max - 1 : max)
+    .map((s) => ({ label: label(s, 'after'), path: s.path }));
+  if (was) picks.push({ label: label(was, 'before'), path: was.path });
+  return picks;
+}
+
+/**
+ * About how many tokens a screenshot costs a vision model: images are scaled to fit about 1568 px
+ * on the long side, then cost roughly width × height / 750 tokens, at most about 1,600.
+ */
+export function imageTokens(png: Buffer): number {
+  if (png.length < 24) return 0;
+  const w = png.readUInt32BE(16);
+  const h = png.readUInt32BE(20);
+  const scale = Math.min(1, 1568 / Math.max(w, h, 1));
+  return Math.min(1600, Math.round((w * scale * h * scale) / 750));
 }

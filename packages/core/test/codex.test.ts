@@ -132,3 +132,21 @@ describe('codexArgs', () => {
     ).toEqual(['exec', 'resume', 'abc']);
   });
 });
+
+describe('codexArgs with screenshots', () => {
+  it('attaches each image before the other flags, and not on a resumed session', () => {
+    const png = process.platform === 'win32' ? 'C:\\shots\\a.png' : '/shots/a.png';
+    const args = codexArgs({
+      prompt: 'x',
+      cwd: '.',
+      role: 'reviewer',
+      readOnly: true,
+      images: [png],
+    });
+    expect(args.slice(0, 3)).toEqual(['exec', '--image', png]);
+    expect(args.at(-1)).toBe('-');
+    expect(codexArgs({ prompt: 'x', cwd: '.', sessionId: 'abc', images: [png] })).not.toContain(
+      '--image',
+    );
+  });
+});

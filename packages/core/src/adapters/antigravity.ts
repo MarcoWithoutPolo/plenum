@@ -52,6 +52,8 @@ export class AntigravityAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: true,
+    // Headless agy has no image option; promoted only once it's shown to read image files.
+    vision: 'none',
   };
   private readonly exec: Exec;
   private readonly explicitCommand: string | undefined;

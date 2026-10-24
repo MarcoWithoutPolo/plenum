@@ -100,3 +100,24 @@ describe('claudeArgs', () => {
     );
   });
 });
+
+describe('claudeArgs with screenshots', () => {
+  it('lets the reviewer read the screenshot folders, and refuses anything but PNGs', () => {
+    const dir = process.platform === 'win32' ? 'C:\\shots\\n_1' : '/shots/n_1';
+    const sep = process.platform === 'win32' ? '\\' : '/';
+    const args = claudeArgs({
+      prompt: 'x',
+      cwd: '.',
+      role: 'reviewer',
+      readOnly: true,
+      images: [`${dir}${sep}home-phone-dark.png`, `${dir}${sep}home-desktop-light.png`],
+    });
+    expect(args.filter((_a, i) => args[i - 1] === '--add-dir')).toEqual([dir]);
+    expect(() => claudeArgs({ prompt: 'x', cwd: '.', images: ['relative.png'] })).toThrow(
+      /Not a screenshot/,
+    );
+    expect(() => claudeArgs({ prompt: 'x', cwd: '.', images: [`${dir}${sep}notes.txt`] })).toThrow(
+      /Not a screenshot/,
+    );
+  });
+});

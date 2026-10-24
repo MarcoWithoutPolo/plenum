@@ -16,6 +16,8 @@ export interface RunRequest {
   permissions?: RunPermissions;
   /** Resume an earlier CLI session, when the provider supports it. */
   sessionId?: string;
+  /** Screenshots to look at (absolute PNG paths), for an adapter that can see. */
+  images?: string[];
   timeoutMs?: number;
   signal?: AbortSignal;
 }
@@ -28,6 +30,11 @@ export interface Capabilities {
   readOnly: boolean;
   resume: boolean;
   streaming: boolean;
+  /**
+   * Whether it can look at images: attached to the prompt (native), opened as files with its own
+   * tools (files), or not at all. Missing means none.
+   */
+  vision?: 'native' | 'files' | 'none';
 }
 
 /** How to start the provider's own sign-in flow (run in a real terminal so the CLI can open a browser). */

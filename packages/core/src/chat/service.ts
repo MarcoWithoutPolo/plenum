@@ -135,7 +135,14 @@ function resolveSeat(thread: Thread, opts: SendOptions): Seat {
 /** After every agent run: plan usage readings for the governor, and a usage-history row. */
 export function recordUsage(
   store: Store,
-  run: { seat: Seat; role: Role; source: RunSource; refId?: string | null; taskId?: string | null },
+  run: {
+    seat: Seat;
+    role: Role;
+    source: RunSource;
+    refId?: string | null;
+    taskId?: string | null;
+    imageTokens?: number;
+  },
   result: RunResult,
 ): void {
   recordQuotas(store, run.seat.provider, result);

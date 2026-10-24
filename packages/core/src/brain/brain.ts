@@ -23,7 +23,13 @@ import { Governor } from '../governor/governor.js';
 import { runShell } from '../process.js';
 import { Workspace, headCommit } from '../workspace/git.js';
 import { detectPreview } from '../preview/preview.js';
-import { snapshotTask, type TaskShots } from '../preview/shots.js';
+import {
+  imageTokens,
+  pickReviewShots,
+  snapshotTask,
+  type ReviewShot,
+  type TaskShots,
+} from '../preview/shots.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock } from './lock.js';
@@ -952,9 +958,23 @@ export class Brain {
     const avoid = task.builtBy ? [task.builtBy] : [];
     // Never the builder's own AI, unless the team has no other reviewer at all: when no other
     // AI is free, the task waits for one instead of being waved through by its author.
-    const team = project.routing.reviewer.some((s) => s.provider !== task.builtBy)
+    let team = project.routing.reviewer.some((s) => s.provider !== task.builtBy)
       ? project.routing.reviewer.filter((s) => s.provider !== task.builtBy)
       : project.routing.reviewer;
+    // Visual review: screenshots go to a reviewer that can see; others still review the code.
+    let shots = project.visualReview ? this.reviewShots(project, task) : undefined;
+    if (shots) {
+      const seeing = team.filter((s) => this.vision(s.provider) !== 'none');
+      if (seeing.length) team = seeing;
+      else {
+        this.log(
+          'review',
+          'No reviewer on the team can see images, so the screenshots are skipped',
+          { task },
+        );
+        shots = undefined;
+      }
+    }
     // A reviewer that crashes or gives no verdict isn't the task's fault: ask the next one.
     const tried: ProviderId[] = [];
     let problem: { seat: Seat; detail: string } | undefined;
@@ -994,16 +1014,26 @@ export class Brain {
       );
       const diff = await this.workspace.taskDiff(task.id);
       lines = changedLines(diff.stat);
+      const seen = shots && this.vision(reviewer.provider) !== 'none' ? shots : undefined;
       result = await this.agent(
         'reviewer',
         reviewer,
         reviewerPrompt(project, task, diff, tests, {
           decisions: this.decisions(),
           ...(goalCheck && { goalCheck }),
+          ...(seen && {
+            shots: {
+              files: seen.files,
+              attached: this.vision(reviewer.provider) === 'native',
+              notes: seen.notes,
+            },
+          }),
         }),
         this.workspace.taskPath(task.id),
         true,
         task,
+        undefined,
+        seen && { images: seen.files.map((f) => f.path) },
       );
       if (this.interrupted) return this.halt(task);
       verdict = result.ok ? parseReview(result.text) : undefined;
@@ -1025,6 +1055,34 @@ export class Brain {
     if (!verdict.approve) {
       const asked = parseQuestion(result.text);
       if (asked) return this.ask(project, task, asked, reviewer, 'review');
+    }
+    if (!verdict.approve && verdict.visual?.length) {
+      // What the reviewer saw: each problem with its screenshot, so the builder can open it.
+      const byLabel = new Map(shots?.files.map((f) => [f.label, f.path]));
+      const visual = verdict.visual.map((v) => {
+        const path = byLabel.get(v.shot);
+        const where = v.box ? ` (region ${v.box.join(', ')})` : '';
+        return `- ${v.issue}${v.shot ? ` [${v.shot}${where}${path ? `: ${path}` : ''}]` : ''}`;
+      });
+      const code = verdict.issues.map((i) => `- ${i}`);
+      this.log(
+        'review',
+        `${seatLabel(reviewer)} found visual problems${verdict.summary ? `: ${verdict.summary}` : ''}`,
+        {
+          task,
+          provider: reviewer.provider,
+          data: { issues: verdict.issues, visual: verdict.visual },
+        },
+      );
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'visual',
+          `${seatLabel(reviewer)} found ${verdict.visual.length} visual problem${verdict.visual.length === 1 ? '' : 's'}`,
+          [...visual, ...code].join('\n'),
+          reviewer,
+        ),
+        feedback: `Review by ${seatLabel(reviewer)}, who looked at the screenshots, asked for changes:\n${[...visual, ...code].join('\n')}`,
+      });
     }
     if (!verdict.approve) {
       const issues = verdict.issues.length
@@ -1140,6 +1198,22 @@ export class Brain {
     }
     this.rankNotes.set(role, note);
     return ranked.seats;
+  }
+
+  /** How a provider can look at images (from its adapter). */
+  private vision(provider: ProviderId): 'native' | 'files' | 'none' {
+    return this.ctx.adapters.get(provider)?.capabilities.vision ?? 'none';
+  }
+
+  /** The screenshots this task's reviewer should see, and the free checks' notes. */
+  private reviewShots(
+    project: Project,
+    task: Task,
+  ): { files: ReviewShot[]; notes: string[] } | undefined {
+    const after = this.ctx.store.snapshots.forTask(project.id, task.id);
+    if (!after?.shots.length) return undefined;
+    const before = after.beforeId ? this.ctx.store.snapshots.get(after.beforeId) : undefined;
+    return { files: pickReviewShots(after, before), notes: after.checks?.notes ?? [] };
   }
 
   /** The project's test command in `cwd`, for the merge queue's combined re-test. */
@@ -1524,6 +1598,7 @@ export class Brain {
     readOnly: boolean,
     task?: Task,
     permissions?: RunPermissions,
+    extra: { images?: string[] } = {},
   ): Promise<RunResult> {
     const adapter = this.ctx.adapters.get(seat.provider);
     if (!adapter) throw new Error(`Provider not available: ${seat.provider}`);
@@ -1539,6 +1614,7 @@ export class Brain {
         ...(this.signal && { signal: this.signal }),
         ...(seat.model && { model: seat.model }),
         ...(seat.effort && { effort: seat.effort }),
+        ...(extra.images?.length && { images: extra.images }),
       }),
       (event: AgentEvent) => {
         // Log what agents touch, once per file or tool, without flooding the log.
@@ -1570,9 +1646,24 @@ export class Brain {
     if (!result.ok && !result.rateLimited && looksLikeLimit(result.errors.join(' '))) {
       result.rateLimited = { message: result.errors[0] ?? 'usage limit reached' };
     }
+    // Screenshots are counted on their own, so Usage can say what visual review costs.
+    const pictures = (extra.images ?? []).reduce((n, path) => {
+      try {
+        return n + imageTokens(readFileSync(path));
+      } catch {
+        return n;
+      }
+    }, 0);
     recordUsage(
       this.ctx.store,
-      { seat, role, source: 'project', refId: this.projectId, taskId: task?.id ?? null },
+      {
+        seat,
+        role,
+        source: 'project',
+        refId: this.projectId,
+        taskId: task?.id ?? null,
+        ...(pictures && { imageTokens: pictures }),
+      },
       result,
     );
     this.governor.observe(seat.provider, result);

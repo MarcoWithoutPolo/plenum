@@ -1,3 +1,4 @@
+import { dirname, isAbsolute } from 'node:path';
 import type { ProviderStatus, Role } from '@conclave/shared';
 import { safeCommands, type RunPermissions } from './permissions.js';
 import { runCommand, isNotFound } from '../process.js';
@@ -36,6 +37,8 @@ export class ClaudeAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: true,
+    // Its Read tool opens image files.
+    vision: 'files',
   };
   private readonly command: string;
   private readonly exec: Exec;
@@ -125,6 +128,10 @@ export function claudeArgs(request: RunRequest): string[] {
     args.push('--resume', request.sessionId);
   }
   args.push(...toolArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions));
+  // Screenshots live outside the worktree: let it read their folders.
+  for (const dir of new Set((request.images ?? []).map((p) => dirname(safeImage(p))))) {
+    args.push('--add-dir', dir);
+  }
   return args;
 }
 
@@ -300,4 +307,12 @@ function rateLimit(info: unknown): EventBody[] {
     });
   }
   return out;
+}
+
+/** An image path from Conclave's own data folder: absolute, a PNG, nothing a shell could misread. */
+function safeImage(path: string): string {
+  if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
+    throw new Error(`Not a screenshot path: ${path}`);
+  }
+  return path;
 }
