@@ -28,6 +28,8 @@ import {
   Brain,
   ClaudeAdapter,
   CodexAdapter,
+  ChromeSnapshotter,
+  findChrome,
   Engine,
   collect,
   createProject,
@@ -50,6 +52,8 @@ const { values } = parseArgs({
     team: { type: 'string' },
     /** Conclave's permission level (Antigravity can only build at 2 or 5). */
     level: { type: 'string', default: '3' },
+    /** Screenshots and the free visual checks for web projects (needs Chrome or Edge). */
+    shots: { type: 'string', default: 'on' },
     runs: { type: 'string', default: '1' },
     'timeout-min': { type: 'string', default: '40' },
     nudges: { type: 'string', default: '2' },
@@ -291,8 +295,12 @@ async function runConclave(
     `level ${values.level}, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)`,
   ];
   let ok = false;
+  let snapshotter: ChromeSnapshotter | undefined;
   try {
-    const brain = new Brain(engine, projectRow.id, { home });
+    const chrome = values.shots === 'off' ? null : findChrome();
+    snapshotter = chrome ? new ChromeSnapshotter(chrome) : undefined;
+    notes.push(snapshotter ? 'screenshots and visual checks on' : 'screenshots off');
+    const brain = new Brain(engine, projectRow.id, { home, ...(snapshotter && { snapshotter }) });
     const outcome = await brain.run({ signal: controller.signal, maxRounds: 400 });
     ok = outcome.kind === 'done';
     notes.push(
@@ -300,6 +308,7 @@ async function runConclave(
     );
   } finally {
     clearTimeout(timer);
+    await snapshotter?.close();
   }
   const tasks = engine.store.projects.listTasks(projectRow.id);
   const count = (s: string) => tasks.filter((t) => t.status === s).length;

@@ -8,6 +8,8 @@ import {
   retryTask,
   seatLabel,
   skipTask,
+  ChromeSnapshotter,
+  findChrome,
   applySteering,
   projectWorkspace,
   steer,
@@ -211,9 +213,13 @@ async function run(
   process.on('SIGINT', onSigint);
 
   console.log(`${bold(project.name)} ${dim(`· ${project.goal}`)}`);
+  // Web projects get screenshots and the free visual checks when a Chrome or Edge is installed.
+  const chrome = findChrome();
+  const snapshotter = chrome ? new ChromeSnapshotter(chrome) : undefined;
   const brain = new Brain(engine, project.id, {
     home: engine.home,
     onEvent: (e) => console.log(formatEvent(e)),
+    ...(snapshotter && { snapshotter }),
   });
   try {
     const outcome = await brain.run({
@@ -230,6 +236,7 @@ async function run(
     return outcome.kind === 'done' || outcome.kind === 'stopped' ? 0 : 1;
   } finally {
     process.off('SIGINT', onSigint);
+    await snapshotter?.close();
   }
 }
 

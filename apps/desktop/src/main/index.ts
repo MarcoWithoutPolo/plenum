@@ -7,6 +7,7 @@ import { demoAdapters, demoGitHub } from './demo.js';
 import { registerIpc } from './ipc.js';
 import { registerProjectIpc } from './projects-ipc.js';
 import { Notifier } from './notify.js';
+import { ElectronSnapshotter } from './snapshotter.js';
 import { IPC, type SettingsPatch } from '../shared/api.js';
 
 silenceSqliteWarning();
@@ -127,7 +128,9 @@ if (!singleInstance) {
 
   void app.whenReady().then(() => {
     const engine = new Engine(demo ? { adapters: demoAdapters() } : {});
-    const brains = new BrainManager(engine, engine.home);
+    const brains = new BrainManager(engine, engine.home, {
+      snapshotter: new ElectronSnapshotter(),
+    });
     brains.recoverOrphans();
     registerIpc(engine, () => window);
     registerProjectIpc(engine, brains, demo ? demoGitHub() : new GitHub(), () => window);

@@ -21,7 +21,10 @@ import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
 import { Governor } from '../governor/governor.js';
 import { runShell } from '../process.js';
-import { Workspace } from '../workspace/git.js';
+import { Workspace, headCommit } from '../workspace/git.js';
+import { detectPreview } from '../preview/preview.js';
+import { snapshotTask, type TaskShots } from '../preview/shots.js';
+import type { Snapshotter } from '../preview/snapshot.js';
 import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
@@ -48,6 +51,8 @@ export interface BrainOptions {
   testTimeoutMs?: number;
   /** Lanes: how many tasks each AI may build at once (defaults: LANE_CAPS). */
   laneCaps?: Partial<Record<ProviderId, number>>;
+  /** Takes screenshots for web projects (Electron in the app, headless Chrome in the CLI). */
+  snapshotter?: Snapshotter;
   onEvent?: (event: BrainEvent) => void;
 }
 
@@ -882,7 +887,65 @@ export class Brain {
       this.log('verify', `Tests passed in ${(run.durationMs / 1000).toFixed(1)}s`, { task });
     }
 
+    // Web projects: screenshots and the free visual checks, before any AI reviews.
+    if (this.opts.snapshotter) {
+      const shots = await this.screenshots(project, task, cwd, commit);
+      if (this.interrupted) return this.halt(task);
+      if (shots?.kind === 'taken' && shots.checks.sendBack.length) {
+        const found = shots.checks.sendBack;
+        return this.sendBack(project, task, {
+          failure: this.failureOf(
+            'tests',
+            `The visual checks found ${found.length} problem${found.length === 1 ? '' : 's'}`,
+            found.join('\n'),
+            builder,
+          ),
+          feedback: `The page has problems this change introduced, found by the visual checks (screenshots at desktop and phone width, light and dark). Fix them:\n${found.map((f) => `- ${f}`).join('\n')}`,
+        });
+      }
+    }
+
     return this.review(project, this.projects.updateTask(task.id, { status: 'reviewing' }), tests);
+  }
+
+  /** Before and after screenshots of a task's pages, with the free visual checks (v0.8 C2, C4). */
+  private async screenshots(
+    project: Project,
+    task: Task,
+    cwd: string,
+    commit: string,
+  ): Promise<TaskShots | undefined> {
+    if (detectPreview(cwd).kind === 'none') return undefined;
+    const shots = await snapshotTask({
+      store: this.ctx.store,
+      home: this.opts.home,
+      project,
+      taskId: task.id,
+      afterDir: cwd,
+      afterCommit: commit,
+      beforeDir: this.workspace.integrationPath,
+      beforeCommit: await headCommit(this.workspace.integrationPath),
+      snapshotter: this.opts.snapshotter!,
+    });
+    if (shots.kind === 'skipped') {
+      this.log('verify', shots.reason, { task });
+      return shots;
+    }
+    const n = shots.after.shots.length;
+    const pages = new Set(shots.after.shots.map((s) => s.page)).size;
+    const changed = shots.diffs.filter((d) => d.changed > 0.01).length;
+    const problems = shots.checks.sendBack.length;
+    this.log(
+      'verify',
+      `Screenshots: ${n} of ${pages} page${pages === 1 ? '' : 's'}${shots.before ? `, ${changed} changed` : ''}; ${
+        problems ? `${problems} problem${problems === 1 ? '' : 's'} found` : 'no problems found'
+      }`,
+      {
+        task,
+        data: { snapshotSet: shots.after.id, before: shots.before?.id ?? null, ...shots.checks },
+      },
+    );
+    return shots;
   }
 
   private async review(project: Project, task: Task, tests: string): Promise<RoundOutcome> {

@@ -13,6 +13,7 @@ import type { EngineContext } from '../chat/service.js';
 import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
 import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
 import { PreviewServer, detectPreview } from '../preview/preview.js';
+import type { Snapshotter } from '../preview/snapshot.js';
 import type { Governor } from '../governor/governor.js';
 import { QUESTION_KINDS, answerQuestion, decidePermission } from './answers.js';
 import { GitHub } from '../github/gh.js';
@@ -152,6 +153,7 @@ export class BrainManager {
   constructor(
     private readonly ctx: EngineContext,
     private readonly home: string,
+    private readonly opts: { snapshotter?: Snapshotter } = {},
   ) {
     this.governor = storeGovernor(ctx.store);
   }
@@ -198,6 +200,7 @@ export class BrainManager {
     const brain = new Brain(this.ctx, projectId, {
       home: this.home,
       governor: this.governor,
+      ...(this.opts.snapshotter && { snapshotter: this.opts.snapshotter }),
       onEvent: (event) => {
         for (const l of this.listeners) l(event);
       },

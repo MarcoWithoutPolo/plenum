@@ -226,6 +226,20 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     addColumn(db, 'projects', 'pages', 'TEXT');
     addColumn(db, 'projects', 'visual_review', 'INTEGER NOT NULL DEFAULT 1');
   },
+  // v13: screenshot sets (PNGs live in the data folder; rows say what they show).
+  `
+  CREATE TABLE IF NOT EXISTS snapshot_sets (
+    id         TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    task_id    TEXT,
+    commit_sha TEXT NOT NULL,
+    shots      TEXT NOT NULL,
+    diff       TEXT,
+    checks     TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS snapshots_by_task ON snapshot_sets(project_id, task_id, created_at);
+  `,
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

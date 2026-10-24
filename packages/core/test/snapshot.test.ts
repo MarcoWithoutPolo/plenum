@@ -1,0 +1,456 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { deflateSync } from 'node:zlib';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  Brain,
+  ChromeSnapshotter,
+  FakeAdapter,
+  PreviewServer,
+  Store,
+  adapterMap,
+  createProject,
+  decodePng,
+  diffShots,
+  findChrome,
+  pageSlug,
+  shotPlan,
+  snapshotTask,
+  visualChecks,
+  type PageMetrics,
+  type RunRequest,
+  type Shot,
+  type Snapshot,
+  type Snapshotter,
+  type View,
+} from '../src/index.js';
+
+const dirs: string[] = [];
+afterEach(() => {
+  for (const d of dirs.splice(0))
+    rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+});
+const temp = () => {
+  const d = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+  dirs.push(d);
+  return d;
+};
+
+/** A PNG of `w`×`h` from a pixel function; rows use filters 0–4 in turn so the decoder sees them all. */
+function png(
+  w: number,
+  h: number,
+  pixel: (x: number, y: number) => number[],
+  alpha = true,
+): Buffer {
+  const bpp = alpha ? 4 : 3;
+  const rows: Buffer[] = [];
+  let prev = Buffer.alloc(w * bpp);
+  for (let y = 0; y < h; y++) {
+    const line = Buffer.alloc(w * bpp);
+    for (let x = 0; x < w; x++)
+      pixel(x, y)
+        .slice(0, bpp)
+        .forEach((v, i) => (line[x * bpp + i] = v));
+    const filter = y % 5;
+    const out = Buffer.alloc(w * bpp + 1);
+    out[0] = filter;
+    for (let i = 0; i < line.length; i++) {
+      const a = i >= bpp ? line[i - bpp]! : 0;
+      const b = prev[i]!;
+      const c = i >= bpp ? prev[i - bpp]! : 0;
+      const p = a + b - c;
+      const paeth =
+        Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c)
+          ? a
+          : Math.abs(p - b) <= Math.abs(p - c)
+            ? b
+            : c;
+      const pred = [0, a, b, (a + b) >> 1, paeth][filter]!;
+      out[i + 1] = (line[i]! - pred) & 0xff;
+    }
+    rows.push(out);
+    prev = line;
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    return Buffer.concat([len, Buffer.from(type, 'latin1'), data, Buffer.alloc(4)]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = alpha ? 6 : 2;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(Buffer.concat(rows))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const metrics = (over: Partial<PageMetrics> = {}): PageMetrics => ({
+  scrollWidth: 390,
+  innerWidth: 390,
+  scrollHeight: 844,
+  textLength: 200,
+  images: 0,
+  lowContrast: [],
+  smallTargets: [],
+  ...over,
+});
+const shot = (name: string, over: Partial<Shot> = {}): Shot => {
+  const [, size = 'desktop', scheme = 'light'] = name.split('-');
+  return {
+    name,
+    page: '/',
+    size: size as 'desktop' | 'phone',
+    view: { width: size === 'phone' ? 390 : 1280, height: 800, scheme: scheme as 'light' | 'dark' },
+    path: '',
+    consoleErrors: [],
+    failedRequests: [],
+    metrics: metrics(),
+    ...over,
+  };
+};
+
+describe('PNG and diffs', () => {
+  it('decodes RGB and RGBA with every row filter', () => {
+    const colour = (x: number, y: number) => [
+      (x * 37) % 256,
+      (y * 53) % 256,
+      (x * y) % 256,
+      255 - x,
+    ];
+    for (const alpha of [true, false]) {
+      const d = decodePng(png(7, 11, colour, alpha));
+      expect([d.width, d.height]).toEqual([7, 11]);
+      for (const [x, y] of [
+        [0, 0],
+        [6, 10],
+        [3, 4],
+      ] as const) {
+        const o = (y * 7 + x) * 4;
+        expect([...d.rgba.subarray(o, o + 4)]).toEqual([
+          ...colour(x, y).slice(0, 3),
+          alpha ? 255 - x : 255,
+        ]);
+      }
+    }
+  });
+
+  it('finds the region that changed, and treats a new size as all changed', () => {
+    const dir = temp();
+    const write = (name: string, buf: Buffer) => {
+      const p = join(dir, name);
+      writeFileSync(p, buf);
+      return p;
+    };
+    const white = () => [255, 255, 255, 255];
+    const before = write('b.png', png(200, 100, white));
+    const after = write(
+      'a.png',
+      png(200, 100, (x, y) =>
+        x >= 40 && x < 60 && y >= 20 && y < 40 ? [200, 0, 0, 255] : white(),
+      ),
+    );
+    const bigger = write('c.png', png(200, 120, white));
+    const [d] = diffShots(
+      [shot('home-desktop-light', { path: before })],
+      [shot('home-desktop-light', { path: after })],
+      (p) => readFileSync(p),
+    );
+    expect(d!.changed).toBeCloseTo(400 / 20_000, 4);
+    expect(d!.boxes).toEqual([[32, 16, 64, 48]]);
+    const [s] = diffShots(
+      [shot('home-desktop-light', { path: before })],
+      [shot('home-desktop-light', { path: bigger })],
+      (p) => readFileSync(p),
+    );
+    expect(s).toEqual({ name: 'home-desktop-light', changed: 1, boxes: [[0, 0, 200, 120]] });
+  });
+
+  it('plans every page at both sizes in both schemes, at most 20', () => {
+    expect(shotPlan(['/', '/settings']).map((s) => s.name)).toEqual([
+      'home-desktop-light',
+      'home-desktop-dark',
+      'home-phone-light',
+      'home-phone-dark',
+      'settings-desktop-light',
+      'settings-desktop-dark',
+      'settings-phone-light',
+      'settings-phone-dark',
+    ]);
+    expect(shotPlan(['/a', '/b', '/c', '/d', '/e', '/f'])).toHaveLength(20);
+    expect([pageSlug('/'), pageSlug('/docs/Getting Started/')]).toEqual([
+      'home',
+      'docs-getting-started',
+    ]);
+  });
+});
+
+describe('Free visual checks', () => {
+  it('sends back problems this change introduced, and only those', () => {
+    const before = [
+      shot('home-phone-dark', {
+        consoleErrors: ['Old warning as error'],
+        metrics: metrics({ lowContrast: [{ el: 'span.count "0"', ratio: 2, needed: 4.5 }] }),
+      }),
+    ];
+    const after = [
+      shot('home-phone-dark', {
+        consoleErrors: ['Old warning as error', 'TypeError: board is undefined'],
+        failedRequests: ['404 /style.css'],
+        metrics: metrics({
+          lowContrast: [
+            { el: 'span.count "0"', ratio: 2, needed: 4.5 },
+            { el: 'button "Add card"', ratio: 1.6, needed: 4.5 },
+          ],
+          smallTargets: [{ el: 'button "Delete"', width: 30, height: 30 }],
+          scrollWidth: 412,
+        }),
+      }),
+      shot('home-desktop-light', {
+        metrics: metrics({ smallTargets: [{ el: 'a "Docs"', width: 40, height: 20 }] }),
+      }),
+    ];
+    expect(visualChecks(after, before)).toEqual({
+      sendBack: [
+        'Console error on / (phone, dark): TypeError: board is undefined',
+        'Failed request on /: 404 /style.css',
+        'Low contrast in dark mode on /: button "Add card" is 1.6:1, needs 4.5:1 (WCAG AA)',
+        'Too small to tap on phones (/): button "Delete" is 30×30 px, needs 44×44',
+      ],
+      notes: ['/ (phone, dark) scrolls sideways by 22 px'],
+    });
+  });
+
+  it('calls a page blank when it shows almost nothing', () => {
+    expect(
+      visualChecks([shot('home-desktop-light', { metrics: metrics({ textLength: 3 }) })]).sendBack,
+    ).toEqual(['/ (desktop, light) looks blank: almost no text and no images']);
+  });
+});
+
+/** Snapshots from a script: what each URL "looks like" and reports. */
+class FakeSnapshotter implements Snapshotter {
+  calls: { url: string; view: View }[] = [];
+  constructor(
+    private readonly report: (
+      url: string,
+      view: View,
+      n: number,
+    ) => Partial<Snapshot> | Promise<never>,
+  ) {}
+  async capture(url: string, view: View): Promise<Snapshot> {
+    this.calls.push({ url, view });
+    const r = await this.report(url, view, this.calls.length);
+    return {
+      png: png(4, 4, () => [255, 255, 255, 255]),
+      consoleErrors: [],
+      failedRequests: [],
+      metrics: metrics(),
+      ...r,
+    };
+  }
+}
+
+describe('snapshotTask', () => {
+  async function project(files: Record<string, string>) {
+    const dir = temp();
+    for (const [p, b] of Object.entries(files)) {
+      mkdirSync(join(dir, p, '..'), { recursive: true });
+      writeFileSync(join(dir, p), b);
+    }
+    const store = new Store(':memory:');
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+    execFileSync(
+      'git',
+      ['-c', 'user.name=T', '-c', 'user.email=t@e', 'commit', '-q', '--allow-empty', '-m', 'i'],
+      { cwd: dir },
+    );
+    const p = await createProject(store, [{ provider: 'claude' }], { repoPath: dir, goal: 'g' });
+    return { store, project: p, dir, home: temp() };
+  }
+
+  it('shoots before once per commit and after every time, and runs the checks', async () => {
+    const { store, project: p, dir, home } = await project({ 'index.html': '<h1>Board</h1>' });
+    const snap = new FakeSnapshotter(() => ({}));
+    const base = {
+      store,
+      home,
+      project: p,
+      afterDir: dir,
+      beforeDir: dir,
+      beforeCommit: 'c1',
+      snapshotter: snap,
+    };
+    const first = await snapshotTask({ ...base, taskId: 'k1', afterCommit: 'a1' });
+    expect(first.kind).toBe('taken');
+    expect(snap.calls).toHaveLength(8); // 4 before + 4 after
+    expect(snap.calls[0]!.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+    const second = await snapshotTask({ ...base, taskId: 'k2', afterCommit: 'a2' });
+    expect(snap.calls).toHaveLength(12); // before reused
+    if (second.kind !== 'taken') throw new Error('skipped');
+    expect(second.before?.id).toBe(first.kind === 'taken' ? first.before?.id : '');
+    expect(second.diffs.every((d) => d.changed === 0)).toBe(true);
+    expect(store.snapshots.forTask(p.id, 'k2')?.shots.map((s) => s.name)).toEqual([
+      'home-desktop-light',
+      'home-desktop-dark',
+      'home-phone-light',
+      'home-phone-dark',
+    ]);
+    expect(readFileSync(second.after.shots[0]!.path).subarray(1, 4).toString()).toBe('PNG');
+  });
+
+  it('skips with a reason when a dev server is not allowed yet, or the shots take too long', async () => {
+    const {
+      store,
+      project: p,
+      dir,
+      home,
+    } = await project({
+      'index.html': '',
+      'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
+    });
+    const snap = new FakeSnapshotter(() => ({}));
+    const base = {
+      store,
+      home,
+      project: p,
+      afterDir: dir,
+      beforeDir: dir,
+      beforeCommit: 'c1',
+      taskId: 'k',
+      afterCommit: 'a',
+    };
+    expect(await snapshotTask({ ...base, snapshotter: snap })).toEqual({
+      kind: 'skipped',
+      reason:
+        'Screenshots need a preview: allow npm run dev for this project in its Preview first.',
+    });
+    const site = await project({ 'index.html': '<p>x</p>' });
+    const stuck = new FakeSnapshotter(() => new Promise<never>(() => undefined));
+    const late = await snapshotTask({
+      ...base,
+      store: site.store,
+      project: site.project,
+      afterDir: site.dir,
+      beforeDir: site.dir,
+      snapshotter: stuck,
+      deadlineMs: 300,
+    });
+    expect(late).toEqual({
+      kind: 'skipped',
+      reason: "Screenshots couldn't be taken: they took longer than a minute",
+    });
+  });
+});
+
+describe('Visual checks in a build', () => {
+  it('sends back a change that hurts contrast before any AI reviews it, then merges the fix', async () => {
+    const repo = temp();
+    const git = (...a: string[]) =>
+      execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@e', ...a], { cwd: repo });
+    git('init', '-q', '-b', 'main');
+    writeFileSync(join(repo, 'index.html'), '<h1>Board</h1>');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'init');
+    const home = temp();
+    const store = new Store(':memory:');
+    let plans = 0;
+    const claude = new FakeAdapter(
+      {
+        reply: (req) =>
+          req.role === 'planner'
+            ? plans++ === 0
+              ? JSON.stringify({
+                  done: false,
+                  tasks: [{ title: 'Add a count', spec: 'Show a card count.' }],
+                })
+              : '{"done": true, "reason": "ok"}'
+            : '{"approve": true, "issues": [], "summary": "Looks right"}',
+      },
+      { id: 'claude' },
+    );
+    let builds = 0;
+    const codex = new FakeAdapter(
+      {
+        reply: 'Done',
+        act: (req: RunRequest) => {
+          builds++;
+          writeFileSync(
+            join(req.cwd, 'index.html'),
+            `<h1>Board</h1><span class="count">${builds}</span>`,
+          );
+        },
+      },
+      { id: 'codex' },
+    );
+    const project = await createProject(store, [{ provider: 'claude' }, { provider: 'codex' }], {
+      repoPath: repo,
+      goal: 'A board',
+    });
+    // Judged by what the page serves: the first attempt's count is unreadable, the fix isn't.
+    const snapshotter = new FakeSnapshotter(async (url) => {
+      const html = await (await fetch(url)).text();
+      return html.includes('class="count">1<')
+        ? { metrics: metrics({ lowContrast: [{ el: 'span.count "1"', ratio: 1.5, needed: 4.5 }] }) }
+        : {};
+    });
+    const brain = new Brain(
+      { store, adapters: adapterMap([claude, codex]), cwd: home },
+      project.id,
+      {
+        home,
+        snapshotter,
+      },
+    );
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(builds).toBe(2);
+    expect(claude.requests.filter((r) => r.role === 'reviewer')).toHaveLength(1);
+    const events = store.projects.events(project.id).map((e) => e.message);
+    expect(events).toContain('Screenshots: 4 of 1 page, 0 changed; 2 problems found');
+    expect(codex.requests[1]!.prompt).toContain(
+      'Low contrast in light mode on /: span.count "1" is 1.5:1, needs 4.5:1 (WCAG AA)',
+    );
+    expect(store.projects.listTasks(project.id)[0]!.status).toBe('merged');
+  });
+});
+
+describe('Headless Chrome snapshots', () => {
+  const chrome = findChrome();
+  it.skipIf(!chrome)(
+    'measures a real page: errors, contrast, tap size, dark mode',
+    async () => {
+      const dir = temp();
+      writeFileSync(
+        join(dir, 'index.html'),
+        `<style>body{background:#fff;color:#111} @media (prefers-color-scheme: dark){body{background:#111;color:#eee}} .faint{color:#ddd}</style>
+       <h1>Board</h1><p class="faint">hard to read</p><button style="width:30px;height:30px">x</button>
+       <img src="missing.png" alt=""><script>console.error('boom')</script>`,
+      );
+      const server = new PreviewServer(dir, { kind: 'static', root: dir });
+      const snap = new ChromeSnapshotter(chrome!);
+      try {
+        const { url } = await server.start();
+        const light = await snap.capture(url, { width: 390, height: 844, scheme: 'light' });
+        expect(decodePng(light.png).width).toBe(390);
+        expect(light.consoleErrors).toEqual(['boom']);
+        expect(light.failedRequests).toEqual(['404 /missing.png']);
+        expect(light.metrics.lowContrast.map((l) => l.el)).toEqual(['p.faint "hard to read"']);
+        expect(light.metrics.smallTargets).toEqual([{ el: 'button "x"', width: 30, height: 30 }]);
+        const dark = await snap.capture(url, { width: 390, height: 844, scheme: 'dark' });
+        const px = decodePng(dark.png).rgba;
+        expect([px[0], px[1], px[2]]).toEqual([17, 17, 17]);
+      } finally {
+        await snap.close();
+        await server.stop();
+      }
+    },
+    60_000,
+  );
+});
