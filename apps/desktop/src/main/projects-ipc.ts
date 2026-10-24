@@ -423,10 +423,17 @@ export function registerProjectIpc(
     return gaps;
   });
 
-  handle(IPC.projectsStart, (projectId: string) => {
+  handle(IPC.projectsStart, (projectId: string, at?: unknown) => {
     mustGet(projectId);
-    manager.start(projectId);
+    // A later start is at most a day away; anything else starts now.
+    const later =
+      typeof at === 'number' && Number.isFinite(at) && at > Date.now() && at < Date.now() + DAY
+        ? at
+        : undefined;
+    manager.start(projectId, later ? { at: later } : {});
   });
+
+  handle(IPC.projectsStartCheck, (projectId: string) => manager.startCheck(mustGet(projectId).id));
 
   handle(IPC.projectsStop, (projectId: string) => manager.stop(id(projectId)));
 

@@ -112,6 +112,34 @@ describe('BrainManager', () => {
     expect(manager.isRunning(project.id)).toBe(false);
   });
 
+  it('waits to start until the time asked, says why, and Stop ends the wait', async () => {
+    const { store, project, manager } = await setup();
+    // Codex is at its limit for an hour: the start-up check says so, and when it's back.
+    const back = Date.now() + 3_600_000;
+    store.recordQuota({
+      provider: 'codex',
+      window: 'limit',
+      utilization: 1,
+      resetsAt: back,
+      at: Date.now(),
+    });
+    const check = manager.startCheck(project.id);
+    expect(check.notes.map((n) => n.provider)).toEqual(['codex']);
+    expect(check.waitUntil).toBe(back);
+
+    manager.start(project.id, { at: back });
+    await until(() => store.projects.get(project.id)?.status === 'waiting');
+    expect(store.projects.get(project.id)?.statusReason).toMatch(
+      /^Starts at .+, when Codex can work again$/,
+    );
+    expect(store.projects.listTasks(project.id)).toEqual([]);
+    const started = Date.now();
+    await manager.stop(project.id);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(store.projects.get(project.id)?.status).toBe('stopped');
+    expect(manager.isRunning(project.id)).toBe(false);
+  });
+
   it('pauses projects a closed app left running', async () => {
     const { store, project, manager } = await setup();
     store.projects.setStatus(project.id, 'running');

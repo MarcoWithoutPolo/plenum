@@ -7,7 +7,9 @@ import {
   type Adapter,
   type CommandResult,
   type RunRequest,
+  type Store,
 } from '@conclave/core';
+import type { ProviderId } from '@conclave/shared';
 
 interface DemoTask {
   title: string;
@@ -262,6 +264,20 @@ async function projectAct(req: RunRequest): Promise<void> {
   writeFileSync(join(req.cwd, task.file), sentBack ? task.fixed! : task.body);
   for (const [file, body] of Object.entries(task.more ?? {}))
     writeFileSync(join(req.cwd, file), body);
+}
+
+/** CONCLAVE_DEMO_OUT=codex: that AI starts at its usage limit for 70 minutes (the start-up check). */
+export function demoReadings(store: Store): void {
+  const out = process.env.CONCLAVE_DEMO_OUT as ProviderId | undefined;
+  if (!out) return;
+  const now = Date.now();
+  store.recordQuota({
+    provider: out,
+    window: 'limit',
+    utilization: 1,
+    resetsAt: now + 70 * 60_000,
+    at: now,
+  });
 }
 
 /** A GitHub CLI stand-in for demo mode: signed in, two repositories, two issues. */

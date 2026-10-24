@@ -142,6 +142,7 @@ export function recordUsage(
     refId?: string | null;
     taskId?: string | null;
     imageTokens?: number;
+    cancelled?: boolean;
   },
   result: RunResult,
 ): void {

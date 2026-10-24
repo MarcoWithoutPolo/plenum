@@ -118,6 +118,7 @@ interface Setup {
   retryStrategy?: 'same' | 'escalate' | 'ask';
   askPolicy?: 'ask' | 'decide' | 'council';
   noTests?: boolean;
+  reviewBudgetMs?: (fastestMedianMs: number) => number;
 }
 
 async function setup(opts: Setup = {}) {
@@ -151,7 +152,10 @@ async function setup(opts: Setup = {}) {
     ...(opts.askPolicy && { askPolicy: opts.askPolicy }),
     ...(opts.retryStrategy && { retryStrategy: opts.retryStrategy }),
   });
-  const brain = new Brain({ store, adapters, cwd: home }, project.id, { home });
+  const brain = new Brain({ store, adapters, cwd: home }, project.id, {
+    home,
+    ...(opts.reviewBudgetMs && { reviewBudgetMs: opts.reviewBudgetMs }),
+  });
   return { repo, home, store, claude, codex, gemini, project, brain };
 }
 
@@ -1955,5 +1959,114 @@ describe('Decide and tell', () => {
     await brain.run({ maxRounds: 10 });
     expect(codex.requests[0]!.prompt).not.toContain('ASSUMED:');
     expect(codex.requests[0]!.prompt).toContain('{"question": "...", "why": "...", "options"');
+  });
+});
+
+describe('Review time budget', () => {
+  // Reviews measured on this machine: gemini usually answers in 15 s, Claude's prior is 18 s,
+  // so Claude stays first in line and gemini is the faster backup.
+  const history = (store: Store, provider: ProviderId, ms: number) => {
+    for (let i = 0; i < 5; i++) {
+      store.usage.record({
+        seat: { provider },
+        role: 'reviewer',
+        source: 'project',
+        result: { ok: true, usage: {}, durationMs: ms },
+      });
+    }
+  };
+  // Claude plans quickly but reviews slowly (one word every 150 ms).
+  const slowClaude = (delayMs = 150) => {
+    let plans = 0;
+    return {
+      reply: (req: RunRequest) =>
+        req.role === 'planner'
+          ? plans++ === 0
+            ? PLAN
+            : DONE
+          : 'Looking closely at every line of this change before I decide anything at all. ' +
+            APPROVE,
+      delayMs,
+    };
+  };
+  const messages = (store: Store, projectId: string) =>
+    store.projects.events(projectId).map((e) => e.message);
+
+  it('asks a faster free reviewer after the budget; the first verdict wins and the other stops', async () => {
+    const { store, brain, project, claude, gemini } = await setup({
+      claude: slowClaude(),
+      gemini: { reply: APPROVE },
+      reviewBudgetMs: () => 300,
+    });
+    history(store, 'gemini', 15_000);
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+
+    const [task] = store.projects.listTasks(project.id);
+    expect(task).toMatchObject({ status: 'merged', builtBy: 'codex', reviewedBy: 'gemini' });
+    expect(gemini!.requests.filter((r) => r.role === 'reviewer')).toHaveLength(1);
+    expect(claude.requests.filter((r) => r.role === 'reviewer')).toHaveLength(1);
+    const log = messages(store, project.id);
+    expect(log).toContain("Claude hasn't answered in 1 second; asking Gemini too");
+    expect(log).toContain("Gemini approved first; stopped Claude's review");
+
+    // The stopped review is recorded, but as cancelled: not a failure, not a speed sample.
+    const runs = store.db
+      .prepare(
+        "SELECT provider, ok, cancelled FROM agent_runs WHERE role = 'reviewer' AND task_id IS NOT NULL",
+      )
+      .all() as { provider: string; ok: number; cancelled: number }[];
+    expect(runs).toEqual(
+      expect.arrayContaining([
+        { provider: 'claude', ok: 0, cancelled: 1 },
+        { provider: 'gemini', ok: 1, cancelled: 0 },
+      ]),
+    );
+    expect(store.usage.roleRuns('reviewer').filter((r) => r.provider === 'claude')).toEqual([]);
+    expect(store.usage.totals(0).find((t) => t.provider === 'claude')?.failed).toBe(0);
+  });
+
+  it('asks nobody else when the review answers within its budget', async () => {
+    const { store, brain, project, gemini } = await setup({
+      claude: slowClaude(5),
+      gemini: { reply: APPROVE },
+      reviewBudgetMs: () => 5_000,
+    });
+    history(store, 'gemini', 15_000);
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(store.projects.listTasks(project.id)[0]).toMatchObject({ reviewedBy: 'claude' });
+    expect(gemini!.requests.filter((r) => r.role === 'reviewer')).toHaveLength(0);
+    expect(messages(store, project.id).some((m) => m.includes("hasn't answered"))).toBe(false);
+  });
+
+  it("waits as before when no faster reviewer is free, and never asks the builder's AI", async () => {
+    // Codex built the task. It reviews fast here, but a task is never reviewed by its builder;
+    // gemini has no measured speed, so it isn't known to be faster.
+    const { store, brain, project, codex, gemini } = await setup({
+      claude: slowClaude(),
+      gemini: { reply: APPROVE },
+      reviewBudgetMs: () => 100,
+    });
+    history(store, 'codex', 1_000);
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(store.projects.listTasks(project.id)[0]).toMatchObject({ reviewedBy: 'claude' });
+    expect(codex.requests.map((r) => r.role)).toEqual(['builder']);
+    expect(gemini!.requests.filter((r) => r.role === 'reviewer')).toHaveLength(0);
+    expect(messages(store, project.id).some((m) => m.includes("hasn't answered"))).toBe(false);
+  });
+
+  it('keeps waiting for the first reviewer when the backup gives no verdict', async () => {
+    const { store, brain, project, gemini } = await setup({
+      claude: slowClaude(),
+      gemini: { reply: 'I am not sure.' },
+      reviewBudgetMs: () => 300,
+    });
+    history(store, 'gemini', 15_000);
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(store.projects.listTasks(project.id)[0]).toMatchObject({
+      status: 'merged',
+      reviewedBy: 'claude',
+    });
+    expect(gemini!.requests.filter((r) => r.role === 'reviewer')).toHaveLength(1);
+    expect(messages(store, project.id)).toContain('Claude approved; Gemini gave no verdict');
   });
 });

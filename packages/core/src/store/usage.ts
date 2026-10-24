@@ -58,13 +58,15 @@ export class UsageStore {
     result: Pick<RunResult, 'ok' | 'rateLimited' | 'usage' | 'durationMs' | 'model'>;
     /** Estimated tokens spent on screenshots (part of the input tokens). */
     imageTokens?: number;
+    /** Stopped because another run answered first: not a failure, and not a speed sample. */
+    cancelled?: boolean;
   }): void {
     const u = input.result.usage;
     this.db
       .prepare(
         `INSERT INTO agent_runs (provider, model, effort, role, source, ref_id, task_id, ok, rate_limited,
-           input_tokens, cached_tokens, output_tokens, cost_usd, duration_ms, at, image_tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           input_tokens, cached_tokens, output_tokens, cost_usd, duration_ms, at, image_tokens, cancelled)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.seat.provider,
@@ -83,6 +85,7 @@ export class UsageStore {
         input.result.durationMs,
         Date.now(),
         Math.round(input.imageTokens ?? 0),
+        input.cancelled ? 1 : 0,
       );
   }
 
@@ -90,7 +93,7 @@ export class UsageStore {
     return (
       this.db
         .prepare(
-          `SELECT provider, COUNT(*) AS runs, SUM(1 - ok) AS failed, SUM(rate_limited) AS limited,
+          `SELECT provider, COUNT(*) AS runs, SUM(1 - ok - cancelled) AS failed, SUM(rate_limited) AS limited,
              SUM(input_tokens) AS input, SUM(cached_tokens) AS cached, SUM(output_tokens) AS output,
              SUM(COALESCE(cost_usd, 0)) AS cost, SUM(duration_ms) AS duration
            FROM agent_runs WHERE at >= ? GROUP BY provider ORDER BY runs DESC`,
@@ -156,7 +159,8 @@ export class UsageStore {
       this.db
         .prepare(
           `SELECT provider, ok, duration_ms FROM agent_runs
-           WHERE role = ? AND source = 'project' AND rate_limited = 0 ORDER BY id DESC LIMIT ?`,
+           WHERE role = ? AND source = 'project' AND rate_limited = 0 AND cancelled = 0
+           ORDER BY id DESC LIMIT ?`,
         )
         .all(role, limit) as Row[]
     ).map((r) => ({

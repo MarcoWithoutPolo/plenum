@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
 import type { AppSettings } from '@conclave/shared';
 import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
-import { demoAdapters, demoGitHub } from './demo.js';
+import { demoAdapters, demoGitHub, demoReadings } from './demo.js';
 import { registerIpc } from './ipc.js';
 import { registerProjectIpc } from './projects-ipc.js';
 import { Notifier } from './notify.js';
@@ -128,6 +128,7 @@ if (!singleInstance) {
 
   void app.whenReady().then(() => {
     const engine = new Engine(demo ? { adapters: demoAdapters() } : {});
+    if (demo) demoReadings(engine.store);
     const brains = new BrainManager(engine, engine.home, {
       snapshotter: new ElectronSnapshotter(),
     });

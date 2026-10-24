@@ -56,6 +56,8 @@ import { api } from '@/lib/api';
 import { QUESTION_KINDS, useProjects } from '@/lib/projects';
 import { providerName, useApp } from '@/lib/store';
 import { PreviewPane } from '@/components/Preview';
+import { StartCheckNote } from '@/components/StartCheck';
+import type { StartCheck } from '@conclave/core';
 import { TaskDrawer } from './TaskDrawer';
 
 export function useNow(active: boolean, every = 1000): number {
@@ -205,6 +207,18 @@ function Header({
   const [expanded, setExpanded] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // The start-up check: shown instead of starting when an AI on the team can't work right now.
+  const [check, setCheck] = useState<StartCheck | null>(null);
+  const begin = async () => {
+    let found: StartCheck | null = null;
+    try {
+      found = await api().projects.startCheck(project.id);
+    } catch {
+      // The check is advice; if it can't run, start as before.
+    }
+    if (found?.notes.length) setCheck(found);
+    else await start(project.id);
+  };
 
   // An idle project that stopped for a reason says "Ready to resume", so its button says so too.
   const startLabel =
@@ -236,7 +250,7 @@ function Header({
             <Button
               // Answering resumes a project that stopped for you; this is only a fallback.
               variant={project.status === 'needs_you' ? 'secondary' : 'primary'}
-              onClick={() => void start(project.id)}
+              onClick={() => void begin()}
               disabled={busy || project.status === 'draft'}
             >
               {project.status === 'done' ? (
@@ -318,6 +332,22 @@ function Header({
         </div>
       </div>
 
+      {check && !running && (
+        <StartCheckNote
+          check={check}
+          label={startLabel}
+          busy={busy}
+          onStart={async (at) => {
+            setCheck(null);
+            await start(project.id, at);
+          }}
+          onEditTeam={() => {
+            setCheck(null);
+            onSettings();
+          }}
+          onClose={() => setCheck(null)}
+        />
+      )}
       {project.statusReason && !['running', 'needs_you', 'idle'].includes(project.status) && (
         <p className="mt-1 text-[12.5px] text-muted">
           <span className="font-medium text-ink">
@@ -493,8 +523,16 @@ function NowStrip({
     return null;
   } else if (project.status === 'waiting') {
     icon = <Hourglass className="size-4 text-warn" aria-hidden />;
-    const until = (last?.data as { until?: number | null } | null)?.until;
-    line = (
+    const data = last?.data as { until?: number | null; scheduled?: boolean } | null;
+    const until = data?.until;
+    line = data?.scheduled ? (
+      <>
+        <span className="font-medium">{project.statusReason}.</span>{' '}
+        <span className="text-muted">
+          {until ? `That's ${relative(until, 'future')}. ` : ''}Stop cancels it.
+        </span>
+      </>
+    ) : (
       <>
         <span className="font-medium">Waiting for usage to free up.</span>{' '}
         <span className="text-muted">

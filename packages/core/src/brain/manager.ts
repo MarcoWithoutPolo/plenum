@@ -15,6 +15,9 @@ import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
 import { PreviewServer, detectPreview } from '../preview/preview.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import type { Governor } from '../governor/governor.js';
+import { seatStats, withPriors } from '../governor/rank.js';
+import { teamCheck, type StartCheck } from '../governor/startcheck.js';
+import { seatLabel } from '../chat/transcript.js';
 import { QUESTION_KINDS, answerQuestion, decidePermission } from './answers.js';
 import { GitHub } from '../github/gh.js';
 import { openPullRequest, publishRepo } from '../github/flows.js';
@@ -191,7 +194,22 @@ export class BrainManager {
     return orphans;
   }
 
-  start(projectId: string): void {
+  /** Before a start: which AIs on the team can't work right now, and what that changes (C6). */
+  startCheck(projectId: string): StartCheck {
+    const project = this.ctx.store.projects.get(projectId);
+    if (!project) throw new Error('No such project.');
+    return teamCheck(
+      project,
+      (p) => this.governor.availability(p),
+      withPriors('reviewer', seatStats(this.ctx.store.usage.roleRuns('reviewer'))),
+    );
+  }
+
+  /**
+   * Start (or resume) a project. With `at`, it waits until then first, like any waiting project:
+   * the start-up check's "Wait until…", for when the AIs it needs are back.
+   */
+  start(projectId: string, opts: { at?: number } = {}): void {
     if (this.running.has(projectId)) return;
     if (isProjectRunning(this.home, projectId)) {
       throw new Error('This project is already running in another Conclave window or terminal.');
@@ -205,8 +223,24 @@ export class BrainManager {
         for (const l of this.listeners) l(event);
       },
     });
+    const later = opts.at !== undefined && opts.at > Date.now() ? opts.at : undefined;
+    const back = later
+      ? [
+          ...new Set(
+            this.startCheck(projectId).notes.map((n) => seatLabel({ provider: n.provider })),
+          ),
+        ]
+      : [];
     const done = brain
-      .run({ signal: controller.signal })
+      .run({
+        signal: controller.signal,
+        ...(later && {
+          startAt: {
+            at: later,
+            reason: `Starts at ${new Date(later).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${back.length ? `, when ${back.join(' and ')} can work again` : ''}`,
+          },
+        }),
+      })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         this.ctx.store.projects.setStatus(projectId, 'paused', message);

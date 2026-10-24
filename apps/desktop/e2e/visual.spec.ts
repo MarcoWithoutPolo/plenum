@@ -132,8 +132,9 @@ for (const scheme of ['light', 'dark'] as const) {
         .getByRole('radio', { name: /Phone/ })
         .click();
       await expect(pane.locator('iframe')).toHaveAttribute('title', /390 px/);
-      // At phone width the frame is not scaled (Playwright can't click through a CSS scale).
-      await frame.getByRole('button', { name: 'Add one' }).click();
+      // The page is live: its script runs. Pressed by keyboard, because Playwright's mouse
+      // can't reliably reach into a cross-origin frame (a scaled one, or on macOS at all).
+      await frame.getByRole('button', { name: 'Add one' }).press('Enter');
       await expect(frame.locator('#count')).toHaveText('1');
       await shot('preview');
       await pane.getByRole('button', { name: 'Close the preview' }).click();

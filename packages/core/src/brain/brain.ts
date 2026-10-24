@@ -60,8 +60,21 @@ export interface BrainOptions {
   laneCaps?: Partial<Record<ProviderId, number>>;
   /** Takes screenshots for web projects (Electron in the app, headless Chrome in the CLI). */
   snapshotter?: Snapshotter;
+  /**
+   * The review time budget: how long a review may take before a faster reviewer is asked too,
+   * from that reviewer's median review time. Default: 3× the median, at least 90 seconds.
+   */
+  reviewBudgetMs?: (fastestMedianMs: number) => number;
   onEvent?: (event: BrainEvent) => void;
 }
+
+type ReviewRun = { seat: Seat; result: RunResult; verdict: ReturnType<typeof parseReview> };
+
+/** "1 second", "90 seconds", "3 minutes". */
+const seconds = (ms: number) => {
+  const s = Math.max(1, Math.round(ms / 1000));
+  return s < 120 ? `${s} second${s === 1 ? '' : 's'}` : `${Math.round(s / 60)} minutes`;
+};
 
 export type RoundOutcome =
   | { kind: 'planned'; tasks: Task[] }
@@ -84,6 +97,8 @@ export interface RunOptions {
   maxSleepMs?: number;
   /** Injected for tests. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /** Start later: wait until `at`, showing `reason` (the start-up check's "Wait until…"). */
+  startAt?: { at: number; reason: string };
 }
 
 /**
@@ -263,6 +278,21 @@ export class Brain {
     const lock = acquireLock(join(this.workspace.root, 'run.lock'));
     this.signal = options.signal;
     try {
+      // "Wait until…" from the start-up check: wait like any waiting project (Stop works).
+      if (options.startAt && options.startAt.at > Date.now() && this.project().status !== 'draft') {
+        this.projects.setStatus(this.projectId, 'waiting', options.startAt.reason);
+        this.log('wait', options.startAt.reason, {
+          data: { until: options.startAt.at, scheduled: true },
+        });
+        await (options.sleep ?? interruptibleSleep)(
+          options.startAt.at - Date.now(),
+          options.signal,
+        );
+        if (options.signal?.aborted) {
+          if (this.project().status !== 'stopped') this.stop('Stopped by you');
+          return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
+        }
+      }
       const lanes = this.project().maxParallel;
       return await (lanes > 1 ? this.lanes(options, lanes) : this.loop(options));
     } finally {
@@ -1015,31 +1045,41 @@ export class Brain {
       );
       const diff = await this.workspace.taskDiff(task.id);
       lines = changedLines(diff.stat);
-      const seen = shots && this.vision(reviewer.provider) !== 'none' ? shots : undefined;
-      result = await this.agent(
-        'reviewer',
-        reviewer,
-        reviewerPrompt(project, task, diff, tests, {
-          decisions: this.decisions(),
-          ...(goalCheck && { goalCheck }),
-          ...(seen && {
-            shots: {
-              files: seen.files,
-              attached: this.vision(reviewer.provider) === 'native',
-              notes: seen.notes,
-            },
+      const run = async (seat: Seat, signal: AbortSignal): Promise<ReviewRun> => {
+        const seen = shots && this.vision(seat.provider) !== 'none' ? shots : undefined;
+        const r = await this.agent(
+          'reviewer',
+          seat,
+          reviewerPrompt(project, task, diff, tests, {
+            decisions: this.decisions(),
+            ...(goalCheck && { goalCheck }),
+            ...(seen && {
+              shots: {
+                files: seen.files,
+                attached: this.vision(seat.provider) === 'native',
+                notes: seen.notes,
+              },
+            }),
           }),
-        }),
-        this.workspace.taskPath(task.id),
-        true,
-        task,
-        undefined,
-        seen && { images: seen.files.map((f) => f.path) },
+          this.workspace.taskPath(task.id),
+          true,
+          task,
+          undefined,
+          { ...(seen && { images: seen.files.map((f) => f.path) }), signal },
+        );
+        return { seat, result: r, verdict: r.ok ? parseReview(r.text) : undefined };
+      };
+      const backups = team.filter(
+        (s) =>
+          s.provider !== reviewer.provider &&
+          s.provider !== task.builtBy &&
+          !tried.includes(s.provider),
       );
+      const outcome = await this.reviewWithBudget(task, reviewer, backups, run);
       if (this.interrupted) return this.halt(task);
-      verdict = result.ok ? parseReview(result.text) : undefined;
+      ({ seat: reviewer, result, verdict } = outcome);
       if (verdict) break;
-      tried.push(reviewer.provider);
+      tried.push(reviewer.provider, ...outcome.alsoTried);
       const detail = result.rateLimited
         ? `${seatLabel(reviewer)} hit a usage limit`
         : result.ok
@@ -1198,6 +1238,99 @@ export class Brain {
     }
     this.rankNotes.set(role, note);
     return ranked.seats;
+  }
+
+  /**
+   * The review time budget (v0.8 C5): when a review runs past its budget and a faster reviewer
+   * is free (never the builder's AI), that one is asked too. The first valid verdict wins and the
+   * other run is stopped; it's recorded as cancelled, so it counts neither as a failure nor as a
+   * speed sample. With no faster reviewer free, the review just waits, as before.
+   */
+  private async reviewWithBudget(
+    task: Task,
+    first: Seat,
+    candidates: Seat[],
+    run: (seat: Seat, signal: AbortSignal) => Promise<ReviewRun>,
+  ): Promise<ReviewRun & { alsoTried: ProviderId[] }> {
+    const own = new AbortController();
+    const primary = run(first, own.signal);
+    const backup = this.backupReviewer(first, candidates);
+    if (!backup) return { ...(await primary), alsoTried: [] };
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<'late'>((ok) => {
+      timer = setTimeout(() => ok('late'), backup.budgetMs);
+    });
+    const early = await Promise.race([primary, late]);
+    clearTimeout(timer);
+    if (early !== 'late') return { ...early, alsoTried: [] };
+    // Still waiting on the primary; is the backup still free right now?
+    if (this.interrupted || !this.governor.pick([backup.seat]).seat) {
+      return { ...(await primary), alsoTried: [] };
+    }
+
+    this.log(
+      'review',
+      `${seatLabel(first)} hasn't answered in ${seconds(backup.budgetMs)}; asking ${seatLabel(backup.seat)} too`,
+      { task, provider: backup.seat.provider, data: { budgetMs: backup.budgetMs } },
+    );
+    const theirs = new AbortController();
+    const second = run(backup.seat, theirs.signal);
+    const runs = [primary, second];
+    // The first valid verdict wins; if neither gives one, the first to finish speaks for both.
+    const empty: ReviewRun[] = [];
+    const winner = await new Promise<ReviewRun>((resolve, reject) => {
+      for (const p of runs) {
+        p.then((r) => {
+          if (r.verdict) return resolve(r);
+          empty.push(r);
+          if (empty.length === runs.length) resolve(empty[0]!);
+        }, reject);
+      }
+    });
+    const lost = winner.seat === first ? backup.seat : first;
+    if (!winner.verdict) {
+      return { ...winner, alsoTried: [lost.provider] };
+    }
+    const said = `${seatLabel(winner.seat)} ${winner.verdict.approve ? 'approved' : 'asked for changes'}`;
+    if (empty.length) {
+      // The other one already finished, without a verdict.
+      this.log('review', `${said}; ${seatLabel(lost)} gave no verdict`, {
+        task,
+        provider: winner.seat.provider,
+      });
+      return { ...winner, alsoTried: [] };
+    }
+    (winner.seat === first ? theirs : own).abort();
+    // Let the stopped run end, so its process is gone and its usage is recorded.
+    await Promise.race([
+      winner.seat === first ? second : primary,
+      new Promise((r) => setTimeout(r, 10_000)),
+    ]);
+    this.log('review', `${said} first; stopped ${seatLabel(lost)}'s review`, {
+      task,
+      provider: winner.seat.provider,
+    });
+    return { ...winner, alsoTried: [] };
+  }
+
+  /**
+   * The free reviewer that usually answers fastest, if it's faster than `first`, with the budget
+   * `first` gets before it's asked: 3× that reviewer's median review time, at least 90 seconds.
+   */
+  private backupReviewer(
+    first: Seat,
+    candidates: Seat[],
+  ): { seat: Seat; budgetMs: number } | undefined {
+    const stats = withPriors('reviewer', seatStats(this.ctx.store.usage.roleRuns('reviewer')));
+    const median = (p: ProviderId) => stats.get(p)?.medianMs ?? Infinity;
+    const free = candidates.filter((s) => this.governor.pick([s]).seat);
+    const fastest = free
+      .filter((s) => Number.isFinite(median(s.provider)))
+      .sort((a, b) => median(a.provider) - median(b.provider))[0];
+    if (!fastest || median(fastest.provider) >= median(first.provider)) return undefined;
+    const budget = this.opts.reviewBudgetMs ?? ((m: number) => Math.max(90_000, 3 * m));
+    return { seat: fastest, budgetMs: budget(median(fastest.provider)) };
   }
 
   /** How a provider can look at images (from its adapter). */
@@ -1598,11 +1731,14 @@ export class Brain {
     readOnly: boolean,
     task?: Task,
     permissions?: RunPermissions,
-    extra: { images?: string[] } = {},
+    extra: { images?: string[]; signal?: AbortSignal } = {},
   ): Promise<RunResult> {
     const adapter = this.ctx.adapters.get(seat.provider);
     if (!adapter) throw new Error(`Provider not available: ${seat.provider}`);
     const seen = new Set<string>();
+    // The project's stop, and this run's own (a review that lost the race).
+    const signals = [this.signal, extra.signal].filter((s): s is AbortSignal => Boolean(s));
+    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
     const result = await collect(
       adapter.run({
         prompt,
@@ -1611,7 +1747,7 @@ export class Brain {
         readOnly,
         ...(permissions && { permissions }),
         timeoutMs: this.agentTimeout,
-        ...(this.signal && { signal: this.signal }),
+        ...(signal && { signal }),
         ...(seat.model && { model: seat.model }),
         ...(seat.effort && { effort: seat.effort }),
         ...(extra.images?.length && { images: extra.images }),
@@ -1646,6 +1782,8 @@ export class Brain {
     if (!result.ok && !result.rateLimited && looksLikeLimit(result.errors.join(' '))) {
       result.rateLimited = { message: result.errors[0] ?? 'usage limit reached' };
     }
+    // Stopped because another run answered first: not the provider's failure.
+    const cancelled = !result.ok && extra.signal?.aborted === true && !this.signal?.aborted;
     // Screenshots are counted on their own, so Usage can say what visual review costs.
     const pictures = (extra.images ?? []).reduce((n, path) => {
       try {
@@ -1663,10 +1801,11 @@ export class Brain {
         refId: this.projectId,
         taskId: task?.id ?? null,
         ...(pictures && { imageTokens: pictures }),
+        ...(cancelled && { cancelled }),
       },
       result,
     );
-    this.governor.observe(seat.provider, result);
+    if (!cancelled) this.governor.observe(seat.provider, result);
     return result;
   }
 }

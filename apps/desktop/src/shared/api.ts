@@ -1,5 +1,5 @@
 import type { AppSettings, SteeringMessage } from '@conclave/shared';
-import type { PreviewResult, SnapshotSet } from '@conclave/core';
+import type { PreviewResult, SnapshotSet, StartCheck } from '@conclave/core';
 import type {
   AgentRun,
   ClarifyResult,
@@ -326,7 +326,10 @@ export interface ConclaveApi {
     permissionGaps(permissions: Permissions): Promise<PermissionGaps>;
     /** Why the brain would reorder this team, from measured speed, reliability and quota. */
     teamInsights(routing: Routing): Promise<TeamInsights>;
-    start(id: string): Promise<void>;
+    /** Start now, or with `at`, wait until then first (the start-up check's "Wait until…"). */
+    start(id: string, at?: number): Promise<void>;
+    /** Which AIs on the team can't work right now, and what that changes. */
+    startCheck(id: string): Promise<StartCheck>;
     stop(id: string): Promise<void>;
     remove(id: string): Promise<void>;
     taskChanges(taskId: string): Promise<string>;
@@ -402,6 +405,7 @@ export const IPC = {
   projectsInspectRepo: 'projects:inspect-repo',
   projectsCreate: 'projects:create',
   projectsStart: 'projects:start',
+  projectsStartCheck: 'projects:start-check',
   projectsStop: 'projects:stop',
   projectsRemove: 'projects:remove',
   projectsTaskChanges: 'projects:task-changes',

@@ -48,7 +48,14 @@ export function StatusPill({
 }) {
   // The brain may still be finishing a step after a stop; trust the lock while it holds.
   const base = STATUS[running && status !== 'waiting' ? 'running' : status];
-  const s = !running && status === 'idle' && reason ? { ...base, label: 'Ready to resume' } : base;
+  // A start you scheduled from the start-up check ("Starts at 4:10 PM, when …").
+  const scheduled = status === 'waiting' && reason?.startsWith('Starts at ');
+  const s =
+    !running && status === 'idle' && reason
+      ? { ...base, label: 'Ready to resume' }
+      : scheduled
+        ? { ...base, label: 'Scheduled' }
+        : base;
   return (
     <span
       className={`inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium ${s.tone}`}

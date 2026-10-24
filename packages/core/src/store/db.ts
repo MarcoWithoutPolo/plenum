@@ -245,6 +245,8 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     addColumn(db, 'agent_runs', 'image_tokens', 'INTEGER NOT NULL DEFAULT 0');
     addColumn(db, 'snapshot_sets', 'before_id', 'TEXT');
   },
+  // v15: the review time budget. A review stopped because another one answered first.
+  (db) => addColumn(db, 'agent_runs', 'cancelled', 'INTEGER NOT NULL DEFAULT 0'),
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

@@ -26,7 +26,7 @@ interface ProjectsState {
   refresh(): Promise<void>;
   load(id: string): Promise<ProjectDetail | null>;
   create(input: NewProjectInput): Promise<string | null>;
-  start(id: string): Promise<void>;
+  start(id: string, at?: number): Promise<void>;
   stop(id: string): Promise<void>;
   remove(id: string): Promise<void>;
   refreshApprovals(): Promise<void>;
@@ -143,10 +143,10 @@ export const useProjects = create<ProjectsState>((set, get) => {
       }
     },
 
-    async start(id) {
+    async start(id, at) {
       set((s) => ({ busy: { ...s.busy, [id]: true } }));
       try {
-        await api().projects.start(id);
+        await api().projects.start(id, at);
       } catch (err) {
         toast(errorText(err));
       } finally {
