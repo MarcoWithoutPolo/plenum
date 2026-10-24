@@ -7,44 +7,47 @@
 
 <p align="center">
   <a href="https://github.com/MarcoWithoutPolo/conclave/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MarcoWithoutPolo/conclave/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Status: private beta" src="https://img.shields.io/badge/status-v0.6%20private%20beta-7c5cff" />
+  <img alt="Status: private beta" src="https://img.shields.io/badge/status-v0.7%20private%20beta-7c5cff" />
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555" />
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue" /></a>
 </p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/project-needs-you-dark.png" />
-  <img alt="A Conclave project: Claude plans, Codex builds, Antigravity reviews, and a question from Codex waits for your answer" src="docs/images/project-needs-you-light.png" />
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/project-lanes-dark.png" />
+  <img alt="A Conclave project with two lanes: Codex builds two tasks at once while Claude plans and reviews" src="docs/images/project-lanes-light.png" />
 </picture>
 
 ## What it does
 
-You give Conclave a goal and a folder. It splits the goal into small tasks. Then, for each task, one AI builds it in its own git worktree, your tests run, and a **different** AI reviews the diff. Good work is merged into a separate branch. Nothing reaches your own branch, or GitHub, until you approve it.
+You give Conclave a goal and a folder. It splits the goal into right-sized tasks. Then, for each task, one AI builds it in its own git worktree, your tests run, and a **different** AI reviews the diff. Independent tasks build at the same time. Good work is merged into a separate branch, re-tested when other work landed first. Nothing reaches your own branch, or GitHub, until you approve it.
 
-- **Projects:** an autonomous loop that can run for hours. It paces itself against each subscription's usage limits and hands work to the next AI when one runs out.
+- **Projects:** an autonomous loop that can run for hours. It paces itself against each subscription's usage limits, hands work to the next AI when one runs out, and you can steer it while it runs.
 - **Council:** ask every AI at once, see their answers side by side, and get one merged answer with citations and the points where they disagree.
 - **Chat:** talk to any of them, and pick the model and reasoning effort for each conversation.
 
 ## Highlights
 
-|                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/new-project-clarify-dark.png" /><img alt="New project wizard: the planner's questions and a draft plan" src="docs/images/new-project-clarify-light.png" /></picture><br />**Asks before it guesses.** A short questions step turns your answers into decisions every agent follows. Questions mid-run land in your Inbox while other work goes on.                    | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/council-dark.png" /><img alt="Council: three answers and a merged answer with citations" src="docs/images/council-light.png" /></picture><br />**A council of models.** One question, every AI, and one merged answer that shows where they agree and where they differ.                                                                           |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/failure-card-dark.png" /><img alt="A failed task explains what went wrong and offers retries" src="docs/images/failure-card-light.png" /></picture><br />**Failures explain themselves.** Each failure says what kind it is and whose problem it is: tests, review, a crashed CLI, a usage limit. Retry with another AI, a stronger model or more effort, or skip it. | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/project-settings-permissions-dark.png" /><img alt="Permission levels 1 to 5 with network and install switches" src="docs/images/project-settings-permissions-light.png" /></picture><br />**You set the permissions.** Five levels, from read-only to full access, each enforced by the CLI's own sandbox flags rather than by trusting the model. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/inbox-question-dark.png" /><img alt="The Inbox with a question from an agent" src="docs/images/inbox-question-light.png" /></picture><br />**One Inbox.** Agents' questions, package installs, merges, pull requests and new repositories all wait here for a yes from you.                                                                                           | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/usage-limit-dark.png" /><img alt="A banner saying Codex is out of usage and its work goes to Claude" src="docs/images/usage-limit-light.png" /></picture><br />**Limits are not failures.** When an AI hits its plan or spend cap, its work moves to the next AI, with no attempts used, and the app tells you.                                    |
+|                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/project-lanes-dark.png" /><img alt="Two lanes building at once" src="docs/images/project-lanes-light.png" /></picture><br />**Parallel lanes.** Independent tasks build at the same time, each AI within its lane cap. Tasks that touch the same files wait for each other, and every merge is re-tested on top of whatever landed first.                             | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/project-chat-proposal-dark.png" /><img alt="The Chat tab: the planner proposes adding a task and recording a decision" src="docs/images/project-chat-proposal-light.png" /></picture><br />**Steer it while it runs.** Tell a project what to change in plain words. Its planner proposes the changes; nothing happens until you tick what you want and apply it. Or move, edit, skip and add tasks on the board. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.png" /><img alt="Settings: lanes, what to leave for you and daily caps per AI, and quiet hours" src="docs/images/settings-light.png" /></picture><br />**Shared limits.** Lanes per AI across every project, a share of each plan left for your own use, daily caps, quiet hours and one Pause everything switch. Every wait says why and until when.   | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/project-settings-team-dark.png" /><img alt="Team settings explaining that faster reviewers go first" src="docs/images/project-settings-team-light.png" /></picture><br />**Picks AIs from measured data.** Slow, unreliable or nearly spent AIs move back in the order, and the team screen says why. A different AI than the builder always reviews.                                                             |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/new-project-clarify-dark.png" /><img alt="New project wizard: the planner's questions and a draft plan" src="docs/images/new-project-clarify-light.png" /></picture><br />**Asks before it guesses.** A short questions step turns your answers into decisions every agent follows. Questions mid-run land in your Inbox while other work goes on.                    | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/council-dark.png" /><img alt="Council: three answers and a merged answer with citations" src="docs/images/council-light.png" /></picture><br />**A council of models.** One question, every AI, and one merged answer that shows where they agree and where they differ.                                                                                                                                          |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/failure-card-dark.png" /><img alt="A failed task explains what went wrong and offers retries" src="docs/images/failure-card-light.png" /></picture><br />**Failures explain themselves.** Each failure says what kind it is and whose problem it is: tests, review, a crashed CLI, a usage limit. Retry with another AI, a stronger model or more effort, or skip it. | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/project-settings-permissions-dark.png" /><img alt="Permission levels 1 to 5 with network and install switches" src="docs/images/project-settings-permissions-light.png" /></picture><br />**You set the permissions.** Five levels, from read-only to full access, each enforced by the CLI's own sandbox flags rather than by trusting the model.                                                                |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/inbox-question-dark.png" /><img alt="The Inbox with a question from an agent" src="docs/images/inbox-question-light.png" /></picture><br />**One Inbox.** Agents' questions, package installs, merges, pull requests and new repositories all wait here for a yes from you.                                                                                           | <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/usage-limit-dark.png" /><img alt="A banner saying Codex is out of usage and its work goes to Claude" src="docs/images/usage-limit-light.png" /></picture><br />**Limits are not failures.** When an AI hits its plan or spend cap, its work moves to the next AI, with no attempts used, and the app tells you.                                                                                                   |
 
 ## How a project runs
 
 ```mermaid
 flowchart LR
   G([Goal]) --> C{{Clarify<br/>questions + draft plan}}
-  C --> P[Plan<br/>small tasks]
-  P --> B[Build<br/>in its own worktree]
+  C --> P[Plan<br/>right-sized tasks]
+  P --> B[Build<br/>lanes in parallel]
   B --> T[Your tests]
   T -->|fail| B
   T -->|pass| R[Review by a<br/>different AI]
   R -->|changes| B
-  R -->|approve| M[(conclave/integration)]
+  R -->|approve| Q[Merge queue<br/>re-test if needed]
+  Q --> M[(conclave/integration)]
   M --> P
   M -->|goal met| A{{You approve}}
   A --> Y[Merge into your branch<br/>or open a pull request]
@@ -52,9 +55,28 @@ flowchart LR
   I -. your answer .-> B
 ```
 
+- **Right-sized plans.** The planner estimates each task's size and risk; tiny tasks are folded together and oversized ones are split, because every task pays for a build, a test run and a review.
+- **The last review checks the whole goal**, so the project finishes without an extra planner round, or the gaps go into the next plan.
 - **One task per piece of work.** Retries reuse the task, and re-planned work replaces the failed task instead of adding a twin, so "3 of 7" means three of seven.
 - **Crash-safe.** Every step is recorded. Close the app, or lose power, mid-build, and the interrupted task goes back in the queue when you reopen.
 - **Escalating retries.** Attempt 2 thinks harder. Attempt 3 hands the task to the next builder on the team.
+
+## Does it beat one AI on its own?
+
+We measure it. [`bench/`](bench/) gives the same goal to Claude Code, Codex and Antigravity on their own and to Conclave, and scores each result with hidden acceptance tests no agent ever sees. There are four projects, from a small library to a multi-module accounting toolkit with a parser and a CLI.
+
+| Project (hidden tests)    | Conclave v0.6 | **Conclave v0.7**   | Claude alone | Codex alone    | Antigravity alone |
+| ------------------------- | ------------- | ------------------- | ------------ | -------------- | ----------------- |
+| textkit, small (7)        | 10.1 min      | **2.7 min**, 7/7    | 1.1 min      | 2.7 min        | 7.8 min           |
+| inventory, refactor (7)   | 12.6 min      | **3.3 min**, 7/7    | 1.3 min      | 2.5 min        | 6.7 min           |
+| calc, medium (7)          | 19.7 min      | **6.3 min**, 7/7    | 1.5 min      | 4.2 min        | 16.8 min, one 6/7 |
+| ledger, multi-module (12) | n/a           | **15.3 min**, 12/12 | 2.8 min      | 9.4 min, 11/12 | 36.0 min          |
+
+- **Quality held:** Conclave passed every hidden test in all eight runs. Codex alone and Antigravity alone each missed one.
+- **v0.7 is 3–4× faster than v0.6**, with 3–6× fewer tokens, and on small projects it's on par with Codex alone.
+- **It's slower than Claude alone.** A second AI reviews every change, and when Codex is out of usage, that reviewer is Antigravity, which is slow. Claude alone is the fastest single tool on well-specified work. Conclave's case is the review, carrying on through usage limits (Codex ran out mid-benchmark; Conclave lost nothing), and long unattended runs.
+
+Full results, per-role timings and what changed between runs: [bench/RESULTS.md](bench/RESULTS.md).
 
 ## Bring your own CLI
 
@@ -92,8 +114,9 @@ CONCLAVE_DEMO=1 npm run desktop
 npm run conclave -- doctor --live              # which AIs are connected
 npm run conclave -- chat --use claude:opus     # chat; /use codex switches mid-chat
 npm run conclave -- ask "..."                  # council: everyone answers, one merged result
-npm run conclave -- project new ./my-repo --goal "..." --test "npm test"
+npm run conclave -- project new ./my-repo --goal "..." --test "npm test" --parallel 2
 npm run conclave -- project run <id>           # work until the goal is met
+npm run conclave -- project steer <id> "..."   # tell it what to change (--apply to apply)
 npm run conclave -- project status <id>
 ```
 
@@ -108,14 +131,13 @@ Data lives in `~/.conclave` (set `CONCLAVE_HOME` to move it).
 
 ## Project status
 
-v0.6, the private beta, is complete. It was tested live on real Claude, Codex, Antigravity and GitHub accounts across seven scenarios: an empty folder to a finished project, usage limits, a three-AI team, permission levels, package installs, a GitHub pull request with CI, and crash recovery. See [docs/DIRECTION.md](docs/DIRECTION.md) for the results.
+v0.7 is complete: right-sized plans, lanes, shared limits, steering and notifications. It was tested live on real Claude, Codex, Antigravity and GitHub accounts across eight scenarios. Scenario 8 runs two projects at once with lanes, steers one by chat mid-run, sets quiet hours and Pause everything, and checks the desktop notification. See [docs/DIRECTION.md](docs/DIRECTION.md) and [bench/RESULTS.md](bench/RESULTS.md).
 
-| Next | Focus                                                                                         |
-| ---- | --------------------------------------------------------------------------------------------- |
-| v0.7 | **Faster:** parallel tasks, daily budgets and quiet hours, steering a running project by chat |
-| v0.8 | **See it:** live preview of web projects, screenshot-based visual review                      |
-| v0.9 | **More AIs:** GitHub Copilot, Cursor, OpenCode, Amp                                           |
-| v1.0 | **Ship it:** installer, auto-update, tray notifications, an MCP server for other AI tools     |
+| Next | Focus                                                                                          |
+| ---- | ---------------------------------------------------------------------------------------------- |
+| v0.8 | **See it:** live preview of web projects, screenshot-based visual review, a review time budget |
+| v0.9 | **More AIs:** GitHub Copilot, Cursor, OpenCode, Amp                                            |
+| v1.0 | **Ship it:** installer, auto-update, tray notifications, an MCP server for other AI tools      |
 
 The full plan is in [docs/PLAN-v2.md](docs/PLAN-v2.md).
 

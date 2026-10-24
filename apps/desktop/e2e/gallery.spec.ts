@@ -407,6 +407,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(page.getByRole('region', { name: 'Lanes: 2 of 2 busy' })).toBeVisible({
         timeout: 30_000,
       });
+      await page.waitForTimeout(3000);
       await shot('project-lanes');
       await page.getByRole('button', { name: 'Project actions' }).click();
       await page.getByRole('button', { name: /Team and settings/ }).click();

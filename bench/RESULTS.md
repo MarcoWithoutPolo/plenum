@@ -150,3 +150,26 @@ account hit its usage limit too, so Conclave's builds fell back to Claude (marke
 - When an AI is at its limit, say so before a project starts ("Codex is at its limit until 4 PM; reviews will use
   Antigravity, which is slower").
 - Re-run with `--runs 3` once Codex has headroom for a whole run.
+
+## v0.7 final (2026-10-24, two runs each)
+
+Conclave and Claude alone: two runs per project, averaged. Codex's account hit its usage limit early in this run,
+so Codex alone is yesterday's uncapped single run (textkit: today's two runs). Antigravity alone is the average of
+yesterday's and today's runs. During Conclave's runs Codex was mostly at its limit too, so Claude built and
+Antigravity reviewed much of the time: the slowest pairing.
+
+| Project   | Conclave v0.6         | Conclave v0.7                  | Claude alone    | Codex alone         | Antigravity alone              |
+| --------- | --------------------- | ------------------------------ | --------------- | ------------------- | ------------------------------ |
+| textkit   | 7/7 · 10.1 min · 1.4M | **7/7 ×2 · 2.7 min · 412k**    | 7/7 · 1.1 min   | 7/7 · 2.7 min       | 7/7 · 7.8 min                  |
+| inventory | 7/7 · 12.6 min · 2.1M | **7/7 ×2 · 3.3 min · 383k**    | 7/7 · 1.3 min   | 7/7 · 2.5 min       | 7/7 · 6.7 min                  |
+| calc      | 7/7 · 19.7 min · 2.6M | **7/7 ×2 · 6.3 min · 433k**    | 7/7 · 1.5 min   | 7/7 · 4.2 min       | 6/7 and 7/7 · 16.8 min         |
+| ledger    | n/a                   | **12/12 ×2 · 15.3 min · 2.7M** | 12/12 · 2.8 min | **11/12** · 9.4 min | 12/12 · 36.0 min · up to 19.9M |
+
+- **Quality:** Conclave got every hidden test in all 8 runs. Codex alone missed one on ledger and Antigravity alone one
+  on calc. Claude alone was perfect too, and remains the fastest single tool on well-specified work.
+- **Speed:** 3–4× faster than v0.6, with tokens down 3–6×. The two runs agree closely (2.6/2.7, 5.6/6.9, 3.9/2.7,
+  15.9/14.6 min).
+- **Against one AI alone:** on par with Codex alone on small projects, 2.5–5× Claude alone. The gap is the second
+  AI's review, and most of it is Antigravity reviewing when Codex is out of usage. With Codex building and Claude
+  reviewing, a small project took 2.6 minutes.
+- **Limits:** Codex ran out mid-benchmark. Codex alone stopped; Conclave carried on with Claude and lost nothing.
