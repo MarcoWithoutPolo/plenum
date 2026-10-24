@@ -1571,7 +1571,7 @@ describe('Lanes', () => {
     const build = (provider: string) => async (req: RunRequest) => {
       const task = opts.tasks.find((t) => req.prompt.includes(`YOUR TASK: ${t.title}`))!;
       const span = { title: task.title, provider, start: Date.now(), end: 0 };
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 1500));
       writeFileSync(join(req.cwd, task.file), `module.exports = '${task.title}';\n`);
       // Told the combined result fails: also write the glue both files need together.
       if (opts.glue && req.prompt.includes('merged meanwhile')) {
