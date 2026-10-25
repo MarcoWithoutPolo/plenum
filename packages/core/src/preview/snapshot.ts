@@ -5,6 +5,7 @@
  */
 
 import { inflateSync } from 'node:zlib';
+import type { ShotStep } from '@conclave/shared';
 
 export interface View {
   width: number;
@@ -32,12 +33,56 @@ export interface Snapshot {
   consoleErrors: string[];
   failedRequests: string[];
   metrics: PageMetrics;
+  /** A sample state's step that couldn't be done ("step 2: no button named Add card"). */
+  stateError?: string;
 }
 
 export interface Snapshotter {
-  capture(url: string, view: View): Promise<Snapshot>;
+  /** `steps`: a sample state to replay after the page loads (conclave.shots.json). */
+  capture(url: string, view: View, steps?: ShotStep[]): Promise<Snapshot>;
   close?(): Promise<void>;
 }
+
+/**
+ * Runs one sample-state step in the page, found the way a person would: a field by its label,
+ * a button by its name. Returns '' when done, or what was missing. Sent as a string.
+ */
+export const STEP_SCRIPT = (step: ShotStep): string => `(() => {
+  const step = ${JSON.stringify(step)};
+  const visible = (e) => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !e.closest('[hidden],[aria-hidden="true"]'); };
+  const text = (e) => (e && e.textContent || '').replace(/\\s+/g, ' ').trim();
+  const byId = (ids) => (ids || '').split(/\\s+/).map((id) => text(document.getElementById(id))).join(' ').trim();
+  const pick = (els, want) => {
+    const w = want.trim().toLowerCase();
+    const named = els.filter(visible).map((e) => [e, e.__name.toLowerCase()]);
+    const hit = named.find(([, n]) => n === w) || named.find(([, n]) => n.includes(w));
+    return hit && hit[0];
+  };
+  if ('fill' in step) {
+    const els = [...document.querySelectorAll('input:not([type=hidden]):not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]), textarea, [contenteditable=""], [contenteditable=true]')];
+    for (const e of els) e.__name = e.getAttribute('aria-label') || byId(e.getAttribute('aria-labelledby')) || (e.labels && e.labels[0] ? text(e.labels[0]) : '') || e.getAttribute('placeholder') || e.getAttribute('title') || '';
+    const el = pick(els, step.fill.label);
+    if (!el) return 'no field labelled "' + step.fill.label + '"';
+    el.focus();
+    if (el.isContentEditable) el.textContent = step.fill.text;
+    else {
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, step.fill.text);
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return '';
+  }
+  if ('click' in step) {
+    const els = [...document.querySelectorAll('button, a[href], [role=button], input[type=button], input[type=submit], summary')].filter((e) => !e.disabled);
+    for (const e of els) e.__name = e.getAttribute('aria-label') || byId(e.getAttribute('aria-labelledby')) || text(e) || e.value || e.getAttribute('title') || '';
+    const el = pick(els, step.click);
+    if (!el) return 'no button named "' + step.click + '"';
+    el.click();
+    return '';
+  }
+  return '';
+})()`;
 
 /** A DevTools Protocol connection to one page: Electron's debugger or a Chrome tab's WebSocket. */
 export interface CdpSession {
@@ -99,6 +144,7 @@ export async function captureWithCdp(
   session: CdpSession,
   url: string,
   view: View,
+  steps: ShotStep[] = [],
 ): Promise<Snapshot> {
   const origin = new URL(url).origin;
   const consoleErrors: string[] = [];
@@ -159,9 +205,31 @@ export async function captureWithCdp(
         ok();
       });
     });
+    // Every shot starts from a clean slate: what one sample state stored isn't in the next shot.
+    await session
+      .send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' })
+      .catch(() => undefined);
     await session.send('Page.navigate', { url });
     await Promise.race([loaded, wait(15_000)]);
     await wait(300);
+    let stateError: string | undefined;
+    for (const [i, step] of steps.entries()) {
+      if ('wait' in step) {
+        await wait(step.wait);
+        continue;
+      }
+      const done = await session.send('Runtime.evaluate', {
+        expression: STEP_SCRIPT(step),
+        returnByValue: true,
+      });
+      const missing = (done.result as { value?: unknown } | undefined)?.value;
+      if (typeof missing !== 'string' || missing) {
+        stateError = `step ${i + 1}: ${typeof missing === 'string' ? missing : 'it failed in the page'}`;
+        break;
+      }
+      await wait(150);
+    }
+    if (steps.length) await wait(300);
     const evaluated = await session.send('Runtime.evaluate', {
       expression: PAGE_PROBE,
       returnByValue: true,
@@ -178,6 +246,7 @@ export async function captureWithCdp(
       consoleErrors: [...new Set(consoleErrors)],
       failedRequests: [...new Set(failedRequests)],
       metrics,
+      ...(stateError && { stateError }),
     };
   } finally {
     for (const f of off) f();
@@ -188,9 +257,13 @@ export async function captureWithCdp(
 
 /** One screenshot in a set, saved as a PNG under Conclave's data folder (never in your repo). */
 export interface Shot {
-  /** e.g. "home-phone-dark": the page, the size and the scheme. */
+  /** e.g. "home-phone-dark", or "home-with-cards-phone-dark" for a sample state. */
   name: string;
   page: string;
+  /** The sample state it shows (conclave.shots.json); none for the page as it loads. */
+  state?: string;
+  /** Why the state couldn't be fully replayed, if it couldn't. */
+  stateError?: string;
   size: 'desktop' | 'phone';
   view: View;
   path: string;
@@ -222,21 +295,41 @@ export function pageSlug(page: string): string {
   );
 }
 
-/** Every page at both sizes in both schemes, at most 20 shots. */
+export interface PlannedShot {
+  name: string;
+  page: string;
+  size: 'desktop' | 'phone';
+  view: View;
+  /** A sample state: its name and the steps to replay first. */
+  state?: { name: string; steps: ShotStep[] };
+}
+
+/**
+ * Every page, and every sample state, at both sizes in both schemes: at most 20 shots. The first
+ * page comes first, then the sample states (the page in use), then the other pages.
+ */
 export function shotPlan(
   pages: string[],
-): { name: string; page: string; size: 'desktop' | 'phone'; view: View }[] {
-  const out = [];
-  for (const page of pages)
-    for (const size of ['desktop', 'phone'] as const)
-      for (const scheme of ['light', 'dark'] as const)
-        out.push({
-          name: `${pageSlug(page)}-${size}-${scheme}`,
-          page,
-          size,
-          view: { ...SIZES[size], scheme },
-        });
-  return out.slice(0, 20);
+  states: { name: string; page: string; steps: ShotStep[] }[] = [],
+): PlannedShot[] {
+  const views = (page: string, slug: string, state?: PlannedShot['state']) =>
+    (['desktop', 'phone'] as const).flatMap((size) =>
+      (['light', 'dark'] as const).map((scheme) => ({
+        name: `${slug}-${size}-${scheme}`,
+        page,
+        size,
+        view: { ...SIZES[size], scheme },
+        ...(state && { state }),
+      })),
+    );
+  const [first, ...rest] = pages;
+  return [
+    ...(first ? views(first, pageSlug(first)) : []),
+    ...states.flatMap((s) =>
+      views(s.page, `${pageSlug(s.page)}-${pageSlug(s.name)}`, { name: s.name, steps: s.steps }),
+    ),
+    ...rest.flatMap((page) => views(page, pageSlug(page))),
+  ].slice(0, 20);
 }
 
 /** Decode an 8-bit RGB or RGBA, non-interlaced PNG (what Chromium's screenshots are). */
@@ -392,7 +485,10 @@ export function diffShots(
   return out;
 }
 
-const where = (s: Shot) => `${s.page} (${s.size}, ${s.view.scheme})`;
+/** "/" or "/ (with cards)": the page, and the sample state it shows. */
+export const shotPlace = (s: Pick<Shot, 'page' | 'state'>) =>
+  s.state ? `${s.page} (${s.state})` : s.page;
+const where = (s: Shot) => `${shotPlace(s)} (${s.size}, ${s.view.scheme})`;
 
 /**
  * The free visual checks: no AI, no tokens. Problems this change introduced are sent back like
@@ -412,7 +508,7 @@ export function visualChecks(
       if (!b?.consoleErrors.includes(e)) sendBack.add(`Console error on ${where(s)}: ${e}`);
     }
     for (const r of s.failedRequests) {
-      if (!b?.failedRequests.includes(r)) sendBack.add(`Failed request on ${s.page}: ${r}`);
+      if (!b?.failedRequests.includes(r)) sendBack.add(`Failed request on ${shotPlace(s)}: ${r}`);
     }
     // A tiny page with a button is not blank (a counter says "Counter 0 Add one").
     const empty = (m: PageMetrics) => m.textLength < 20 && m.images === 0 && !m.controls;
@@ -423,16 +519,21 @@ export function visualChecks(
     for (const l of s.metrics.lowContrast) {
       if (!oldLow.has(l.el)) {
         sendBack.add(
-          `Low contrast in ${s.view.scheme} mode on ${s.page}: ${l.el} is ${l.ratio}:1, needs ${l.needed}:1 (WCAG AA)`,
+          `Low contrast in ${s.view.scheme} mode on ${shotPlace(s)}: ${l.el} is ${l.ratio}:1, needs ${l.needed}:1 (WCAG AA)`,
         );
       }
+    }
+    // A state that can't be replayed is the shots file's problem or the page's: say so, don't
+    // send the work back for it (the shot shows whatever the page reached).
+    if (s.stateError && s.state) {
+      notes.add(`The sample state "${s.state}" stopped at ${s.stateError}`);
     }
     if (s.size === 'phone') {
       const oldSmall = new Set(b?.metrics.smallTargets.map((t) => t.el));
       for (const t of s.metrics.smallTargets) {
         if (!oldSmall.has(t.el)) {
           sendBack.add(
-            `Too small to tap on phones (${s.page}): ${t.el} is ${t.width}×${t.height} px, needs 44×44`,
+            `Too small to tap on phones (${shotPlace(s)}): ${t.el} is ${t.width}×${t.height} px, needs 44×44`,
           );
         }
       }

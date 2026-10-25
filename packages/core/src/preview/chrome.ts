@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { killTree, removeDir } from '../process.js';
 import { delimiter, join } from 'node:path';
+import type { ShotStep } from '@conclave/shared';
 import {
   captureWithCdp,
   type CdpSession,
@@ -157,9 +158,9 @@ export class ChromeSnapshotter implements Snapshotter {
     return this.page;
   }
 
-  capture(url: string, view: View): Promise<Snapshot> {
+  capture(url: string, view: View, steps?: ShotStep[]): Promise<Snapshot> {
     const run = this.queue.then(async () =>
-      captureWithCdp((await this.start()).session, url, view),
+      captureWithCdp((await this.start()).session, url, view, steps),
     );
     this.queue = run.catch(() => undefined);
     return run;

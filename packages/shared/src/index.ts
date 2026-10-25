@@ -4,3 +4,4 @@ export * from './chat.js';
 export * from './project.js';
 export * from './settings.js';
 export * from './visual.js';
+export * from './shots.js';

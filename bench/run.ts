@@ -48,7 +48,10 @@ const { values } = parseArgs({
   options: {
     projects: { type: 'string', default: 'textkit,calc,inventory' },
     contenders: { type: 'string', default: 'claude,codex,antigravity,conclave' },
-    /** Force Conclave's team, e.g. "builder:antigravity,reviewer:claude+codex". */
+    /**
+     * Force Conclave's team, e.g. "builder:antigravity,reviewer:claude+codex". A seat can name a
+     * model: "builder:codex@gpt-6-luna+claude".
+     */
     team: { type: 'string' },
     /** Conclave's permission level (Antigravity can only build at 2 or 5). */
     level: { type: 'string', default: '3' },
@@ -63,6 +66,8 @@ const { values } = parseArgs({
   },
 });
 const projects = values.projects!.split(',');
+const seatName = (s: { provider: string; model?: string }) =>
+  s.model ? `${s.provider}@${s.model}` : s.provider;
 const contenders = values.contenders!.split(',');
 const runs = Number(values.runs);
 const timeoutMs = Number(values['timeout-min']) * 60_000;
@@ -74,13 +79,23 @@ const team = values.team
         const [role, providers] = part.split(':') as [string, string];
         return [
           role,
-          providers.split('+').map((provider) => ({ provider: provider as ProviderId })),
+          providers.split('+').map((seat) => {
+            const [provider, model] = seat.split('@') as [string, string | undefined];
+            return { provider: provider as ProviderId, ...(model && { model }) };
+          }),
         ];
       }),
     )
   : undefined;
 /** Names this run's Conclave variant in results, e.g. conclave-b=antigravity-r=claude-2l. */
-const variant = `${values.team ? `-${values.team.replace(/([a-z])[a-z]*:/g, '$1=').replace(/,/g, '-')}` : ''}${parallel > 1 ? `-${parallel}l` : ''}`;
+const variant = `${
+  values.team
+    ? `-${values.team
+        .replace(/([a-z])[a-z]*:/g, '$1=')
+        .replace(/,/g, '-')
+        .replace(/[@.]/g, '_')}`
+    : ''
+}${parallel > 1 ? `-${parallel}l` : ''}`;
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const out = join(here, 'results', stamp);
 mkdirSync(out, { recursive: true });
@@ -294,7 +309,7 @@ async function runConclave(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const notes = [
-    `team: plans ${projectRow.routing.planner.map((s) => s.provider).join('>')}, builds ${projectRow.routing.builder.map((s) => s.provider).join('>')}, reviews ${projectRow.routing.reviewer.map((s) => s.provider).join('>')}`,
+    `team: plans ${projectRow.routing.planner.map(seatName).join('>')}, builds ${projectRow.routing.builder.map(seatName).join('>')}, reviews ${projectRow.routing.reviewer.map(seatName).join('>')}`,
     `level ${values.level}, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)`,
   ];
   let ok = false;

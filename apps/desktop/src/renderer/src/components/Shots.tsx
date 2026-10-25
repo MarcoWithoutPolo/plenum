@@ -155,10 +155,12 @@ export function TaskScreenshots({
 
   const after = data?.after;
   if (!after || !after.shots.length) return null;
-  const pages = [...new Set(after.shots.map((s) => s.page))];
+  // A page as it loads, and each sample state it was shot in ("/ (with cards)").
+  const place = (s: Shot) => (s.state ? `${s.page} (${s.state})` : s.page);
+  const pages = [...new Set(after.shots.map(place))];
   const current = page && pages.includes(page) ? page : pages[0]!;
   const pick = (set: SnapshotSet | null | undefined) =>
-    set?.shots.find((s) => s.page === current && s.size === size && s.view.scheme === scheme);
+    set?.shots.find((s) => place(s) === current && s.size === size && s.view.scheme === scheme);
   const shot = pick(after);
   const was = pick(data.before);
   const diff = shot && after.diff?.find((d) => d.name === shot.name);

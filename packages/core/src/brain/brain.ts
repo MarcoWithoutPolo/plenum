@@ -854,6 +854,7 @@ export class Brain {
         network: permissions.network,
         ...(install && { installed: install }),
         ...(project.askPolicy === 'decide' && { decideAndTell: true }),
+        ...(this.isWeb(project, task, cwd) && { web: true }),
       }),
       cwd,
       false,
@@ -880,10 +881,13 @@ export class Brain {
         ),
       });
       await this.workspace.removeTaskTree(task.id);
-      this.log('wait', `${seatLabel(builder)} hit a usage limit; the task goes back in the queue`, {
-        task,
-        provider: builder.provider,
-      });
+      // What the CLI said, so a limit that isn't one (or a cap you didn't expect) can be seen.
+      const said = built.rateLimited.message.split('\n')[0]!.slice(0, 240);
+      this.log(
+        'wait',
+        `${seatLabel(builder)} hit a usage limit; the task goes back in the queue (${said})`,
+        { task, provider: builder.provider, data: { message: built.rateLimited.message } },
+      );
       return { kind: 'retry', task, reason: 'Builder hit a usage limit' };
     }
     if (!built.ok) {
@@ -1379,6 +1383,18 @@ export class Brain {
     if (!fastest || median(fastest.provider) >= median(first.provider)) return undefined;
     const budget = this.opts.reviewBudgetMs ?? ((m: number) => Math.max(90_000, 3 * m));
     return { seat: fastest, budgetMs: budget(median(fastest.provider)) };
+  }
+
+  /**
+   * Whether this task's pages get screenshots: a snapshotter is set, and the folder is already a
+   * web page or the work says it will be one (the first task often creates the page).
+   */
+  private isWeb(project: Project, task: Task, cwd: string): boolean {
+    if (!this.opts.snapshotter) return false;
+    if (detectPreview(cwd).kind !== 'none') return true;
+    return /\b(html|css|web ?page|web ?app|website|front.?end|browser|ui)\b/i.test(
+      [project.goal, task.title, task.spec].join(' '),
+    );
   }
 
   /** How a provider can look at images (from its adapter). */

@@ -75,9 +75,9 @@ for (const scheme of ['light', 'dark'] as const) {
         name: 'The count sits at the left edge, away from the title and button; center it',
       });
       await expect(issue).toBeChecked();
-      // The screenshot the reviewer saw, with the region outlined.
+      // The screenshot the reviewer saw, with the region outlined: the page in use comes first.
       await expect(
-        drawer.getByRole('img', { name: /^after: \/ \(phone, dark\): The count sits/ }),
+        drawer.getByRole('img', { name: /^after: \/ \(counted\) \(phone, dark\): The count sits/ }),
       ).toBeVisible();
       await shot('visual-failure');
 
@@ -94,6 +94,12 @@ for (const scheme of ['light', 'dark'] as const) {
         .getByRole('radio', { name: 'Dark' })
         .click();
       await expect(shots.getByRole('img', { name: '/, phone, dark' })).toBeVisible();
+      // The page in use: the sample state from conclave.shots.json, replayed before its shots.
+      await shots
+        .getByRole('radiogroup', { name: 'Page' })
+        .getByRole('radio', { name: '/ (counted)' })
+        .click();
+      await expect(shots.getByRole('img', { name: '/ (counted), phone, dark' })).toBeVisible();
       await shot('screenshots-first');
 
       // Retry: the builder centers the count, the reviewer looks again and approves.

@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron';
+import type { ShotStep } from '@conclave/shared';
 import {
   captureWithCdp,
   type CdpSession,
@@ -14,13 +15,13 @@ import {
 export class ElectronSnapshotter implements Snapshotter {
   private queue: Promise<unknown> = Promise.resolve();
 
-  capture(url: string, view: View): Promise<Snapshot> {
-    const run = this.queue.then(() => this.shoot(url, view));
+  capture(url: string, view: View, steps?: ShotStep[]): Promise<Snapshot> {
+    const run = this.queue.then(() => this.shoot(url, view, steps));
     this.queue = run.catch(() => undefined);
     return run;
   }
 
-  private async shoot(url: string, view: View): Promise<Snapshot> {
+  private async shoot(url: string, view: View, steps?: ShotStep[]): Promise<Snapshot> {
     const win = new BrowserWindow({
       show: false,
       width: view.width,
@@ -51,7 +52,7 @@ export class ElectronSnapshotter implements Snapshotter {
       },
     };
     try {
-      return await captureWithCdp(session, url, view);
+      return await captureWithCdp(session, url, view, steps);
     } finally {
       try {
         dbg.detach();

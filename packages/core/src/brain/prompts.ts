@@ -1,4 +1,4 @@
-import type { Project, Task } from '@conclave/shared';
+import { SHOTS_FILE, type Project, type Task } from '@conclave/shared';
 import {
   DECIDE_AND_TELL,
   DECIDE_YOURSELF,
@@ -131,7 +131,14 @@ export interface BuilderExtras extends PromptExtras {
   installed?: string;
   /** Decide-and-tell: make choices and list them instead of stopping to ask. */
   decideAndTell?: boolean;
+  /** A web project whose pages are screenshotted: explain sample states. */
+  web?: boolean;
 }
+
+/** For web projects: how to show the screenshots the page in use, not just as it loads. */
+const SAMPLE_STATES = `- The system screenshots the page (desktop and phone, light and dark) and checks contrast, tap sizes and errors. It shoots the page as it loads, so if your page shows little until it's used (an empty list, a board with no cards), keep a file named ${SHOTS_FILE} at the top of the project with one to three typical states, each a few steps the system replays first:
+  {"states": [{"name": "with cards", "page": "/", "steps": [{"fill": {"label": "New card", "text": "Plan the release"}}, {"click": "Add card"}]}]}
+  Steps are {"fill": {"label": "<the field's label>", "text": "..."}}, {"click": "<the button's name>"} and {"wait": <ms, up to 2000>}. Fields and buttons are found by their visible label, aria-label or text, as a person would. Update it when you change those labels.`;
 
 export function builderPrompt(project: Project, task: Task, extras: BuilderExtras = {}): string {
   return `You are building one task for an autonomous coding project. You are in a git worktree created just for this task.
@@ -154,7 +161,7 @@ Rules:
 - Do not run git commit, push, or change branches; the system commits for you.
 ${commandRule(project, extras.allowedCommands ?? [], extras.network ?? false)}
 - Keep the existing code style.
-
+${extras.web ? SAMPLE_STATES : ''}
 ${extras.decideYourself ? DECIDE_YOURSELF : extras.decideAndTell ? DECIDE_AND_TELL : QUESTION_RULE}
 
 When you are done, reply with a short summary of what you changed.`;

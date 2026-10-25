@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseVisualIssue, visualIssueLine } from '@conclave/shared';
+import { parseShotsFile, parseVisualIssue, visualIssueLine, type ShotStep } from '@conclave/shared';
 import {
   Brain,
   ChromeSnapshotter,
@@ -20,6 +20,7 @@ import {
   parseReview,
   pickReviewShots,
   pageSlug,
+  STEP_SCRIPT,
   shotPlan,
   snapshotTask,
   visualChecks,
@@ -248,7 +249,7 @@ describe('Free visual checks', () => {
 
 /** Snapshots from a script: what each URL "looks like" and reports. */
 class FakeSnapshotter implements Snapshotter {
-  calls: { url: string; view: View }[] = [];
+  calls: { url: string; view: View; steps?: ShotStep[] }[] = [];
   constructor(
     private readonly report: (
       url: string,
@@ -256,8 +257,8 @@ class FakeSnapshotter implements Snapshotter {
       n: number,
     ) => Partial<Snapshot> | Promise<never>,
   ) {}
-  async capture(url: string, view: View): Promise<Snapshot> {
-    this.calls.push({ url, view });
+  async capture(url: string, view: View, steps?: ShotStep[]): Promise<Snapshot> {
+    this.calls.push({ url, view, ...(steps && { steps }) });
     const r = await this.report(url, view, this.calls.length);
     return {
       png: png(64, 64, () => [255, 255, 255, 255]),
@@ -607,6 +608,8 @@ describe('Visual review', () => {
     expect(review.images!.every((p) => p.endsWith('.png'))).toBe(true);
     expect(review.prompt).toContain('Open each file with your Read tool');
     expect(review.prompt).toMatch(/- after: \/ \(phone, dark\): .+home-phone-dark\.png/);
+    // Builders of a web project are told how to show the page in use.
+    expect(codex.requests[0]!.prompt).toContain('conclave.shots.json');
     // The builder got the issue, the region and the file to open.
     expect(codex.requests[1]!.prompt).toMatch(
       /The slider label is dark grey on black \[after: \/ \(phone, dark\) \(region 20, 300, 370, 340\): .+home-phone-dark\.png\]/,
@@ -699,4 +702,174 @@ describe('Visual issue lines', () => {
       issue: 'Use a darker grey for the hint',
     });
   });
+});
+
+describe('Sample states (conclave.shots.json)', () => {
+  const STATES = {
+    states: [
+      {
+        name: 'with cards',
+        page: '/',
+        steps: [{ fill: { label: 'New card', text: 'Plan the release' } }, { click: 'Add card' }],
+      },
+    ],
+  };
+
+  it('reads the file, and says plainly what is wrong with a bad one', () => {
+    expect(parseShotsFile(JSON.stringify(STATES))).toEqual({
+      states: [{ ...STATES.states[0], page: '/' }],
+    });
+    expect(parseShotsFile('{oops')).toEqual({ error: "conclave.shots.json isn't valid JSON" });
+    expect(
+      parseShotsFile(JSON.stringify({ states: [{ name: 'x', steps: [{ hover: 'a' }] }] })),
+    ).toMatchObject({
+      error: expect.stringMatching(/^conclave\.shots\.json: states\.0\.steps\.0/),
+    });
+    const twice = { states: [STATES.states[0], { ...STATES.states[0], name: 'With Cards' }] };
+    expect(parseShotsFile(JSON.stringify(twice))).toEqual({
+      error: 'conclave.shots.json: two states share a name',
+    });
+  });
+
+  it('plans the first page, then the states, then other pages, at most 20 shots', () => {
+    const plan = shotPlan(
+      ['/', '/about'],
+      [{ name: 'with cards', page: '/', steps: [{ click: 'Add' }] }],
+    );
+    expect(plan.map((p) => p.name)).toEqual([
+      'home-desktop-light',
+      'home-desktop-dark',
+      'home-phone-light',
+      'home-phone-dark',
+      'home-with-cards-desktop-light',
+      'home-with-cards-desktop-dark',
+      'home-with-cards-phone-light',
+      'home-with-cards-phone-dark',
+      'about-desktop-light',
+      'about-desktop-dark',
+      'about-phone-light',
+      'about-phone-dark',
+    ]);
+    expect(plan[4]!.state).toEqual({ name: 'with cards', steps: [{ click: 'Add' }] });
+    const many = ['/', '/a', '/b', '/c', '/d'];
+    const states = [1, 2, 3].map((n) => ({ name: `s${n}`, page: '/', steps: [{ wait: 1 }] }));
+    const capped = shotPlan(many, states);
+    expect(capped).toHaveLength(20);
+    // The states make it in before the extra pages do.
+    expect(capped.filter((p) => p.state)).toHaveLength(12);
+  });
+
+  it('sends a valid step script into the page', () => {
+    for (const step of [
+      { fill: { label: 'New "card"', text: "it's </script>" } },
+      { click: 'Add card' },
+    ] as ShotStep[]) {
+      const src = STEP_SCRIPT(step);
+      expect(() => new Function(src)).not.toThrow();
+      expect(src).toContain(String.raw`/\s+/g`);
+    }
+  });
+
+  it('replays each state before its shots, and notes a state that could not be replayed', async () => {
+    const dir = temp();
+    writeFileSync(join(dir, 'index.html'), '<h1>Board</h1>');
+    writeFileSync(join(dir, 'conclave.shots.json'), JSON.stringify(STATES));
+    const store = new Store(':memory:');
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+    execFileSync(
+      'git',
+      ['-c', 'user.name=T', '-c', 'user.email=t@e', 'commit', '-q', '--allow-empty', '-m', 'i'],
+      { cwd: dir },
+    );
+    const p = await createProject(store, [{ provider: 'claude' }], { repoPath: dir, goal: 'g' });
+    const snap = new FakeSnapshotter((_u, view, n) =>
+      n > 4 && view.scheme === 'dark' ? { stateError: 'step 2: no button named "Add card"' } : {},
+    );
+    const taken = await snapshotTask({
+      store,
+      home: temp(),
+      project: p,
+      taskId: 'k',
+      afterDir: dir,
+      afterCommit: 'a',
+      beforeDir: dir,
+      beforeCommit: 'b',
+      snapshotter: snap,
+    });
+    if (taken.kind !== 'taken') throw new Error(taken.reason);
+    // The page as it loads (before and after), then the state (before and after).
+    expect(snap.calls.filter((c) => c.steps)).toHaveLength(8);
+    expect(snap.calls.find((c) => c.steps)!.steps).toEqual(STATES.states[0]!.steps);
+    const state = taken.after.shots.filter((x) => x.state === 'with cards');
+    expect(state.map((x) => x.name)).toEqual([
+      'home-with-cards-desktop-light',
+      'home-with-cards-desktop-dark',
+      'home-with-cards-phone-light',
+      'home-with-cards-phone-dark',
+    ]);
+    expect(taken.checks.notes).toContain(
+      'The sample state "with cards" stopped at step 2: no button named "Add card"',
+    );
+    expect(taken.checks.sendBack).toEqual([]);
+
+    // A broken file is said once, and the page is still shot as it loads.
+    writeFileSync(join(dir, 'conclave.shots.json'), '{"states": [{"name": "?!", "steps": []}]}');
+    const again = await snapshotTask({
+      store,
+      home: temp(),
+      project: p,
+      taskId: 'k2',
+      afterDir: dir,
+      afterCommit: 'a2',
+      beforeDir: dir,
+      beforeCommit: 'b',
+      snapshotter: new FakeSnapshotter(() => ({})),
+    });
+    if (again.kind !== 'taken') throw new Error(again.reason);
+    expect(again.after.shots.some((x) => x.state)).toBe(false);
+    expect(again.checks.notes[0]).toMatch(
+      /^conclave\.shots\.json: states\.0\.name: .+; its sample states were left out$/,
+    );
+  });
+
+  const chrome = findChrome();
+  it.skipIf(!chrome)(
+    'replays a state in real Chrome and finds what only shows once the page is used',
+    async () => {
+      const dir = temp();
+      writeFileSync(
+        join(dir, 'index.html'),
+        `<style>body{background:#fff;color:#111;font:16px sans-serif} li{color:#bbb} button{min-height:44px;min-width:44px}</style>
+         <label>New card <input id="t"></label><button>Add card</button><ul id="l"></ul>
+         <script>
+           document.querySelector('button').onclick = () => {
+             const li = document.createElement('li');
+             li.textContent = document.getElementById('t').value;
+             document.getElementById('l').append(li);
+             localStorage.setItem('cards', '1');
+           };
+           if (localStorage.getItem('cards')) { const li = document.createElement('li'); li.textContent = 'leaked'; document.getElementById('l').append(li); }
+         </script>`,
+      );
+      const server = new PreviewServer(dir, { kind: 'static', root: dir });
+      const snap = new ChromeSnapshotter(chrome!);
+      try {
+        const { url } = await server.start();
+        const view = { width: 390, height: 844, scheme: 'light' } as const;
+        const loaded = await snap.capture(url, view);
+        expect(loaded.metrics.lowContrast).toEqual([]);
+        const used = await snap.capture(url, view, STATES.states[0]!.steps as ShotStep[]);
+        expect(used.stateError).toBeUndefined();
+        expect(used.metrics.lowContrast.map((l) => l.el)).toEqual(['li "Plan the release"']);
+        // What one state stored doesn't leak into the next shot.
+        const next = await snap.capture(url, view, [{ click: 'Remove all' }]);
+        expect(next.stateError).toBe('step 1: no button named "Remove all"');
+        expect(next.metrics.lowContrast).toEqual([]);
+      } finally {
+        await snap.close();
+        await server.stop();
+      }
+    },
+    120_000,
+  );
 });

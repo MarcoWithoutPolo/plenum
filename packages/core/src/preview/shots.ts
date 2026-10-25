@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Project } from '@conclave/shared';
+import { SHOTS_FILE, parseShotsFile, type Project, type ShotState } from '@conclave/shared';
 import type { Store } from '../store/store.js';
 import type { SnapshotSet } from '../store/snapshots.js';
 import { PreviewServer, detectPreview, previewAllowed } from './preview.js';
@@ -8,6 +8,7 @@ import {
   diffShots,
   shotPlan,
   visualChecks,
+  shotPlace,
   type Shot,
   type ShotDiff,
   type Snapshotter,
@@ -65,7 +66,20 @@ export async function snapshotTask(input: {
       ),
     ]);
 
-  const shoot = async (dir: string, setId: string): Promise<Shot[]> => {
+  // Sample states from the folder being shot (a task can add or change them).
+  const notes: string[] = [];
+  const statesOf = (dir: string, report: boolean): ShotState[] => {
+    const file = join(dir, SHOTS_FILE);
+    if (!existsSync(file)) return [];
+    const parsed = parseShotsFile(readFileSync(file, 'utf8'));
+    if ('error' in parsed) {
+      if (report) notes.push(`${parsed.error}; its sample states were left out`);
+      return [];
+    }
+    return parsed.states;
+  };
+
+  const shoot = async (dir: string, setId: string, report = false): Promise<Shot[]> => {
     const p = detectPreview(dir);
     const server = new PreviewServer(dir, p);
     const folder = join(shotsDir(input.home, project.id), setId);
@@ -73,15 +87,17 @@ export async function snapshotTask(input: {
     try {
       const { url } = await inTime(server.start());
       const shots: Shot[] = [];
-      for (const s of shotPlan(project.pages)) {
+      for (const s of shotPlan(project.pages, statesOf(dir, report))) {
         const snap = await inTime(
-          input.snapshotter.capture(new URL(s.page.slice(1), url).href, s.view),
+          input.snapshotter.capture(new URL(s.page.slice(1), url).href, s.view, s.state?.steps),
         );
         const path = join(folder, `${s.name}.png`);
         writeFileSync(path, snap.png);
         shots.push({
           name: s.name,
           page: s.page,
+          ...(s.state && { state: s.state.name }),
+          ...(snap.stateError && { stateError: snap.stateError }),
           size: s.size,
           view: s.view,
           path,
@@ -114,9 +130,10 @@ export async function snapshotTask(input: {
       });
     }
     const id = store.snapshots.newId();
-    const shots = await shoot(input.afterDir, id);
+    const shots = await shoot(input.afterDir, id, true);
     const diffs = before ? diffShots(before.shots, shots, (p) => readFileSync(p)) : [];
-    const checks = visualChecks(shots, before?.shots);
+    const found = visualChecks(shots, before?.shots);
+    const checks = { sendBack: found.sendBack, notes: [...notes, ...found.notes].slice(0, 8) };
     const after = store.snapshots.save({
       id,
       projectId: project.id,
@@ -159,15 +176,19 @@ export function pickReviewShots(
     (after.diff ?? []).map((d) => [d.name, d.changed > 0.01 ? d.changed : 0]),
   );
   const rank = (s: Shot) => PREFERRED.findIndex((p) => s.name.endsWith(p));
+  // A sample state shows the page in use, so it goes before the page as it loads.
   const sorted = [...after.shots].sort(
-    (a, b) => (changed.get(b.name) ?? 0) - (changed.get(a.name) ?? 0) || rank(a) - rank(b),
+    (a, b) =>
+      (changed.get(b.name) ?? 0) - (changed.get(a.name) ?? 0) ||
+      Number(Boolean(b.state)) - Number(Boolean(a.state)) ||
+      rank(a) - rank(b),
   );
   const top = sorted[0];
   const was =
     top && (changed.get(top.name) ?? 0) > 0.01
       ? before?.shots.find((s) => s.name === top.name)
       : undefined;
-  const label = (s: Shot, when: string) => `${when}: ${s.page} (${s.size}, ${s.view.scheme})`;
+  const label = (s: Shot, when: string) => `${when}: ${shotPlace(s)} (${s.size}, ${s.view.scheme})`;
   const picks = sorted
     .slice(0, was ? max - 1 : max)
     .map((s) => ({ label: label(s, 'after'), path: s.path }));

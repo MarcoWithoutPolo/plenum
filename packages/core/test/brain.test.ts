@@ -180,6 +180,8 @@ describe('Brain', () => {
     expect(codex.requests.map((r) => [r.role, r.readOnly])).toEqual([['builder', false]]);
     expect(claude.requests.map((r) => r.role)).toEqual(['planner', 'reviewer', 'planner']);
     expect(claude.requests[1]!.prompt).toContain('+module.exports = (a, b) => a + b;');
+    // Not a web project (and no screenshots): nothing about sample states.
+    expect(codex.requests[0]!.prompt).not.toContain('conclave.shots.json');
 
     expect(store.projects.get(project.id)?.status).toBe('done');
     const approvals = store.projects.approvals(project.id, 'pending');

@@ -66,7 +66,10 @@ const WEB_TASKS: DemoTask[] = [
     spec: 'Create index.html and style.css: a title, the count, and an "Add one" button, in light and dark.',
     file: 'index.html',
     body: page('left'),
-    more: { 'style.css': STYLE },
+    more: {
+      'style.css': STYLE,
+      'conclave.shots.json': `${JSON.stringify({ states: [{ name: 'counted', page: '/', steps: [{ click: 'Add one' }, { click: 'Add one' }] }] }, null, 2)}\n`,
+    },
     fixed: page('center'),
   },
   {
@@ -114,7 +117,10 @@ function visualReply(req: RunRequest): string | undefined {
   if (!existsSync(html) || readFileSync(html, 'utf8').includes('text-align: center')) {
     return undefined;
   }
-  const shot = /^- (after: .+?\)): /m.exec(req.prompt)?.[1] ?? 'after: / (phone, dark)';
+  // The first screenshot's whole label, a sample state's included: "after: / (counted) (phone, dark)".
+  const shot =
+    /^- (after: .+?\((?:desktop|phone), (?:light|dark)\)): /m.exec(req.prompt)?.[1] ??
+    'after: / (phone, dark)';
   return JSON.stringify({
     approve: false,
     issues: [],
