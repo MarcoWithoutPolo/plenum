@@ -1,10 +1,11 @@
 import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
-import type { ProviderId, Seat } from '@conclave/shared';
+import { PROVIDERS as REGISTRY, type ProviderId, type Seat } from '@conclave/shared';
 import { INSTALL_PACKAGES, activeLimits, streamProcess, type Engine } from '@conclave/core';
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
 
-const PROVIDERS = new Set<ProviderId>(['claude', 'codex', 'antigravity', 'gemini']);
+/** Real providers from the registry; the demo's fake one never comes from the renderer. */
+const PROVIDERS = new Set<ProviderId>(REGISTRY.filter((p) => p.id !== 'fake').map((p) => p.id));
 
 export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | null): void {
   const running = new Map<string, AbortController>();

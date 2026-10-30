@@ -1,19 +1,11 @@
-import type { Message, ProviderId, Seat } from '@conclave/shared';
-
-const SHORT_NAMES: Record<ProviderId, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  antigravity: 'Antigravity',
-  gemini: 'Gemini',
-  fake: 'Fake',
-};
+import { shortName, type Message, type ProviderId, type Seat } from '@conclave/shared';
 
 /** Keep replayed history well under every CLI's context and stdin limits. */
 export const MAX_TRANSCRIPT_CHARS = 60_000;
 
 export function seatLabel(seat: Seat): string {
   const detail = [seat.model, seat.effort && `${seat.effort} effort`].filter(Boolean).join(', ');
-  return SHORT_NAMES[seat.provider] + (detail ? ` (${detail})` : '');
+  return shortName(seat.provider) + (detail ? ` (${detail})` : '');
 }
 
 /** Labels for a set of seats; the model is only shown when a provider appears more than once. */
@@ -21,7 +13,7 @@ export function seatLabels(seats: Seat[]): string[] {
   const counts = new Map<ProviderId, number>();
   for (const s of seats) counts.set(s.provider, (counts.get(s.provider) ?? 0) + 1);
   const labels = seats.map((s) =>
-    (counts.get(s.provider) ?? 0) > 1 ? seatLabel(s) : SHORT_NAMES[s.provider],
+    (counts.get(s.provider) ?? 0) > 1 ? seatLabel(s) : shortName(s.provider),
   );
   const seen = new Map<string, number>();
   return labels.map((label) => {

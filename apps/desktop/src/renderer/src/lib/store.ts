@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AgentEvent, Message, ProviderId, Seat, Thread } from '@conclave/shared';
+import { firstPreferred, preferred, shortName } from '@conclave/shared';
 import type { ProviderInfo, QuotaInfo, RunUpdate, ThreadDetail } from '../../../shared/api';
 import { api, newRequestId } from './api';
 
@@ -297,20 +298,12 @@ function applyUpdate(u: RunUpdate, set: (fn: (s: State) => Partial<State>) => vo
   });
 }
 
-const SHORT: Record<ProviderId, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  antigravity: 'Antigravity',
-  gemini: 'Gemini',
-  fake: 'Fake',
-};
-
 export function providerName(provider: ProviderId): string {
-  return SHORT[provider];
+  return shortName(provider);
 }
 
 export function seatText(seat: Seat): string {
-  return [SHORT[seat.provider], seat.model, seat.effort && `${seat.effort} effort`]
+  return [shortName(seat.provider), seat.model, seat.effort && `${seat.effort} effort`]
     .filter(Boolean)
     .join(' · ');
 }
@@ -322,7 +315,7 @@ export function seatOf(m: {
   effort: string | null;
 }): Seat {
   return {
-    provider: m.provider ?? 'claude',
+    provider: m.provider ?? preferred('chat')[0]!,
     ...(m.model && { model: m.model }),
     ...(m.effort && { effort: m.effort }),
   };
@@ -334,8 +327,8 @@ export function labelSeats(seats: Seat[]): string[] {
   for (const s of seats) counts.set(s.provider, (counts.get(s.provider) ?? 0) + 1);
   return seats.map((s) =>
     (counts.get(s.provider) ?? 0) > 1 && s.model
-      ? `${SHORT[s.provider]} (${s.model})`
-      : SHORT[s.provider],
+      ? `${shortName(s.provider)} (${s.model})`
+      : shortName(s.provider),
   );
 }
 
@@ -346,7 +339,7 @@ export function readyProviders(providers: ProviderInfo[]): ProviderInfo[] {
 export function defaultSeat(providers: ProviderInfo[], last?: Seat): Seat | undefined {
   const ready = readyProviders(providers);
   if (last && ready.some((p) => p.provider === last.provider)) return last;
-  const pick = ready.find((p) => p.provider === 'claude') ?? ready[0];
+  const pick = firstPreferred(ready);
   return pick && { provider: pick.provider };
 }
 

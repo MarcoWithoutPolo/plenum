@@ -1,4 +1,4 @@
-import type { Seat } from '@conclave/shared';
+import { firstPreferred, type Seat } from '@conclave/shared';
 import type { CouncilUpdate, Engine } from '@conclave/core';
 import { bold, dim, heading, paint, seatName, shortId, stats } from './format.js';
 
@@ -16,8 +16,7 @@ export async function askCommand(engine: Engine, args: AskArgs): Promise<number>
     console.error('No AI provider is signed in. Run: conclave doctor');
     return 1;
   }
-  const synthesizer =
-    args.synthesizer ?? members.find((m) => m.provider === 'claude') ?? members[0]!;
+  const synthesizer = args.synthesizer ?? firstPreferred(members)!;
   let threadId: string | undefined;
   if (args.threadId) {
     const thread = engine.store.findThread(args.threadId);

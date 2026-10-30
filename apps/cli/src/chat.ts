@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline/promises';
-import type { ProviderId, Seat, Thread } from '@conclave/shared';
+import { firstPreferred, type ProviderId, type Seat, type Thread } from '@conclave/shared';
 import { parseSeat, type Engine } from '@conclave/core';
 import { bold, dim, messageBlock, paint, seatName, shortId, stats, threadLine } from './format.js';
 
@@ -83,7 +83,7 @@ async function openThread(engine: Engine, args: ChatArgs): Promise<Thread | unde
 
 async function defaultSeat(engine: Engine): Promise<Seat | undefined> {
   const ready = await engine.readySeats();
-  return ready.find((s) => s.provider === 'claude') ?? ready[0];
+  return firstPreferred(ready);
 }
 
 async function sendOne(

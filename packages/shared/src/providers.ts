@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-export const ProviderId = z.enum(['claude', 'codex', 'antigravity', 'gemini', 'fake']);
+/** Any provider id: lowercase, as the registry names them. Unknown ids survive in old rows. */
+export const ProviderId = z.string().regex(/^[a-z][a-z0-9-]{1,23}$/, 'Not a provider id');
 export type ProviderId = z.infer<typeof ProviderId>;
 
 export const AuthState = z.enum(['signed_in', 'signed_out', 'unknown']);

@@ -4,11 +4,11 @@ import type {
   AskPolicy,
   PermissionLevel,
   Permissions,
-  ProviderId,
   RetryStrategy,
   Routing,
   Seat,
 } from '@conclave/shared';
+import { preferred } from '@conclave/shared';
 import type { PermissionGaps, ProviderInfo, TeamInsights } from '../../../shared/api';
 import { Popover } from './Popover';
 import { SeatPicker, modelLabel } from './SeatPicker';
@@ -121,12 +121,6 @@ export function Segmented<T extends string | number>({
 
 /* ── Team ────────────────────────────────────────────────────────────── */
 
-const PREFERENCE: Record<keyof Routing, ProviderId[]> = {
-  planner: ['claude', 'antigravity', 'codex', 'gemini'],
-  builder: ['codex', 'claude', 'antigravity', 'gemini'],
-  reviewer: ['claude', 'antigravity', 'codex', 'gemini'],
-};
-
 export const ROLES: { key: keyof Routing; label: string; hint: string }[] = [
   { key: 'planner', label: 'Plans', hint: 'Splits the goal into tasks' },
   { key: 'builder', label: 'Builds', hint: 'Writes each task in a worktree' },
@@ -135,7 +129,7 @@ export const ROLES: { key: keyof Routing; label: string; hint: string }[] = [
 
 export function defaultRouting(ready: ProviderInfo[]): Routing {
   const order = (role: keyof Routing) =>
-    PREFERENCE[role].flatMap((p) => (ready.some((r) => r.provider === p) ? [{ provider: p }] : []));
+    preferred(role).flatMap((p) => (ready.some((r) => r.provider === p) ? [{ provider: p }] : []));
   return { planner: order('planner'), builder: order('builder'), reviewer: order('reviewer') };
 }
 

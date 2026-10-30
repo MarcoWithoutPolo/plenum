@@ -13,7 +13,7 @@ import type {
   Task,
   TaskFailure,
 } from '@conclave/shared';
-import { IN_FLIGHT, visualIssueLine } from '@conclave/shared';
+import { IN_FLIGHT, PROVIDERS, visualIssueLine } from '@conclave/shared';
 import { limitResetsAt, looksLikeLimit } from '../adapters/cli.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
@@ -121,12 +121,9 @@ export function storeGovernor(store: EngineContext['store']): Governor {
 }
 
 /** How many tasks one AI may build at once across projects, by default (lanes). */
-export const LANE_CAPS: Partial<Record<ProviderId, number>> = {
-  claude: 2,
-  codex: 2,
-  antigravity: 1,
-  gemini: 1,
-};
+export const LANE_CAPS: Partial<Record<ProviderId, number>> = Object.fromEntries(
+  PROVIDERS.map((p) => [p.id, p.laneCap]),
+);
 
 /** The adopted test command, or until then the proposed one. */
 function testCommandOf(project: Project): string | null {

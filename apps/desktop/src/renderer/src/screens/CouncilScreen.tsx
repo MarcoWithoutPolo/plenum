@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, GitMerge, Plus } from 'lucide-react';
-import type { Message, ProviderId, Seat } from '@conclave/shared';
+import { firstPreferred, type Message, type ProviderId, type Seat } from '@conclave/shared';
 import type { ProviderInfo } from '../../../shared/api';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
@@ -52,7 +52,7 @@ export function CouncilScreen({ threadId }: { threadId?: string }) {
 
   useEffect(() => {
     if (!synth && ready.length) {
-      const pick = ready.find((p) => p.provider === 'claude') ?? ready[0]!;
+      const pick = firstPreferred(ready)!;
       setSynth({ provider: pick.provider });
     }
   }, [ready.length, synth]);

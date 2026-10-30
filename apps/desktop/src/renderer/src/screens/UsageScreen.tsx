@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Eye, Gauge, RefreshCw, XCircle } from 'lucide-react';
-import type { ProviderId } from '@conclave/shared';
+import { PROVIDERS, type ProviderId } from '@conclave/shared';
 import type { AgentRun, DailyActivity, ProviderTotals } from '@conclave/core';
 import type { QuotaInfo } from '../../../shared/api';
 import { Button, ProviderDot } from '@/components/bits';
@@ -10,8 +10,8 @@ import { clock, elapsed } from '@/components/project-bits';
 import { useProjects } from '@/lib/projects';
 import { providerName, useApp } from '@/lib/store';
 
-/** Fixed series order, so a provider always keeps its color and place. */
-const ORDER: ProviderId[] = ['claude', 'codex', 'antigravity', 'gemini'];
+/** Fixed series order (the registry's), so a provider always keeps its color and place. */
+const ORDER: ProviderId[] = PROVIDERS.filter((p) => p.id !== 'fake').map((p) => p.id);
 
 export function UsageScreen() {
   const usage = useProjects((s) => s.usage);

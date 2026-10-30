@@ -1,0 +1,196 @@
+/**
+ * Every AI Conclave knows about, as data. Display names, colours, install and sign-in steps,
+ * default lanes and the default team order all come from here, so adding a provider means one
+ * entry and one adapter, never a switch on its id elsewhere. An entry without an adapter in
+ * core simply isn't offered yet.
+ */
+
+export type ProviderCost = 'plan' | 'credits' | 'free-local';
+
+export interface ProviderEntry {
+  id: string;
+  /** Full product name ("Claude Code"). */
+  name: string;
+  /** Short name for labels and transcripts ("Claude"). */
+  short: string;
+  /** Validated with the dataviz palette script against the light and dark surfaces. */
+  colour: string;
+  cost: ProviderCost;
+  install?: {
+    /** npm package of the official CLI, for guided installs. */
+    npm?: string;
+    /** A PowerShell or shell line from the vendor's docs, shown and run only after approval. */
+    script?: { windows?: string; unix?: string };
+    docs?: string;
+    note?: string;
+  };
+  /** How many tasks it may build at once across projects, by default. */
+  laneCap: number;
+  /** Whether the CLI reports plan usage, so "leave some for me" can apply. */
+  reportsUsage?: boolean;
+  /**
+   * Default team order: lower goes first. Planning and review lean on judgment; building on
+   * fast, careful edits. The brain adjusts this from measured reliability, quota and speed.
+   */
+  prefer: { planner: number; builder: number; reviewer: number; chat: number };
+  /** Listed only for people who set it up themselves (an API key, a retired CLI). */
+  hidden?: boolean;
+}
+
+export const PROVIDERS: readonly ProviderEntry[] = [
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    short: 'Claude',
+    colour: '#d0683f',
+    cost: 'plan',
+    install: { npm: '@anthropic-ai/claude-code', docs: 'https://code.claude.com/docs' },
+    laneCap: 2,
+    reportsUsage: true,
+    prefer: { planner: 1, builder: 2, reviewer: 1, chat: 1 },
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    short: 'Codex',
+    colour: '#10a37f',
+    cost: 'plan',
+    install: { npm: '@openai/codex', docs: 'https://developers.openai.com/codex/cli' },
+    laneCap: 2,
+    reportsUsage: true,
+    prefer: { planner: 3, builder: 1, reviewer: 3, chat: 2 },
+  },
+  {
+    id: 'antigravity',
+    name: 'Antigravity',
+    short: 'Antigravity',
+    colour: '#3b7de0',
+    cost: 'plan',
+    install: {
+      script: { windows: 'irm https://antigravity.google/cli/install.ps1 | iex' },
+      docs: 'https://antigravity.google/docs/install/',
+      note: 'Antigravity replaced the Gemini CLI for Google accounts.',
+    },
+    laneCap: 1,
+    prefer: { planner: 2, builder: 3, reviewer: 2, chat: 3 },
+  },
+  {
+    id: 'copilot',
+    name: 'Copilot',
+    short: 'Copilot',
+    colour: '#c2569b',
+    cost: 'plan',
+    install: {
+      npm: '@github/copilot',
+      docs: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+      note: 'Every GitHub account includes Copilot Free.',
+    },
+    laneCap: 1,
+    prefer: { planner: 5, builder: 5, reviewer: 5, chat: 5 },
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    short: 'Cursor',
+    colour: '#b38600',
+    cost: 'plan',
+    install: {
+      script: {
+        windows: "irm 'https://cursor.com/install?win32=true' | iex",
+        unix: 'curl https://cursor.com/install -fsS | bash',
+      },
+      docs: 'https://cursor.com/docs/cli/installation',
+    },
+    laneCap: 1,
+    prefer: { planner: 4, builder: 4, reviewer: 4, chat: 4 },
+  },
+  {
+    id: 'grok',
+    name: 'Grok Build',
+    short: 'Grok',
+    colour: '#a0522d',
+    cost: 'plan',
+    install: {
+      script: {
+        windows: 'irm https://x.ai/cli/install.ps1 | iex',
+        unix: 'curl -fsSL https://x.ai/cli/install.sh | bash',
+      },
+      docs: 'https://docs.x.ai/build/overview',
+      note: 'Its installer also adds an `agent` command, which can shadow Cursor’s.',
+    },
+    laneCap: 1,
+    prefer: { planner: 6, builder: 6, reviewer: 6, chat: 6 },
+  },
+  {
+    id: 'amp',
+    name: 'Amp',
+    short: 'Amp',
+    colour: '#6d8f00',
+    cost: 'credits',
+    install: { npm: '@ampcode/cli', docs: 'https://ampcode.com/docs/cli' },
+    laneCap: 1,
+    prefer: { planner: 8, builder: 8, reviewer: 8, chat: 8 },
+  },
+  {
+    id: 'local',
+    name: 'Local models',
+    short: 'Local',
+    colour: '#7e57c2',
+    cost: 'free-local',
+    install: { docs: 'https://ollama.com/download' },
+    laneCap: 1,
+    prefer: { planner: 7, builder: 7, reviewer: 7, chat: 7 },
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini CLI',
+    short: 'Gemini',
+    colour: '#3b7de0',
+    cost: 'plan',
+    install: { npm: '@google/gemini-cli' },
+    laneCap: 1,
+    prefer: { planner: 9, builder: 9, reviewer: 9, chat: 9 },
+    hidden: true,
+  },
+  {
+    id: 'fake',
+    name: 'Fake',
+    short: 'Fake',
+    colour: '#8a8a8a',
+    cost: 'free-local',
+    laneCap: 2,
+    prefer: { planner: 10, builder: 10, reviewer: 10, chat: 10 },
+    hidden: true,
+  },
+];
+
+const BY_ID = new Map(PROVIDERS.map((p) => [p.id, p]));
+
+export function providerEntry(id: string): ProviderEntry | undefined {
+  return BY_ID.get(id);
+}
+
+/** Short name for any provider id, including one this version doesn't know. */
+export function shortName(id: string): string {
+  return BY_ID.get(id)?.short ?? id;
+}
+
+/** Display order: the registry's order, unknown ids last. */
+export function providerOrder(id: string): number {
+  const at = PROVIDERS.findIndex((p) => p.id === id);
+  return at === -1 ? PROVIDERS.length : at;
+}
+
+/** The item whose provider comes first for a job (chat: who answers by default). */
+export function firstPreferred<T extends { provider: string }>(
+  items: readonly T[],
+  job: keyof ProviderEntry['prefer'] = 'chat',
+): T | undefined {
+  const rank = (id: string) => providerEntry(id)?.prefer[job] ?? Number.MAX_SAFE_INTEGER;
+  return [...items].sort((a, b) => rank(a.provider) - rank(b.provider))[0];
+}
+
+/** Ids best first for a job, from the registry's default preference. */
+export function preferred(job: keyof ProviderEntry['prefer']): string[] {
+  return [...PROVIDERS].sort((a, b) => a.prefer[job] - b.prefer[job]).map((p) => p.id);
+}

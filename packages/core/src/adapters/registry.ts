@@ -1,14 +1,13 @@
-import type { ProviderId } from '@conclave/shared';
+import { PROVIDERS, type ProviderId } from '@conclave/shared';
 import { ClaudeAdapter } from './claude.js';
 import { CodexAdapter } from './codex.js';
 import { AntigravityAdapter } from './antigravity.js';
 import type { Adapter } from './types.js';
 
-/** npm packages of the official CLIs, for guided installs. Antigravity installs with its own script. */
-export const INSTALL_PACKAGES: Partial<Record<ProviderId, string>> = {
-  claude: '@anthropic-ai/claude-code',
-  codex: '@openai/codex',
-};
+/** npm packages of the official CLIs, for guided installs (from the provider registry). */
+export const INSTALL_PACKAGES: Partial<Record<ProviderId, string>> = Object.fromEntries(
+  PROVIDERS.flatMap((p) => (p.install?.npm ? [[p.id, p.install.npm]] : [])),
+);
 
 /** The real providers Conclave knows about, in display order. */
 export function createAdapters(): Adapter[] {

@@ -8,6 +8,7 @@ import type {
   ProviderLimit,
   QuietHours,
 } from '@conclave/shared';
+import { PROVIDERS } from '@conclave/shared';
 import { Button, ProviderDot } from '@/components/bits';
 import { Segmented, inputClass } from '@/components/form';
 import { api } from '@/lib/api';
@@ -29,15 +30,12 @@ const NOTICES: { key: keyof NotificationSettings; label: string; hint: string }[
   { key: 'limit', label: 'Out of usage', hint: 'An AI hit its limit. At most once per AI a day.' },
 ];
 
-/** The default lanes per AI, matching the engine's LANE_CAPS. */
-const DEFAULT_LANES: Partial<Record<ProviderId, number>> = {
-  claude: 2,
-  codex: 2,
-  antigravity: 1,
-  gemini: 1,
-};
-/** Only Claude and Codex report plan usage, so "leave for me" only applies to them. */
-const REPORTS_USAGE: ProviderId[] = ['claude', 'codex'];
+/** The default lanes per AI, matching the engine's LANE_CAPS (both from the registry). */
+const DEFAULT_LANES: Partial<Record<ProviderId, number>> = Object.fromEntries(
+  PROVIDERS.map((p) => [p.id, p.laneCap]),
+);
+/** Only AIs that report plan usage can have some left for you. */
+const REPORTS_USAGE: ProviderId[] = PROVIDERS.filter((p) => p.reportsUsage).map((p) => p.id);
 /** AI · lanes · leave for me · daily cap, aligned across rows. */
 const LIMIT_GRID =
   'grid grid-cols-[8.5rem_8.5rem_12rem_1fr] items-center justify-items-start gap-x-5 px-4';

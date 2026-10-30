@@ -4,26 +4,22 @@ import type {
   GitHubLink,
   Permissions,
   Project,
-  ProviderId,
   RetryStrategy,
   Routing,
   Seat,
 } from '@conclave/shared';
+import { preferred } from '@conclave/shared';
 import type { Store } from '../store/store.js';
 import { currentBranch, isRepo, repoRoot } from '../workspace/git.js';
 
-/** Which provider does each job by default, best first. Only signed-in providers are kept. */
-const PREFERENCE: Record<keyof Routing, ProviderId[]> = {
-  // Planning and review lean on judgment; building on fast, careful edits.
-  // The brain adjusts this order from measured reliability, quota and speed (governor/rank.ts).
-  planner: ['claude', 'antigravity', 'codex', 'gemini'],
-  builder: ['codex', 'claude', 'antigravity', 'gemini'],
-  reviewer: ['claude', 'antigravity', 'codex', 'gemini'],
-};
-
+/**
+ * Which provider does each job by default, best first (the registry's preference). Only
+ * signed-in providers are kept. The brain adjusts this order from measured reliability, quota
+ * and speed (governor/rank.ts).
+ */
 export function defaultRouting(ready: Seat[]): Routing {
   const order = (role: keyof Routing) =>
-    PREFERENCE[role].flatMap((p) => ready.filter((s) => s.provider === p));
+    preferred(role).flatMap((p) => ready.filter((s) => s.provider === p));
   return { planner: order('planner'), builder: order('builder'), reviewer: order('reviewer') };
 }
 

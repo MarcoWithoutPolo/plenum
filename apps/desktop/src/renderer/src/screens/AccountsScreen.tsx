@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, Hourglass, LogIn, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { GitHubStatus } from '@conclave/core';
+import { providerEntry } from '@conclave/shared';
 import type { ProviderInfo, QuotaInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
 import { useApp } from '@/lib/store';
@@ -104,6 +105,7 @@ function ProviderCard({
   );
 
   const signedIn = info.auth === 'signed_in';
+  const setup = providerEntry(info.provider)?.install;
   const status = !info.installed
     ? { tone: 'neutral' as const, text: 'Not installed' }
     : signedIn
@@ -189,20 +191,22 @@ function ProviderCard({
       </div>
       {signedIn && <Facts info={info} />}
       {signedIn && quotas.length > 0 && <PlanUsage quotas={quotas} />}
-      {info.provider === 'antigravity' && !info.installed && (
+      {!info.installed && setup?.script?.windows && !setup.npm && (
         <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-muted">
           Install it from PowerShell with{' '}
           <code className="selectable rounded bg-sunken px-1 font-mono text-[12px]">
-            irm https://antigravity.google/cli/install.ps1 | iex
+            {setup.script.windows}
           </code>
-          , then press Sign in. Antigravity replaced the Gemini CLI for Google accounts.
-          <button
-            type="button"
-            onClick={() => void api().openExternal('https://antigravity.google/docs/install/')}
-            className="ml-1 inline-flex items-center gap-1 text-accent-ink hover:underline"
-          >
-            Install guide <ExternalLink className="size-3" />
-          </button>
+          , then press Sign in.{setup.note && ` ${setup.note}`}
+          {setup.docs && (
+            <button
+              type="button"
+              onClick={() => void api().openExternal(setup.docs!)}
+              className="ml-1 inline-flex items-center gap-1 text-accent-ink hover:underline"
+            >
+              Install guide <ExternalLink className="size-3" />
+            </button>
+          )}
         </p>
       )}
       {log && (
