@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   _electron as electron,
@@ -226,9 +226,10 @@ test('steers from the board and the chat, changing nothing until you apply', asy
 
 test('finishing says where the work goes, merges here and pushes to GitHub', async () => {
   const card = page.getByRole('article', { name: /Ready to merge/ });
-  // Where it goes, named, and your folder against GitHub (from a fetch).
+  // Where it goes, named, and your folder against GitHub (from a fetch). The path is as git
+  // reports it (macOS adds /private, Windows may shorten it), so match the folder's name.
   await expect(card).toContainText(
-    `Merges into main in your folder ${repo}. GitHub isn't changed.`,
+    new RegExp(`Merges into main in your folder .*${basename(repo)}\\. GitHub isn't changed\\.`),
   );
   await expect(card).toContainText('main here matches');
   await card.getByRole('radio', { name: 'Merge here, then push' }).click();

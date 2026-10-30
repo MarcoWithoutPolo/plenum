@@ -62,7 +62,8 @@ test('scenario 15: the new AIs chat and join a council', async () => {
       { provider: 'copilot' },
       { provider: 'cursor' },
       { provider: 'grok' },
-      { provider: 'local', model: 'llama3.2:1b' },
+      // 1B models miss exact instructions ("bubble" for pong); a 14B one follows them.
+      { provider: 'local', model: 'qwen2.5-coder:14b' },
     ];
     for (const seat of seats) {
       const { reply } = await ask(api, seat, PONG);
@@ -108,7 +109,7 @@ test('scenario 19: the picker sets model and effort per provider', async () => {
   test.setTimeout(15 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot } = await launch('19');
-  const pick = async (provider: string, model: RegExp, effort?: string) => {
+  const pick = async (provider: string, model: RegExp, effort?: string, maker?: string) => {
     await page.getByRole('button', { name: 'New chat' }).click();
     await page.getByRole('button', { name: 'Choose model' }).click();
     const picker = page.getByRole('dialog', { name: 'Choose model' });
@@ -116,6 +117,10 @@ test('scenario 19: the picker sets model and effort per provider', async () => {
       .getByRole('navigation', { name: 'Providers' })
       .getByRole('button', { name: new RegExp(`^${provider}:`) })
       .click();
+    // Long lists of many makers' models (Cursor's) show one maker at a time.
+    const chips = picker.getByRole('tablist', { name: 'Model makers' });
+    if (maker && (await chips.count()))
+      await chips.getByRole('tab', { name: new RegExp(`^${maker}`) }).click();
     await picker.getByRole('option', { name: model }).first().click();
     if (effort) await picker.getByRole('radio', { name: effort, exact: true }).click();
     else await page.keyboard.press('Escape');
@@ -144,7 +149,7 @@ test('scenario 19: the picker sets model and effort per provider', async () => {
       JSON.stringify(m).slice(0, 160),
     );
     // Cursor's free plan includes Grok 4.7: its effort is part of the id.
-    await pick('Cursor', /^Grok 4\.7/, 'High');
+    await pick('Cursor', /^Grok 4\.7/, 'High', 'Grok');
     m = last();
     check(
       'Cursor ran Grok 4.7 High (its effort is in the id) on the free plan',
