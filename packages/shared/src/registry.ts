@@ -130,6 +130,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     install: { npm: '@ampcode/cli', docs: 'https://ampcode.com/docs/cli' },
     laneCap: 1,
     prefer: { planner: 8, builder: 8, reviewer: 8, chat: 8 },
+    // Deferred past v0.9: its headless runs need a token the user creates.
+    hidden: true,
   },
   {
     id: 'local',
