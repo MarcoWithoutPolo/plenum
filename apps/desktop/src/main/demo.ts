@@ -421,6 +421,9 @@ export function demoAdapters(): Adapter[] {
             efforts: levels,
             maker: 'Claude',
             ...(older ? { older: true } : {}),
+            ...(['haiku', 'sonnet', 'opus', 'fable'].includes(id as string) && {
+              tier: ['haiku', 'sonnet', 'opus', 'fable'].indexOf(id as string) + 1,
+            }),
           })),
         },
         limits: [
@@ -469,6 +472,7 @@ export function demoAdapters(): Adapter[] {
               id: 'gpt-6-astra',
               label: 'GPT-6-Astra',
               description: 'Frontier model for the hardest problems.',
+              tier: 2,
               efforts: [...levels, 'ultra'],
               defaultEffort: 'low',
             },

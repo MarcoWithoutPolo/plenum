@@ -13,6 +13,7 @@ import {
   grokArgs,
   parseCursorModels,
   parseGrokModels,
+  type Exec,
 } from '../src/index.js';
 import { fixturePath, replay } from './helpers.js';
 
@@ -199,5 +200,68 @@ describe('CopilotAdapter (recorded Copilot CLI 1.0.105, Copilot Free)', () => {
     expect(all).not.toContain('--autopilot');
     expect(copilotArgs({ prompt: 'x', cwd: '.', model: 'auto' })).not.toContain('--model');
     expect(copilotPermissionGap({ level: 4, network: false })).toMatch(/levels 1, 2 and 5/);
+  });
+});
+
+// Scenario 21: none of the new AIs can be pushed to its limit on purpose, so their limit
+// messages are simulated in each CLI's own event format. A usage limit hands the task off
+// instead of failing it.
+describe('usage limits from the new AIs', () => {
+  const lines = (out: string[], code = 0, stderr = ''): Exec =>
+    async function* () {
+      for (const line of out) yield { kind: 'line' as const, line };
+      if (stderr) yield { kind: 'stderr' as const, text: stderr };
+      yield { kind: 'exit' as const, code };
+    };
+
+  it('Copilot: an exhausted monthly allowance', async () => {
+    const result = await collect(
+      new CopilotAdapter({
+        exec: lines(
+          [
+            JSON.stringify({
+              type: 'session.error',
+              data: {
+                message:
+                  'You have reached your monthly limit of premium requests. Try again in 3 days.',
+              },
+            }),
+          ],
+          1,
+        ),
+      }).run({ prompt: 'x', cwd: '.' }),
+    );
+    expect(result.rateLimited?.message).toMatch(/monthly limit/);
+    expect(result.rateLimited?.resetsAt).toBeGreaterThan(Date.now());
+  });
+
+  it('Grok Build: a rate limit', async () => {
+    const result = await collect(
+      new GrokAdapter({
+        exec: lines(
+          [
+            JSON.stringify({
+              type: 'error',
+              message: 'Rate limit exceeded (429). Try again in 2 hours.',
+            }),
+          ],
+          1,
+        ),
+      }).run({ prompt: 'x', cwd: '.' }),
+    );
+    expect(result.rateLimited).toBeDefined();
+  });
+
+  it('Cursor: a usage limit on stderr, with no result line', async () => {
+    const result = await collect(
+      new CursorAdapter({
+        exec: lines(
+          [],
+          1,
+          "You've hit your usage limit for this billing period. Upgrade or try again later.\n",
+        ),
+      }).run({ prompt: 'x', cwd: '.' }),
+    );
+    expect(result.rateLimited?.message).toMatch(/usage limit/);
   });
 });

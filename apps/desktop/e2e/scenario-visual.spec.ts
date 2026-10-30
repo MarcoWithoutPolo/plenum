@@ -1,145 +1,26 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  _electron as electron,
-  expect,
-  test,
-  type ElectronApplication,
-  type Page,
-} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 // Private tests, scenarios 9–13 (v0.8), on your real accounts and Conclave data. Scenarios 9,
 // 11 and 13 spend real usage; 10 and 12 run no AI. Pick them: CONCLAVE_SCENARIO=9,10,11,12,13.
 // Scenario 14 (can each AI read a screenshot) is packages/core/test/live-vision.test.ts.
+import {
+  stamp,
+  query,
+  repo,
+  pkg,
+  checker,
+  launch,
+  status,
+  events,
+  tasks,
+  waitFor,
+  settled,
+  openProject,
+} from './scenario-kit.js';
+
 const which = (process.env.CONCLAVE_SCENARIO ?? '').split(',').map((s) => s.trim());
-const here = dirname(fileURLToPath(import.meta.url));
-const sqlite = process.getBuiltinModule('node:sqlite');
-const DB = join(homedir(), '.conclave', 'conclave.db');
-const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-
-function query<T>(sql: string, ...args: (string | number)[]): T[] {
-  const db = new sqlite.DatabaseSync(DB, { readOnly: true });
-  try {
-    return db.prepare(sql).all(...args) as T[];
-  } finally {
-    db.close();
-  }
-}
-
-function repo(scenario: string, name: string, files: Record<string, string>): string {
-  const dir = join(homedir(), `conclave-scenario-${scenario}`, name);
-  mkdirSync(dir, { recursive: true });
-  const git = (...a: string[]) => execFileSync('git', a, { cwd: dir });
-  git('init', '-q', '-b', 'main');
-  for (const [path, body] of Object.entries(files)) {
-    mkdirSync(dirname(join(dir, path)), { recursive: true });
-    writeFileSync(join(dir, path), body);
-  }
-  git('add', '-A');
-  git(
-    '-c',
-    'user.name=Scenario',
-    '-c',
-    'user.email=scenario@localhost',
-    'commit',
-    '-q',
-    '-m',
-    'init',
-  );
-  return dir;
-}
-
-const pkg = (name: string, extra: Record<string, unknown> = {}) =>
-  `${JSON.stringify({ name, version: '0.1.0', private: true, scripts: { test: 'node --test' }, ...extra }, null, 2)}\n`;
-
-type Check = { name: string; ok: boolean; detail: string };
-function checker() {
-  const checks: Check[] = [];
-  const check = (name: string, ok: boolean, detail = '') => {
-    checks.push({ name, ok, detail });
-    console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
-  };
-  return { checks, check };
-}
-
-async function launch(scenario: string) {
-  const shots = join(here, 'screenshots', `scenario-${scenario}`);
-  mkdirSync(shots, { recursive: true });
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
-  const app: ElectronApplication = await electron.launch({
-    args: [join(here, '../out/main/index.js')],
-    env: env as Record<string, string>,
-  });
-  const page: Page = await app.firstWindow();
-  await page.setViewportSize({ width: 1320, height: 900 });
-  let n = 0;
-  const shot = (label: string) =>
-    page.screenshot({ path: join(shots, `${String(++n).padStart(2, '0')}-${label}.png`) });
-  const api = <T>(fn: string, ...args: unknown[]) =>
-    page.evaluate(
-      ([f, a]) => {
-        const [group, method] = (f as string).split('.') as [string, string];
-        const g = (
-          window.conclave as unknown as Record<string, Record<string, (...x: unknown[]) => unknown>>
-        )[group]!;
-        return g[method]!(...(a as unknown[]));
-      },
-      [fn, args] as const,
-    ) as Promise<T>;
-  return { app, page, shot, api };
-}
-
-const status = (id: string) =>
-  query<{ status: string; status_reason: string | null }>(
-    'SELECT status, status_reason FROM projects WHERE id = ?',
-    id,
-  )[0]!;
-const events = (id: string) =>
-  query<{
-    kind: string;
-    message: string;
-    provider: string | null;
-    task_id: string | null;
-    at: number;
-  }>(
-    'SELECT kind, message, provider, task_id, at FROM brain_events WHERE project_id = ? ORDER BY id',
-    id,
-  );
-const tasks = (id: string) =>
-  query<{
-    id: string;
-    title: string;
-    status: string;
-    built_by: string | null;
-    reviewed_by: string | null;
-  }>(
-    'SELECT id, title, status, built_by, reviewed_by FROM tasks WHERE project_id = ? ORDER BY priority',
-    id,
-  );
-
-/** Poll the database until `done` says so, or the time is up. */
-async function waitFor(page: Page, done: () => boolean, ms: number, every = 15_000) {
-  const end = Date.now() + ms;
-  while (!done() && Date.now() < end) await page.waitForTimeout(every);
-  return done();
-}
-const settled = (id: string) =>
-  ['done', 'paused', 'stopped', 'needs_you', 'idle'].includes(status(id).status);
-
-async function openProject(page: Page, name: string) {
-  await page
-    .getByRole('complementary')
-    .getByRole('button', { name: /^Projects/ })
-    .click();
-  await page
-    .getByRole('button', { name: new RegExp(`^${name}`) })
-    .first()
-    .click();
-}
 
 // ── 9: a static web app, 2 lanes: shots for every task, a real visual review ─────────────
 test('scenario 9: a static tip calculator, screenshots and a real visual review', async () => {
@@ -350,20 +231,20 @@ test('scenario 11: the review time budget', async () => {
   test.skip(!which.includes('11'), 'set CONCLAVE_SCENARIO=11 to run');
   test.setTimeout(45 * 60_000);
   const { checks, check } = checker();
-  const { app, page, shot, api } = await launch('11');
+  // A short budget makes the backup reviewer step in every time (v0.9 C10): no slow AI needed.
+  const { app, page, shot, api } = await launch('11', { CONCLAVE_REVIEW_BUDGET_MS: '20000' });
   try {
     const name = `units-${stamp}`;
     const p = await api<{ id: string }>('projects.create', {
       repoPath: repo('11', name, { 'package.json': pkg(name), 'README.md': `# ${name}\n` }),
       name,
-      // A web page: Antigravity's review then reads screenshots too, which makes it slow
-      // (98 s in scenario 9), past the 90 s budget.
+      // A web page: Antigravity's review then reads screenshots too, well past 20 s.
       goal: 'A static unit converter web page: index.html, style.css and app.js at the top of the repo, no build step and no dependencies. Convert between at least 30 units of length, mass, volume and temperature, picked from two dropdowns, updating as you type, with a swap button. Light and dark themes that follow the system setting, a layout that works on a 390px-wide phone without sideways scrolling, readable contrast and controls at least 44px tall. The conversion table and convert(value, from, to) live in units.js, which works both in the page and in node:test tests in test/ covering every unit. npm test runs node --test.',
-      // Antigravity reviews first (at max effort: slow on purpose); Claude is the faster backup.
+      // Antigravity reviews first; Claude is the backup the short budget brings in.
       routing: {
         planner: [{ provider: 'claude' }],
         builder: [{ provider: 'codex' }],
-        reviewer: [{ provider: 'antigravity', effort: 'max' }, { provider: 'claude' }],
+        reviewer: [{ provider: 'antigravity' }, { provider: 'claude' }],
       },
       adaptiveTeam: false,
       maxAttempts: 2,

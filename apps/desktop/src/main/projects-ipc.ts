@@ -219,26 +219,49 @@ export function registerProjectIpc(
   });
 
   handle(IPC.projectsCreate, async (input: NewProjectInput) => {
-    const project = await createProject(engine.store, await engine.readySeats(), {
-      repoPath: text(input.repoPath, 4096),
-      goal: text(input.goal),
-      ...(input.name && { name: text(input.name, 200) }),
-      ...(input.doneWhen && { doneWhen: text(input.doneWhen) }),
-      ...(input.testCommand && { testCommand: text(input.testCommand, 1000) }),
-      ...(input.routing && { routing: Routing.partial().parse(input.routing) }),
-      ...(input.maxAttempts && {
-        maxAttempts: Math.max(1, Math.min(10, Number(input.maxAttempts))),
+    // Each step is timed: a slow create (one CI run waited 24 s) names the step that was slow.
+    const steps: [string, number][] = [];
+    const started = Date.now();
+    const timed = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      const t = Date.now();
+      try {
+        return await fn();
+      } finally {
+        steps.push([label, Date.now() - t]);
+      }
+    };
+    const ready = await timed('sign-in check', () => engine.readySeats());
+    const project = await timed('create', () =>
+      createProject(engine.store, ready, {
+        repoPath: text(input.repoPath, 4096),
+        goal: text(input.goal),
+        ...(input.name && { name: text(input.name, 200) }),
+        ...(input.doneWhen && { doneWhen: text(input.doneWhen) }),
+        ...(input.testCommand && { testCommand: text(input.testCommand, 1000) }),
+        ...(input.routing && { routing: Routing.partial().parse(input.routing) }),
+        ...(input.maxAttempts && {
+          maxAttempts: Math.max(1, Math.min(10, Number(input.maxAttempts))),
+        }),
+        ...(input.maxParallel && { maxParallel: clampParallel(Number(input.maxParallel)) }),
+        ...(input.adaptiveTeam !== undefined && { adaptiveTeam: Boolean(input.adaptiveTeam) }),
+        ...(input.retryStrategy && { retryStrategy: RetryStrategy.parse(input.retryStrategy) }),
+        ...(input.askPolicy && { askPolicy: AskPolicy.parse(input.askPolicy) }),
+        ...(input.permissions && { permissions: checkPermissions(input.permissions) }),
+        ...(input.designDirection && { designDirection: text(input.designDirection, 2000) }),
+        ...(input.draft && { draft: true }),
       }),
-      ...(input.maxParallel && { maxParallel: clampParallel(Number(input.maxParallel)) }),
-      ...(input.adaptiveTeam !== undefined && { adaptiveTeam: Boolean(input.adaptiveTeam) }),
-      ...(input.retryStrategy && { retryStrategy: RetryStrategy.parse(input.retryStrategy) }),
-      ...(input.askPolicy && { askPolicy: AskPolicy.parse(input.askPolicy) }),
-      ...(input.permissions && { permissions: checkPermissions(input.permissions) }),
-      ...(input.designDirection && { designDirection: text(input.designDirection, 2000) }),
-      ...(input.draft && { draft: true }),
-    });
+    );
     // A clone of a GitHub repository knows where it came from.
-    const link = await linkRepo(engine, github, project).catch(() => undefined);
+    const link = await timed('GitHub link', () =>
+      linkRepo(engine, github, project).catch(() => undefined),
+    );
+    const total = Date.now() - started;
+    if (total > 3000) {
+      const breakdown = steps.map(([l, ms]) => `${l} ${(ms / 1000).toFixed(1)}s`).join(', ');
+      console.warn(
+        `[conclave] creating ${project.name} took ${(total / 1000).toFixed(1)}s: ${breakdown}`,
+      );
+    }
     const issue = input.github?.issue;
     if (link && issue && Number.isInteger(issue.number)) {
       projects.update(project.id, {

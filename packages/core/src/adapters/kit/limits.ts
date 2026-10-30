@@ -4,7 +4,7 @@
  * The governor moves work elsewhere instead of charging the task an attempt.
  */
 const LIMIT_PATTERN =
-  /rate.?limit|usage limit|limit (?:reached|exceeded)|quota|spend(?:ing)? cap|usage cap|credit balance|out of credits|insufficient (?:credits|quota|funds)|billing|too many requests|status\W*429|\b429\b/i;
+  /rate.?limit|usage limit|limit (?:reached|exceeded)|(?:hourly|daily|weekly|monthly) limit|reached (?:your |the )?(?:\w+ )?limit|quota|spend(?:ing)? cap|usage cap|credit balance|out of credits|insufficient (?:credits|quota|funds)|billing|too many requests|status\W*429|\b429\b/i;
 
 export function looksLikeLimit(text: string | undefined): boolean {
   return Boolean(text && LIMIT_PATTERN.test(text));

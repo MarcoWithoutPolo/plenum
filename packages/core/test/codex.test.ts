@@ -42,6 +42,7 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
           efforts: ['low'],
           defaultEffort: 'low',
           maker: 'GPT',
+          tier: 1,
         },
         {
           id: 'gpt-b',
@@ -49,6 +50,7 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
           efforts: ['low', 'medium'],
           defaultEffort: 'medium',
           maker: 'GPT',
+          tier: 1,
         },
       ],
       defaultModel: 'gpt-a',

@@ -1,28 +1,22 @@
 import type { ProviderInfo } from '../../../shared/api';
 
-/** Claude's models, weakest to strongest. */
-const CLAUDE_TIERS = ['haiku', 'sonnet', 'opus', 'fable'];
-
 /**
- * A clearly stronger model than `current` from the same provider, when one is known: the next
- * Claude tier up, or Codex's model described as frontier. Undefined when there's no clear answer.
+ * A clearly stronger model than `current` from the same provider: the next tier up, as the
+ * provider's own model list ranks them (Claude's aliases, Codex's "frontier" model). Undefined
+ * when the list doesn't rank its models.
  */
 export function strongerModel(
   info: ProviderInfo | undefined,
   current: string | undefined,
 ): string | undefined {
   if (!info) return undefined;
+  const ranked = info.models.filter((m) => m.tier !== undefined && !m.older);
+  if (!ranked.length) return undefined;
   const now = current ?? info.defaultModel;
-  if (info.provider === 'claude') {
-    const ids = info.models.map((m) => m.id);
-    // With the CLI's default and no known default model, the strongest one is the clear step up.
-    if (!now) return [...CLAUDE_TIERS].reverse().find((t) => ids.includes(t));
-    const at = CLAUDE_TIERS.indexOf(now);
-    return at === -1 ? undefined : CLAUDE_TIERS.slice(at + 1).find((t) => ids.includes(t));
-  }
-  if (info.provider === 'codex') {
-    const top = info.models.find((m) => /frontier/i.test(m.description ?? ''));
-    return top && top.id !== now ? top.id : undefined;
-  }
-  return undefined;
+  // With the CLI's default and no known default model, the strongest one is the clear step up.
+  if (!now) return ranked.reduce((a, b) => (b.tier! > a.tier! ? b : a)).id;
+  const at = ranked.find((m) => m.id === now)?.tier;
+  if (at === undefined) return undefined;
+  const up = ranked.filter((m) => m.tier! > at);
+  return up.length ? up.reduce((a, b) => (b.tier! < a.tier! ? b : a)).id : undefined;
 }

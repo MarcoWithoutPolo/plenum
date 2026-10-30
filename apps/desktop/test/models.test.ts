@@ -4,14 +4,15 @@ import { strongerModel } from '../src/renderer/src/lib/models';
 
 const info = (
   provider: string,
-  models: { id: string; description?: string }[],
+  models: { id: string; description?: string; tier?: number }[],
   defaultModel?: string,
 ) => ({ provider, models, ...(defaultModel && { defaultModel }) }) as unknown as ProviderInfo;
 
 describe('strongerModel', () => {
+  // Tiers as the Claude adapter sets them from its aliases.
   const claude = info(
     'claude',
-    ['fable', 'opus', 'sonnet', 'haiku'].map((id) => ({ id })),
+    ['fable', 'opus', 'sonnet', 'haiku'].map((id, i) => ({ id, tier: 4 - i })),
   );
 
   it('steps Claude up one tier', () => {
@@ -30,8 +31,12 @@ describe('strongerModel', () => {
     const codex = info(
       'codex',
       [
-        { id: 'gpt-6.1-sol', description: 'Latest workhorse model for coding.' },
-        { id: 'gpt-6-astra', description: 'Frontier intelligence for the most demanding work.' },
+        { id: 'gpt-6.1-sol', description: 'Latest workhorse model for coding.', tier: 1 },
+        {
+          id: 'gpt-6-astra',
+          description: 'Frontier intelligence for the most demanding work.',
+          tier: 2,
+        },
       ],
       'gpt-6.1-sol',
     );

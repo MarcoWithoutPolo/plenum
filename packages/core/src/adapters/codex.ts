@@ -109,6 +109,8 @@ export class CodexAdapter implements Adapter {
           ...(m.defaultEffort && { defaultEffort: m.defaultEffort }),
           ...(m.effortNotes && { effortNotes: m.effortNotes }),
           maker: 'GPT',
+          // Codex calls its strongest model "frontier" in the description.
+          tier: /frontier/i.test(m.description ?? '') ? 2 : 1,
         })),
       ),
       ...(defaults.model && { defaultModel: defaults.model }),

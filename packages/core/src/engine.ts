@@ -41,13 +41,25 @@ export class Engine {
     this.council = new Council(ctx);
   }
 
-  async detectAll(): Promise<ProviderStatus[]> {
-    return Promise.all([...this.adapters.values()].map((a) => a.detect()));
+  private detected: { at: number; statuses: Promise<ProviderStatus[]> } | undefined;
+
+  /**
+   * Every CLI's install and sign-in state. Fresh by default (the Accounts screen); pass
+   * `maxAgeMs` to reuse a recent check, since asking seven CLIs takes seconds.
+   */
+  async detectAll(opts: { maxAgeMs?: number } = {}): Promise<ProviderStatus[]> {
+    const recent = this.detected && Date.now() - this.detected.at < (opts.maxAgeMs ?? -1);
+    if (!recent) {
+      const statuses = Promise.all([...this.adapters.values()].map((a) => a.detect()));
+      this.detected = { at: Date.now(), statuses };
+      statuses.catch(() => (this.detected = undefined));
+    }
+    return this.detected!.statuses;
   }
 
-  /** Signed-in providers, in display order. */
+  /** Signed-in providers, in display order, from a check at most a minute old. */
   async readySeats(): Promise<Seat[]> {
-    return (await this.detectAll())
+    return (await this.detectAll({ maxAgeMs: 60_000 }))
       .filter((s) => s.auth === 'signed_in')
       .map((s) => ({ provider: s.provider }));
   }

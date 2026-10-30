@@ -303,6 +303,10 @@ export class BrainManager {
       home: this.home,
       governor: this.governor,
       ...(this.opts.snapshotter && { snapshotter: this.opts.snapshotter }),
+      // Live scenario 11 forces the backup reviewer with a short review budget.
+      ...(Number(process.env.CONCLAVE_REVIEW_BUDGET_MS) > 0 && {
+        reviewBudgetMs: () => Number(process.env.CONCLAVE_REVIEW_BUDGET_MS),
+      }),
       onEvent: (event) => {
         for (const l of this.listeners) l(event);
       },

@@ -155,6 +155,9 @@ export class ClaudeAdapter implements Adapter {
  * The `models` of Claude Code's initialize response: aliases (opus, sonnet) and pinned ids, each
  * with its effort levels. "Default" names the model the CLI picks on its own.
  */
+/** Claude Code's aliases, weakest to strongest. */
+const CLAUDE_TIERS = ['haiku', 'sonnet', 'opus', 'fable'];
+
 export function parseClaudeModels(response: unknown): ModelList {
   if (!isRecord(response) || !Array.isArray(response.models)) return { models: [] };
   const resolved: Record<string, string> = {};
@@ -175,12 +178,14 @@ export function parseClaudeModels(response: unknown): ModelList {
       : [];
     const label = str(m.displayName);
     const description = str(m.description);
+    const tier = CLAUDE_TIERS.indexOf(id) + 1;
     models.push({
       id,
       ...(label && { label }),
       ...(description && { description }),
       ...(efforts.length && { efforts }),
       maker: 'Claude',
+      ...(tier > 0 && { tier }),
     });
   }
   // The alias that stands for the default, so "Default" is marked on its model.

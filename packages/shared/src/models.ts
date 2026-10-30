@@ -32,6 +32,11 @@ export interface ModelOption {
   older?: boolean;
   /** Short facts: size, context, "too big" and so on. */
   tags?: string[];
+  /**
+   * How capable it is among this provider's models, when the CLI makes that clear (higher is
+   * stronger): "Retry with a stronger model" steps up by it.
+   */
+  tier?: number;
 }
 
 export interface ModelList {
