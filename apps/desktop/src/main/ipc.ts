@@ -1,6 +1,12 @@
 import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { PROVIDERS as REGISTRY, type ProviderId, type Seat } from '@conclave/shared';
-import { INSTALL_PACKAGES, activeLimits, streamProcess, type Engine } from '@conclave/core';
+import {
+  INSTALL_PACKAGES,
+  LocalAdapter,
+  activeLimits,
+  streamProcess,
+  type Engine,
+} from '@conclave/core';
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
 
@@ -103,6 +109,37 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
     return code === 0
       ? { ok: true }
       : { ok: false, error: error ?? `npm exited with code ${code}` };
+  });
+
+  handle(IPC.localPull, async (model: unknown) => {
+    const local = engine.adapters.get('local');
+    if (!(local instanceof LocalAdapter))
+      return { ok: false, error: 'Local models are not available' };
+    if (typeof model !== 'string' || !/^[\w.:/-]{1,80}$/.test(model)) {
+      return { ok: false, error: 'Not a model name' };
+    }
+    const win = getWindow();
+    const options = {
+      type: 'question' as const,
+      buttons: ['Download', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Download a model',
+      message: `Download ${model} into Ollama?`,
+      detail:
+        'Models are several gigabytes. Ollama downloads it from its own library and keeps it on this computer (or the Ollama address in Settings).',
+    };
+    const choice = win
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options);
+    if (choice.response !== 0) return { ok: false, cancelled: true };
+    try {
+      await local.pull(model, (text) => send(IPC.installLog, { provider: 'local', text }));
+      await engine.catalog('local', { refresh: true }).catch(() => undefined);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
   });
 
   handle(IPC.accountsQuotas, async () => {

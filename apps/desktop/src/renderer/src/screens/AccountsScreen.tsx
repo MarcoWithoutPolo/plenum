@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, ExternalLink, Hourglass, LogIn, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { GitHubStatus } from '@conclave/core';
-import { providerEntry } from '@conclave/shared';
+import { LOCAL_LIBRARY, providerEntry } from '@conclave/shared';
 import type { ProviderInfo, QuotaInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
 import { useApp } from '@/lib/store';
@@ -216,6 +216,9 @@ function ProviderCard({
         </div>
       </div>
       {signedIn && <Facts info={info} />}
+      {signedIn && entry?.cost === 'free-local' && (
+        <ModelLibrary have={info.models.map((m) => m.id)} onPulled={onChanged} />
+      )}
       {signedIn && quotas.length > 0 && <PlanUsage quotas={quotas} />}
       {!info.installed && setup?.script?.windows && !setup.npm && (
         <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-muted">
@@ -241,6 +244,57 @@ function ProviderCard({
         </pre>
       )}
     </section>
+  );
+}
+
+/** "Get more models": a few downloads, each through your confirmation. */
+function ModelLibrary({ have, onPulled }: { have: string[]; onPulled: () => Promise<void> }) {
+  const showToast = useApp((s) => s.showToast);
+  const [pulling, setPulling] = useState<string | null>(null);
+  const pull = async (id: string) => {
+    setPulling(id);
+    const result = await api().local.pull(id);
+    setPulling(null);
+    if (result.cancelled) return;
+    if (result.ok) {
+      showToast('info', `${id} is ready.`);
+      await onPulled();
+    } else showToast('error', result.error ?? `Couldn't download ${id}`);
+  };
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <h3 className="text-[12.5px] font-semibold text-muted">Get more models</h3>
+      <ul className="mt-1.5 flex flex-col">
+        {LOCAL_LIBRARY.map((m) => {
+          const got = have.includes(m.id);
+          return (
+            <li key={m.id} className="flex items-center gap-3 py-1.5 text-[12.5px]">
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{m.label}</span>
+                <span className="text-faint"> · {m.sizeGb} GB</span>
+                <span className="block truncate text-[12px] text-muted">{m.use}</span>
+              </span>
+              {got ? (
+                <Badge tone="ok">Downloaded</Badge>
+              ) : (
+                <Button size="sm" onClick={() => void pull(m.id)} disabled={pulling !== null}>
+                  <Download className="size-3.5" />
+                  {pulling === m.id ? 'Downloading…' : 'Download'}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {pulling && (
+        <p className="mt-1 text-[12px] text-faint">
+          Ollama's progress shows below. You can keep using Conclave meanwhile.
+        </p>
+      )}
+      <span className="sr-only" aria-live="polite">
+        {pulling ? `Downloading ${pulling}` : ''}
+      </span>
+    </div>
   );
 }
 

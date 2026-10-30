@@ -93,8 +93,69 @@ function Section({
   );
 }
 
+/** The Ollama address, with a warning when it isn't this computer or a private network. */
+function LocalHost({
+  value,
+  onSave,
+}: {
+  value: string | undefined;
+  onSave: (host: string) => Promise<void>;
+}) {
+  const [text, setText] = useState(value ?? '');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => setText(value ?? ''), [value]);
+  const host = text.trim().replace(/\/+$/, '');
+  const open = /^https?:\/\/[\w.[\]:-]+(?::\d+)?$/.test(host) && !isPrivateAddress(host);
+  return (
+    <form
+      className="flex flex-col gap-2 px-4 py-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setError(null);
+        onSave(host).catch(() => setError("That isn't an address like http://127.0.0.1:11434."));
+      }}
+    >
+      <label className="flex items-center gap-3">
+        <span className="w-28 shrink-0 text-[13.5px] font-medium">Ollama address</span>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="http://127.0.0.1:11434"
+          spellCheck={false}
+          className="h-8 min-w-0 flex-1 rounded-lg border border-line-strong bg-panel px-2.5 font-mono text-[12.5px] outline-none focus:border-accent"
+        />
+        <Button type="submit" disabled={!value || host === value}>
+          Save
+        </Button>
+      </label>
+      {open && (
+        <p className="text-[12px] text-warn">
+          This address isn't on your computer or a private network. Ollama has no sign-in, so anyone
+          who can reach it can use it, and your prompts travel there.
+        </p>
+      )}
+      {error && <p className="text-[12px] text-danger">{error}</p>}
+    </form>
+  );
+}
+
+/** Same rule as the engine's isPrivateHost: loopback, .local, bare names and private ranges. */
+function isPrivateAddress(host: string): boolean {
+  try {
+    const { hostname } = new URL(host);
+    if (['127.0.0.1', 'localhost', '::1', '[::1]'].includes(hostname)) return true;
+    if (hostname.endsWith('.local') || !hostname.includes('.')) return true;
+    return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(
+      hostname,
+    );
+  } catch {
+    return true;
+  }
+}
+
 export function SettingsScreen() {
   const providers = useApp((s) => s.providers);
+  const refreshProviders = useApp((s) => s.refreshProviders);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   useEffect(() => {
     void api().settings.get().then(setSettings);
@@ -329,6 +390,20 @@ export function SettingsScreen() {
                 <Plus className="size-3.5" aria-hidden /> Add quiet hours
               </Button>
             </div>
+          </Section>
+
+          <Section
+            id="local"
+            title="Local models"
+            hint="Where Ollama runs. A powerful computer on your network can serve the models for this one."
+          >
+            <LocalHost
+              value={settings?.local.host}
+              onSave={async (host) => {
+                setSettings(await api().settings.update({ local: { host } }));
+                await refreshProviders();
+              }}
+            />
           </Section>
 
           <Section

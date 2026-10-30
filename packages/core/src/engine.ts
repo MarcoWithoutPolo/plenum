@@ -33,7 +33,9 @@ export class Engine {
   constructor(opts: EngineOptions = {}) {
     this.home = opts.home ?? defaultHome();
     this.store = opts.store ?? new Store(join(this.home, 'conclave.db'));
-    this.adapters = adapterMap(opts.adapters ?? createAdapters());
+    this.adapters = adapterMap(
+      opts.adapters ?? createAdapters({ settings: () => this.store.settings.get() }),
+    );
     const ctx = { store: this.store, adapters: this.adapters, cwd: this.home };
     this.chat = new ChatService(ctx);
     this.council = new Council(ctx);

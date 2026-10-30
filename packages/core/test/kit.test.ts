@@ -8,6 +8,7 @@ import {
   detectVersion,
   failure,
   locateCli,
+  outside,
   recordingExec,
   runCli,
   scrubLine,
@@ -128,5 +129,40 @@ describe('adapter kit', () => {
     expect(locateCli('mycli', { windows: [], unix: [] })).toBe('mycli');
     const here = process.execPath;
     expect(locateCli('node', { windows: [here], unix: [here] })).toBe(here);
+  });
+});
+
+describe('edits outside the working folder', () => {
+  it('fail the run with a clear error', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'conclave-out-'));
+    try {
+      class EditParser extends TypedEventParser {
+        protected on(_type: string, message: Record<string, unknown>): EventBody[] {
+          return [{ type: 'file.edit', path: String(message.path), kind: 'update' }];
+        }
+      }
+      const inside = join(dir, 'a.txt');
+      const elsewhere = join(tmpdir(), 'somewhere-else.txt');
+      const events = [];
+      for await (const e of runCli(
+        'fake',
+        lines([
+          JSON.stringify({ type: 'e', path: inside }),
+          JSON.stringify({ type: 'e', path: elsewhere }),
+        ]),
+        { command: 'x', args: [], cwd: dir },
+        new EditParser(),
+      ))
+        events.push(e);
+      expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
+      expect(events.find((e) => e.type === 'error')).toMatchObject({
+        message: expect.stringContaining('outside its working folder'),
+      });
+      expect(events.at(-1)).toMatchObject({ type: 'done', ok: false });
+      expect(outside('relative/path.txt', dir)).toBe(false);
+      expect(outside(inside, dir)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentEvent, ProviderId } from '@conclave/shared';
 import { streamProcess, type ProcessChunk, type ProcessOptions } from '../../process.js';
 import { limitResetsAt, looksLikeLimit } from './limits.js';
@@ -45,10 +47,21 @@ export async function* runCli(
 
   let stderrTail = '';
   let reportedError = false;
+  let escaped: string | undefined;
   const emit = function* (bodies: EventBody[]) {
     for (const body of bodies) {
       if (body.type === 'error' || body.type === 'rate_limit') reportedError = true;
       yield stamp(body);
+      // An agent only ever writes inside its folder. A CLI that wrote elsewhere fails the run, so
+      // the work is never taken as done (OpenCode once followed an inherited PWD out of it).
+      if (body.type === 'file.edit' && !escaped && process.cwd && outside(body.path, process.cwd)) {
+        escaped = body.path;
+        reportedError = true;
+        yield stamp({
+          type: 'error',
+          message: `It edited a file outside its working folder: ${body.path}. The run is stopped and its work is not used.`,
+        });
+      }
     }
   };
 
@@ -70,10 +83,10 @@ export async function* runCli(
       continue;
     }
 
-    let ok = chunk.code === 0 && !chunk.error && !parser.failed;
+    let ok = chunk.code === 0 && !chunk.error && !parser.failed && !escaped;
     if (parser.finish) {
       yield* emit(parser.finish(ok));
-      ok = ok && !parser.failed;
+      ok = ok && !parser.failed && !escaped;
     }
     if (!ok && !reportedError) {
       const message =
@@ -91,6 +104,29 @@ export async function* runCli(
 }
 
 export const defaultExec: Exec = streamProcess;
+
+/** The real path, so /var and /private/var (macOS) or different letter case (Windows) compare. */
+function real(path: string): string {
+  // CLIs on Windows report backslashes; elsewhere a backslash in a name is almost never meant.
+  let out = resolve(process.platform === 'win32' ? path : path.replace(/\\/g, '/'));
+  try {
+    out = realpathSync.native(out);
+  } catch {
+    try {
+      out = join(realpathSync.native(dirname(out)), basename(out));
+    } catch {
+      // neither exists: compare as written
+    }
+  }
+  return process.platform === 'win32' ? out.toLowerCase() : out;
+}
+
+/** Whether an absolute path lies outside `folder`. Relative paths are the CLI's own: inside. */
+export function outside(path: string, folder: string): boolean {
+  if (!isAbsolute(path)) return false;
+  const rel = relative(real(folder), real(path));
+  return rel.startsWith('..') || isAbsolute(rel);
+}
 
 function lastMeaningfulLine(text: string): string | undefined {
   return text

@@ -31,7 +31,8 @@ describe('AntigravityAdapter (recorded agy 1.4.6 output)', () => {
         command: 'agy',
       }).run({
         prompt: 'x',
-        cwd: '.',
+        // The folder the recording ran in.
+        cwd: '/work',
         role: 'builder',
         readOnly: false,
       }),

@@ -74,6 +74,7 @@ export function pickerProviders(providers: ProviderInfo[]): PickerProvider[] {
       tone: info.limit ? 'warn' : connected ? 'ok' : 'off',
       ...(entry && { billing: BILLING[entry.cost] }),
       effortName: entry?.effortName ?? 'Effort',
+      ...(entry?.effortHint && { effortHint: entry.effortHint }),
       ...(info.defaultModel && { defaultModel: info.defaultModel }),
       models: info.models.map((m) => toPickerModel(info, m, makers)),
       install: {

@@ -46,9 +46,19 @@ export const LimitSettings = z.object({
 });
 export type LimitSettings = z.infer<typeof LimitSettings>;
 
+/** Local models: where Ollama runs. Another computer on your network can serve them. */
+export const LocalSettings = z.object({
+  host: z
+    .string()
+    .regex(/^https?:\/\/[\w.[\]:-]+(?::\d+)?\/?$/, 'An address like http://127.0.0.1:11434')
+    .default('http://127.0.0.1:11434'),
+});
+export type LocalSettings = z.infer<typeof LocalSettings>;
+
 /** App-wide settings, stored in the settings table. Unknown or missing keys get defaults. */
 export const AppSettings = z.object({
   notifications: NotificationSettings.prefault({}),
   limits: LimitSettings.prefault({}),
+  local: LocalSettings.prefault({}),
 });
 export type AppSettings = z.infer<typeof AppSettings>;

@@ -73,9 +73,11 @@ function registerSettings(engine: Engine, brains: BrainManager): void {
       v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
     const notifications = section(patch?.notifications);
     const limits = section(patch?.limits);
+    const local = section(patch?.local);
     const next = engine.store.settings.update({
       ...(notifications && { notifications }),
       ...(limits && { limits }),
+      ...(local && { local }),
     } as SettingsPatch);
     // Limits changed (Pause everything off, quiet hours, caps): waiting projects look again now.
     if (limits) brains.wake();

@@ -371,6 +371,10 @@ export interface ConclaveApi {
     get(): Promise<AppSettings>;
     update(patch: SettingsPatch): Promise<AppSettings>;
   };
+  local: {
+    /** Download a model into Ollama, after the user confirms (several GB). */
+    pull(model: string): Promise<{ ok: boolean; cancelled?: boolean; error?: string }>;
+  };
   /** A notification was clicked: open this project. */
   onOpenProject(listener: (projectId: string) => void): () => void;
   onInstallLog(listener: (log: InstallLog) => void): () => void;
@@ -388,6 +392,7 @@ export const IPC = {
   accountsList: 'accounts:list',
   accountsSignIn: 'accounts:sign-in',
   accountsInstall: 'accounts:install',
+  localPull: 'local:pull',
   accountsQuotas: 'accounts:quotas',
   threadsList: 'threads:list',
   threadsGet: 'threads:get',

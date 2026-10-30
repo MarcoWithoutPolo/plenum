@@ -97,6 +97,9 @@ const api: ConclaveApi = {
   usage: {
     report: () => invoke(IPC.usageReport),
   },
+  local: {
+    pull: (model) => invoke(IPC.localPull, model),
+  },
   settings: {
     get: () => invoke(IPC.settingsGet),
     update: (patch) => invoke(IPC.settingsUpdate, patch),

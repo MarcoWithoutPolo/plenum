@@ -39,6 +39,8 @@ export interface ProviderEntry {
   effortName?: string;
   /** One sentence on what it is, for "AIs you can add". */
   blurb?: string;
+  /** Shown in the picker instead of an effort control, for AIs without effort levels. */
+  effortHint?: string;
 }
 
 export const PROVIDERS: readonly ProviderEntry[] = [
@@ -161,6 +163,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     laneCap: 1,
     prefer: { planner: 7, builder: 7, reviewer: 7, chat: 7 },
     effortName: 'Context',
+    effortHint:
+      'No effort setting: Conclave gives each job the context it needs (8k to chat, 16k to review, 32k to build).',
     blurb: 'Models on your own computer through Ollama: free, private, offline.',
   },
   {
@@ -216,3 +220,33 @@ export function firstPreferred<T extends { provider: string }>(
 export function preferred(job: keyof ProviderEntry['prefer']): string[] {
   return [...PROVIDERS].sort((a, b) => a.prefer[job] - b.prefer[job]).map((p) => p.id);
 }
+
+/** A short list of models to download for local use, with what each is good for. */
+export const LOCAL_LIBRARY: readonly { id: string; label: string; sizeGb: number; use: string }[] =
+  [
+    { id: 'llama3.2:3b', label: 'Llama 3.2 3B', sizeGb: 2, use: 'Quick answers on any machine' },
+    {
+      id: 'qwen2.5-coder:7b',
+      label: 'Qwen2.5 Coder 7B',
+      sizeGb: 4.7,
+      use: 'Code questions and reviews',
+    },
+    {
+      id: 'gpt-oss:20b',
+      label: 'GPT-OSS 20B',
+      sizeGb: 13.8,
+      use: 'Builds through OpenCode (uses tools well); needs about 16 GB of graphics memory',
+    },
+    {
+      id: 'qwen2.5-coder:32b',
+      label: 'Qwen2.5 Coder 32B',
+      sizeGb: 20,
+      use: 'Stronger code answers; 24 GB GPU',
+    },
+    {
+      id: 'gpt-oss:120b',
+      label: 'GPT-OSS 120B',
+      sizeGb: 65,
+      use: 'For big machines: 80 GB of GPU memory',
+    },
+  ];

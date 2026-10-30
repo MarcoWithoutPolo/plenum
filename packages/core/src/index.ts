@@ -10,6 +10,7 @@ export * from './adapters/antigravity.js';
 export * from './adapters/cursor.js';
 export * from './adapters/copilot.js';
 export * from './adapters/grok.js';
+export * from './adapters/local.js';
 export * from './adapters/registry.js';
 export * from './collect.js';
 export * from './process.js';
