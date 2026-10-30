@@ -27,6 +27,13 @@
   --antigravity: #3b7de0;
   --gemini: #3b7de0;
   --fake: #8a8a8a;
+  /* v0.9 providers; checked with the dataviz palette validator in light and dark. */
+  --copilot: #c2569b;
+  --cursor: #b38600;
+  --local: #7e57c2;
+  --opencode: #7e57c2;
+  --amp: #6d8f00;
+  --grok: #a0522d;
   --shadow: 0 1px 2px rgb(28 27 25 / 0.04), 0 4px 16px rgb(28 27 25 / 0.05);
   color-scheme: light;
 }
