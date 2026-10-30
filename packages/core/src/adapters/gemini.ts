@@ -11,7 +11,7 @@ import {
   type EventBody,
   type Exec,
   type LineParser,
-} from './cli.js';
+} from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
 
 /**

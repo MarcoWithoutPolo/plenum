@@ -25,7 +25,8 @@
     "typecheck": "tsc -b && npm run -s -w @conclave/desktop typecheck",
     "desktop": "npm run -w @conclave/desktop dev",
     "desktop:build": "npm run -w @conclave/desktop build",
-    "e2e": "npm run desktop:build && npm run -w @conclave/desktop e2e"
+    "e2e": "npm run desktop:build && npm run -w @conclave/desktop e2e",
+    "record-fixture": "tsx --conditions=development apps/cli/src/record-fixture.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

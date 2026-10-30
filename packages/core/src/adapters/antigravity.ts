@@ -1,23 +1,29 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type { AgentEvent, ProviderStatus, Role } from '@conclave/shared';
-import { isNotFound, runCommand } from '../process.js';
+import { runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
 import {
   assertSafeEffort,
   assertSafeModel,
+  assertSafeSession,
   defaultExec,
+  detectVersion,
+  homeDirs,
   isRecord,
+  locateCli,
   looksLikeLimit,
   num,
   runCli,
+  safeImage,
   str,
+  tokenUsage,
   type CliAdapterOptions,
   type EventBody,
   type Exec,
   type LineParser,
-} from './cli.js';
+} from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
 
 /**
@@ -66,37 +72,25 @@ export class AntigravityAdapter implements Adapter {
 
   /** `agy` on PATH, or where its installer puts it (PATH only updates in new terminals). */
   private get command(): string {
-    if (this.explicitCommand) return this.explicitCommand;
-    const candidates =
-      process.platform === 'win32'
-        ? [
-            join(
-              process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'),
-              'agy',
-              'bin',
-              'agy.exe',
-            ),
-          ]
-        : [join(homedir(), '.local', 'bin', 'agy'), '/usr/local/bin/agy'];
-    return candidates.find((c) => existsSync(c)) ?? 'agy';
+    return (
+      this.explicitCommand ??
+      locateCli('agy', {
+        windows: [join(homeDirs.localAppData, 'agy', 'bin', 'agy.exe')],
+        unix: [join(homeDirs.home, '.local', 'bin', 'agy'), '/usr/local/bin/agy'],
+      })
+    );
   }
 
   async detect(): Promise<ProviderStatus> {
-    const version = await runCommand(this.command, ['--version']);
-    if (version.code !== 0) {
-      return {
-        provider: 'antigravity',
-        installed: false,
-        auth: 'unknown',
-        detail: isNotFound(version)
-          ? 'Antigravity CLI (agy) not found'
-          : version.stderr.trim().split('\n')[0],
-      };
-    }
+    const found = await detectVersion('antigravity', this.command, {
+      missing: 'Antigravity CLI (agy) not found',
+      version: (out) => out.split(/\s+/).at(-1),
+    });
+    if (!found.installed) return found.status;
     const status: ProviderStatus = {
       provider: 'antigravity',
       installed: true,
-      version: version.stdout.trim().split(/\s+/).at(-1) ?? version.stdout.trim(),
+      version: found.version,
       auth: 'unknown',
     };
     // Listing models needs a signed-in account (or an API key), and costs no usage.
@@ -211,8 +205,7 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
   // Slash-command expansion stays on (turning it off makes agy ignore --mode), so a prompt
   // must never start with "/".
   if (prompt.trimStart().startsWith('/')) prompt = `Request: ${prompt}`;
-  if (request.sessionId && !/^[\w-]+$/.test(request.sessionId))
-    throw new Error('Invalid session id');
+  assertSafeSession(request.sessionId);
   const args = [
     // agy reads the prompt as --print's value, so the two stay together.
     `--print=${prompt}`,
@@ -225,13 +218,6 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     ...extra,
   ];
   return { args, cleanup };
-}
-
-function safeImage(path: string): string {
-  if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
-    throw new Error(`Not a screenshot path: ${path}`);
-  }
-  return path;
 }
 
 export class AntigravityParser implements LineParser {
@@ -314,11 +300,11 @@ export class AntigravityParser implements LineParser {
     const output = (num(usage.output_tokens) ?? 0) + (num(usage.thinking_tokens) ?? 0);
     out.push({
       type: 'usage',
-      usage: {
-        ...(input !== undefined && { inputTokens: input + (cached ?? 0) }),
-        ...(cached !== undefined && { cachedInputTokens: cached }),
-        outputTokens: output,
-      },
+      usage: tokenUsage({
+        input: input !== undefined ? input + (cached ?? 0) : undefined,
+        cached,
+        output,
+      }),
     });
     const answer = (str(result.response) ?? this.text).trim();
     const deniedActions = Array.isArray(result.denied_actions) ? result.denied_actions.length : 0;

@@ -1,21 +1,24 @@
-import { dirname, isAbsolute } from 'node:path';
-import type { ProviderStatus, Role } from '@conclave/shared';
+import { dirname } from 'node:path';
+import type { ProviderStatus, Role, Usage } from '@conclave/shared';
 import { safeCommands, type RunPermissions } from './permissions.js';
-import { runCommand, isNotFound } from '../process.js';
+import { runCommand } from '../process.js';
 import {
   assertSafeEffort,
   assertSafeModel,
+  assertSafeSession,
+  ClaudeStreamParser,
   defaultExec,
-  looksLikeLimit,
+  detectVersion,
   isRecord,
   num,
   runCli,
+  safeImage,
   str,
+  tokenUsage,
   type CliAdapterOptions,
   type EventBody,
   type Exec,
-  type LineParser,
-} from './cli.js';
+} from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
 
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -49,19 +52,14 @@ export class ClaudeAdapter implements Adapter {
   }
 
   async detect(): Promise<ProviderStatus> {
-    const version = await runCommand(this.command, ['--version']);
-    if (version.code !== 0) {
-      return {
-        provider: 'claude',
-        installed: false,
-        auth: 'unknown',
-        detail: isNotFound(version) ? 'Claude Code CLI not found on PATH' : version.stderr.trim(),
-      };
-    }
+    const found = await detectVersion('claude', this.command, {
+      missing: 'Claude Code CLI not found on PATH',
+    });
+    if (!found.installed) return found.status;
     const status: ProviderStatus = {
       provider: 'claude',
       installed: true,
-      version: version.stdout.trim().split(/\s+/)[0] ?? version.stdout.trim(),
+      version: found.version,
       auth: 'unknown',
     };
     const auth = await runCommand(this.command, ['auth', 'status']);
@@ -123,10 +121,8 @@ export function claudeArgs(request: RunRequest): string[] {
   ];
   if (request.model) args.push('--model', request.model);
   if (request.effort) args.push('--effort', request.effort);
-  if (request.sessionId) {
-    if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
-    args.push('--resume', request.sessionId);
-  }
+  assertSafeSession(request.sessionId);
+  if (request.sessionId) args.push('--resume', request.sessionId);
   args.push(...toolArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions));
   // Screenshots live outside the worktree: let it read their folders.
   for (const dir of new Set((request.images ?? []).map((p) => dirname(safeImage(p))))) {
@@ -173,25 +169,12 @@ export function claudePermissionGap(permissions: RunPermissions): string | undef
   return undefined;
 }
 
-export class ClaudeParser implements LineParser {
-  failed = false;
+export class ClaudeParser extends ClaudeStreamParser {
+  protected readonly cliName = 'Claude Code';
   private readonly streamedMessages = new Set<string>();
 
-  parse(message: unknown): EventBody[] {
-    if (!isRecord(message)) return [];
-    // Ignore subagent traffic; only the main conversation is the answer.
-    if (message.parent_tool_use_id) return [];
-
+  protected event(message: Record<string, unknown>): EventBody[] {
     switch (message.type) {
-      case 'system':
-        if (message.subtype === 'init' && str(message.session_id)) {
-          const model = str(message.model);
-          return [
-            { type: 'session', sessionId: str(message.session_id)!, ...(model && { model }) },
-          ];
-        }
-        return [];
-
       case 'stream_event': {
         const event = message.event;
         if (!isRecord(event) || event.type !== 'content_block_delta' || !isRecord(event.delta))
@@ -208,9 +191,6 @@ export class ClaudeParser implements LineParser {
 
       case 'rate_limit_event':
         return rateLimit(message.rate_limit_info);
-
-      case 'result':
-        return this.result(message);
 
       default:
         return [];
@@ -244,41 +224,19 @@ export class ClaudeParser implements LineParser {
     return out;
   }
 
-  private result(message: Record<string, unknown>): EventBody[] {
-    const out: EventBody[] = [];
-    const usage = isRecord(message.usage) ? message.usage : {};
-    // Same convention as OpenAI: inputTokens counts every input token, cachedInputTokens the cache reads among them.
+  protected usage(result: Record<string, unknown>): Usage {
+    const usage = isRecord(result.usage) ? result.usage : {};
+    // Claude counts cache writes and reads apart from input_tokens; Conclave's inputTokens is all of them.
     const cached = num(usage.cache_read_input_tokens);
-    const input =
-      (num(usage.input_tokens) ?? 0) +
-      (num(usage.cache_creation_input_tokens) ?? 0) +
-      (cached ?? 0);
-    const output = num(usage.output_tokens);
-    const cost = num(message.total_cost_usd);
-    out.push({
-      type: 'usage',
-      usage: {
-        inputTokens: input,
-        ...(cached !== undefined && { cachedInputTokens: cached }),
-        ...(output !== undefined && { outputTokens: output }),
-        ...(cost !== undefined && { costUsd: cost }),
-      },
+    return tokenUsage({
+      input:
+        (num(usage.input_tokens) ?? 0) +
+        (num(usage.cache_creation_input_tokens) ?? 0) +
+        (cached ?? 0),
+      cached,
+      output: num(usage.output_tokens),
+      costUsd: num(result.total_cost_usd),
     });
-    const text = str(message.result) ?? '';
-    if (
-      message.is_error === true ||
-      (message.subtype !== undefined && message.subtype !== 'success')
-    ) {
-      this.failed = true;
-      const reason = text || `Claude Code stopped: ${String(message.subtype)}`;
-      out.push({
-        type: looksLikeLimit(reason) ? 'rate_limit' : 'error',
-        message: reason,
-      });
-    } else {
-      out.push({ type: 'message.done', text });
-    }
-    return out;
   }
 }
 
@@ -307,12 +265,4 @@ function rateLimit(info: unknown): EventBody[] {
     });
   }
   return out;
-}
-
-/** An image path from Conclave's own data folder: absolute, a PNG, nothing a shell could misread. */
-function safeImage(path: string): string {
-  if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
-    throw new Error(`Not a screenshot path: ${path}`);
-  }
-  return path;
 }

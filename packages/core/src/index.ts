@@ -1,6 +1,6 @@
 export * from './adapters/types.js';
 export * from './adapters/permissions.js';
-export * from './adapters/cli.js';
+export * from './adapters/kit/index.js';
 export * from './adapters/fake.js';
 export * from './adapters/claude.js';
 export * from './adapters/codex.js';

@@ -1,21 +1,24 @@
-import { isAbsolute } from 'node:path';
 import type { AgentEvent, ProviderStatus } from '@conclave/shared';
-import { runCommand, isNotFound } from '../process.js';
+import { runCommand } from '../process.js';
 import {
   assertSafeEffort,
   assertSafeModel,
+  assertSafeSession,
   defaultExec,
+  detectVersion,
   limitResetsAt,
   looksLikeLimit,
   isRecord,
   num,
   runCli,
+  safeImage,
   str,
+  tokenUsage,
   type CliAdapterOptions,
   type EventBody,
   type Exec,
   type LineParser,
-} from './cli.js';
+} from './kit/index.js';
 import { codexHome, readCodexDefaults, readCodexLimits, readCodexModels } from './codex-home.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
 
@@ -52,19 +55,15 @@ export class CodexAdapter implements Adapter {
   }
 
   async detect(): Promise<ProviderStatus> {
-    const version = await runCommand(this.command, ['--version']);
-    if (version.code !== 0) {
-      return {
-        provider: 'codex',
-        installed: false,
-        auth: 'unknown',
-        detail: isNotFound(version) ? 'Codex CLI not found on PATH' : version.stderr.trim(),
-      };
-    }
+    const found = await detectVersion('codex', this.command, {
+      missing: 'Codex CLI not found on PATH',
+      version: (out) => out.replace(/^codex-cli\s+/, ''),
+    });
+    if (!found.installed) return found.status;
     const status: ProviderStatus = {
       provider: 'codex',
       installed: true,
-      version: version.stdout.trim().replace(/^codex-cli\s+/, ''),
+      version: found.version,
       auth: 'unknown',
     };
     const auth = await runCommand(this.command, ['login', 'status']);
@@ -140,10 +139,8 @@ export function codexArgs(request: RunRequest): string[] {
   assertSafeModel(request.model);
   assertSafeEffort(request.effort);
   const args = ['exec'];
-  if (request.sessionId) {
-    if (!/^[\w-]+$/.test(request.sessionId)) throw new Error('Invalid session id');
-    args.push('resume', request.sessionId);
-  }
+  assertSafeSession(request.sessionId);
+  if (request.sessionId) args.push('resume', request.sessionId);
   // Before the other flags, so a multi-value --image never swallows them.
   if (!request.sessionId)
     for (const img of request.images ?? []) args.push('--image', safeImage(img));
@@ -242,14 +239,7 @@ ${text}`
       const input = num(usage.input_tokens);
       const cached = num(usage.cached_input_tokens);
       const output = (num(usage.output_tokens) ?? 0) + (num(usage.reasoning_output_tokens) ?? 0);
-      out.push({
-        type: 'usage',
-        usage: {
-          ...(input !== undefined && { inputTokens: input }),
-          ...(cached !== undefined && { cachedInputTokens: cached }),
-          outputTokens: output,
-        },
-      });
+      out.push({ type: 'usage', usage: tokenUsage({ input, cached, output }) });
     }
     return out;
   }
@@ -280,12 +270,4 @@ function unwrapApiError(raw: string | undefined): string | undefined {
     // not JSON, use as is
   }
   return raw;
-}
-
-/** An image path from Conclave's own data folder: absolute, a PNG, nothing a shell could misread. */
-function safeImage(path: string): string {
-  if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
-    throw new Error(`Not a screenshot path: ${path}`);
-  }
-  return path;
 }

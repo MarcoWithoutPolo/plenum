@@ -14,7 +14,7 @@ import type {
   TaskFailure,
 } from '@conclave/shared';
 import { IN_FLIGHT, PROVIDERS, visualIssueLine } from '@conclave/shared';
-import { limitResetsAt, looksLikeLimit } from '../adapters/cli.js';
+import { limitResetsAt, looksLikeLimit } from '../adapters/kit/index.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
 import { collect, type RunResult } from '../collect.js';

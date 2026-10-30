@@ -2,6 +2,8 @@ import { PROVIDERS, type ProviderId } from '@conclave/shared';
 import { ClaudeAdapter } from './claude.js';
 import { CodexAdapter } from './codex.js';
 import { AntigravityAdapter } from './antigravity.js';
+import { GeminiAdapter } from './gemini.js';
+import type { CliAdapterOptions } from './kit/index.js';
 import type { Adapter } from './types.js';
 
 /** npm packages of the official CLIs, for guided installs (from the provider registry). */
@@ -9,11 +11,23 @@ export const INSTALL_PACKAGES: Partial<Record<ProviderId, string>> = Object.from
   PROVIDERS.flatMap((p) => (p.install?.npm ? [[p.id, p.install.npm]] : [])),
 );
 
+/** How to build each real adapter; options let tests and the fixture recorder replace spawning. */
+export const ADAPTER_FACTORIES: Partial<Record<ProviderId, (opts?: CliAdapterOptions) => Adapter>> =
+  {
+    claude: (opts) => new ClaudeAdapter(opts),
+    codex: (opts) => new CodexAdapter(opts),
+    antigravity: (opts) => new AntigravityAdapter(opts),
+    gemini: (opts) => new GeminiAdapter(opts),
+  };
+
 /** The real providers Conclave knows about, in display order. */
 export function createAdapters(): Adapter[] {
-  // Gemini CLI stays available for API-key users (see adapters/gemini.ts) but isn't listed:
-  // Google retired it for Free/Pro/Ultra accounts in June 2026 in favor of Antigravity.
-  return [new ClaudeAdapter(), new CodexAdapter(), new AntigravityAdapter()];
+  // Hidden registry entries (Gemini CLI: Google retired it for Free/Pro/Ultra accounts in June
+  // 2026 in favor of Antigravity) stay buildable but aren't listed.
+  return PROVIDERS.flatMap((p) => {
+    const make = ADAPTER_FACTORIES[p.id];
+    return make && !p.hidden ? [make()] : [];
+  });
 }
 
 export function adapterMap(adapters: Adapter[]): Map<ProviderId, Adapter> {
