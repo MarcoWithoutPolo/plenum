@@ -1,0 +1,32 @@
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"thought","data":"The"}
+{"type":"thought","data":" user"}
+{"type":"thought","data":" wants"}
+{"type":"thought","data":" me"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" reply"}
+{"type":"thought","data":" with"}
+{"type":"thought","data":" exactly"}
+{"type":"thought","data":" \""}
+{"type":"thought","data":"pong"}
+{"type":"thought","data":"\"."}
+{"type":"thought","data":" This"}
+{"type":"thought","data":" is"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" simple"}
+{"type":"thought","data":" request"}
+{"type":"thought","data":" -"}
+{"type":"thought","data":" I"}
+{"type":"thought","data":" should"}
+{"type":"thought","data":" just"}
+{"type":"thought","data":" reply"}
+{"type":"thought","data":" with"}
+{"type":"thought","data":" that"}
+{"type":"thought","data":" exact"}
+{"type":"thought","data":" text"}
+{"type":"thought","data":"."}
+{"type":"text","data":"pong"}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"usage","usage":{"input_tokens":13566,"output_tokens":27,"cache_read_input_tokens":1664,"cache_creation_input_tokens":0,"reasoning_tokens":26},"signature":"DzT2JCAZkX0+CAagA2EWr/Sb2JOM8JBtmmRkEvPGfUH9jbnNdc6ZhFIX6BlZra3vJV1hR1MN0ZffhINq9nRnbbIUhooSC8jwI+eTz3BL/n4QIG8uBGMQv5hDpK6r5P2TV8rsLpnXICgZNQVljkFc+V/IV911+I3fJBobdnEURIbN+By845AHC+VuVidqmsFl"}
+{"type":"end","stopReason":"end_turn","sessionId":"01a18d6a-fa7b-7703-8241-74fc10388a98","requestId":"01e26ef1-a0bd-4cf6-9104-121ccb729674","cwd":"<cwd>","usage":{"input_tokens":13566,"cache_read_input_tokens":1664,"cache_creation_input_tokens":0,"output_tokens":27,"reasoning_tokens":26,"total_tokens":15257},"num_turns":1,"total_cost_usd":0.028126,"total_cost_usd_ticks":281260000,"modelUsage":{"grok-4.7":{"inputTokens":13566,"outputTokens":27,"cacheReadInputTokens":1664,"cacheCreationInputTokens":0,"modelCalls":1,"costUSD":0.028126}}}

@@ -26,6 +26,12 @@ export function AccountsScreen() {
     void refresh();
   }, []);
 
+  // Installed AIs first (connected before signed out), then the ones you could add.
+  const yours = providers
+    .filter((p) => p.installed)
+    .sort((a, b) => Number(b.auth === 'signed_in') - Number(a.auth === 'signed_in'));
+  const toAdd = providers.filter((p) => !p.installed);
+
   const recheck = async () => {
     setChecking(true);
     await Promise.all([refresh(), checkGithub()]);
@@ -60,7 +66,7 @@ export function AccountsScreen() {
           </div>
 
           <div className="mt-5 flex flex-col gap-3">
-            {providers.map((p) => (
+            {yours.map((p) => (
               <ProviderCard
                 key={p.provider}
                 info={p}
@@ -69,6 +75,23 @@ export function AccountsScreen() {
               />
             ))}
           </div>
+
+          {toAdd.length > 0 && (
+            <>
+              <h2 className="mt-8 text-[11.5px] font-semibold tracking-wide text-faint uppercase">
+                AIs you can add
+              </h2>
+              <p className="mt-1 text-[12.5px] text-muted">
+                Each one joins chats, councils and project teams once its CLI is installed and
+                signed in to your account.
+              </p>
+              <div className="mt-3 flex flex-col gap-3">
+                {toAdd.map((p) => (
+                  <ProviderCard key={p.provider} info={p} quotas={[]} onChanged={recheck} />
+                ))}
+              </div>
+            </>
+          )}
 
           <h2 className="mt-8 text-[11.5px] font-semibold tracking-wide text-faint uppercase">
             Code hosting
@@ -105,7 +128,8 @@ function ProviderCard({
   );
 
   const signedIn = info.auth === 'signed_in';
-  const setup = providerEntry(info.provider)?.install;
+  const entry = providerEntry(info.provider);
+  const setup = entry?.install;
   const status = !info.installed
     ? { tone: 'neutral' as const, text: 'Not installed' }
     : signedIn
@@ -155,11 +179,13 @@ function ProviderCard({
             {info.version && <span className="text-[12px] text-faint">v{info.version}</span>}
           </div>
           <p className="selectable mt-0.5 text-[13px] text-muted">
-            {info.detail ??
-              (info.installed
-                ? info.loginHint
-                : `Install the official CLI to use ${info.displayName}.`)}
+            {info.installed
+              ? (info.detail ?? info.loginHint)
+              : (entry?.blurb ?? `Install the official CLI to use ${info.displayName}.`)}
           </p>
+          {!info.installed && entry && (
+            <p className="mt-1 text-[12px] text-faint">{COST[entry.cost]}</p>
+          )}
           {note && <p className="mt-2 text-[12.5px] text-accent-ink">{note}</p>}
           {signedIn && info.limit && (
             <p className="mt-2 flex items-start gap-1.5 text-[12.5px] text-warn">
@@ -217,6 +243,12 @@ function ProviderCard({
     </section>
   );
 }
+
+const COST = {
+  plan: 'Uses your own subscription with that company',
+  credits: 'Pays per use, from credits you buy',
+  'free-local': 'Free: runs on your own hardware',
+} as const;
 
 /** GitHub through the official gh CLI: optional, for cloning, issues and pull requests. */
 function GitHubCard({ status }: { status: GitHubStatus | null }) {

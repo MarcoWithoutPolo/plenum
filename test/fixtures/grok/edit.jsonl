@@ -1,0 +1,248 @@
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"thought","data":"The"}
+{"type":"thought","data":" user"}
+{"type":"thought","data":" wants"}
+{"type":"thought","data":" me"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":":\n"}
+{"type":"thought","data":"1"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" Add"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" line"}
+{"type":"thought","data":" '"}
+{"type":"thought","data":"Hello"}
+{"type":"thought","data":" from"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" test"}
+{"type":"thought","data":"'"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" end"}
+{"type":"thought","data":" of"}
+{"type":"thought","data":" README"}
+{"type":"thought","data":".md"}
+{"type":"text","data":"I'll"}
+{"type":"text","data":" add"}
+{"type":"text","data":" that"}
+{"type":"text","data":" line"}
+{"type":"text","data":" to"}
+{"type":"text","data":" the"}
+{"type":"text","data":" end"}
+{"type":"text","data":" of"}
+{"type":"text","data":" `"}
+{"type":"text","data":"README"}
+{"type":"text","data":".md"}
+{"type":"text","data":"`,"}
+{"type":"text","data":" then"}
+{"type":"text","data":" run"}
+{"type":"text","data":" `"}
+{"type":"text","data":"npm"}
+{"type":"text","data":" test"}
+{"type":"text","data":"`."}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"usage","usage":{"input_tokens":13591,"output_tokens":118,"cache_read_input_tokens":1664,"cache_creation_input_tokens":0,"reasoning_tokens":52},"signature":"jl18dHU2/rLiKi93ZUWgqklfYeQA6UBRIt4tPtqGajqrxV3SOrqR2OiWKxTaVYq1AOxFKYAbzrSya4SpUgqvh5aRQrxyHNwsupSWShMeHlOlVz17vyFSbwyp5dziw1UW4K+mzRrtitm4TAlUXc+neC9AplyJ+mAXHtIYreI7FZOQoQM7xIFvlRktYuQ1HIbDlitW3SoTb6Rb4InYCmp5205m5qD2OY91QcQ7AGGsX/fTtR3btAtY14tRZVSV79mGZou/tXCSxv7jwxfCHLgOaFMuNH5O+46Crg5ldOZvZKkfKzTW8T9Csj1Mz+bPgRR3uw"}
+{"type":"tool_call","toolCallId":"call-8f5f76cd-4ddf-422a-be82-93c20f346453-0","title":"list_dir","kind":"list","status":"pending","toolName":"list_dir","rawInput":{"target_directory":"<cwd>"},"content":[],"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-8f5f76cd-4ddf-422a-be82-93c20f346453-0","status":null,"content":[],"rawOutput":null,"locations":[{"path":"<cwd>"}]}
+{"type":"tool_call","toolCallId":"call-8f5f76cd-4ddf-422a-be82-93c20f346453-1","title":"grep","kind":"search","status":"pending","toolName":"grep","rawInput":{"pattern":".","glob":"README.md"},"content":[],"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-8f5f76cd-4ddf-422a-be82-93c20f346453-1","status":null,"content":[],"rawOutput":null,"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-8f5f76cd-4ddf-422a-be82-93c20f346453-0","status":"completed","content":[],"rawOutput":{"type":"ListDir","Content":{"content":"- <cwd>/\n  - README.md","absolute_root_path":"<cwd>"}},"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-8f5f76cd-4ddf-422a-be82-93c20f346453-1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"found 2 matches"}}],"rawOutput":{"type":"GrepSearch","stdout":[60,119,111,114,107,115,112,97,99,101,95,114,101,115,117,108,116,32,119,111,114,107,115,112,97,99,101,95,112,97,116,104,61,34,67,58,92,85,115,101,114,115,92,77,97,114,118,105,110,92,65,112,112,68,97,116,97,92,76,111,99,97,108,92,84,101,109,112,92,99,111,110,99,108,97,118,101,45,114,101,99,111,114,100,45,106,51,76,73,116,99,34,62,10,70,111,117,110,100,32,50,32,109,97,116,99,104,105,110,103,32,108,105,110,101,115,10,67,58,92,85,115,101,114,115,92,77,97,114,118,105,110,92,65,112,112,68,97,116,97,92,76,111,99,97,108,92,84,101,109,112,92,99,111,110,99,108,97,118,101,45,114,101,99,111,114,100,45,106,51,76,73,116,99,92,82,69,65,68,77,69,46,109,100,10,49,58,35,32,83,97,109,112,108,101,10,51,58,65,32,115,99,114,97,116,99,104,32,102,111,108,100,101,114,32,102,111,114,32,97,32,114,101,99,111,114,100,101,100,32,114,117,110,46,10,60,47,119,111,114,107,115,112,97,99,101,95,114,101,115,117,108,116,62],"stderr":[],"exit_code":0,"match_count":2,"file_matches":[{"path":"<cwd>\\README.md","matches":[{"line_number":1,"content":"# Sample"},{"line_number":3,"content":"A scratch folder for a recorded run."}]}]},"locations":[]}
+{"type":"thought","data":"I"}
+{"type":"thought","data":" need"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" read"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" README"}
+{"type":"thought","data":".md"}
+{"type":"thought","data":" and"}
+{"type":"thought","data":" append"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" line"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" Let"}
+{"type":"thought","data":" me"}
+{"type":"thought","data":" read"}
+{"type":"thought","data":" it"}
+{"type":"thought","data":" first"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" get"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" exact"}
+{"type":"thought","data":" content"}
+{"type":"thought","data":"."}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"usage","usage":{"input_tokens":270,"output_tokens":61,"cache_read_input_tokens":15232,"cache_creation_input_tokens":0,"reasoning_tokens":23},"signature":"vA68QZqnx3lGQUXujXn5fdRp4egHKJna87jf9dQ2Os8C967ic1e1cIyrBthdgJkEm2OJFyb4uJNLExo9eu8ho7u5TRdzgs7q70CtwzE6Sy/cRISGwMn4YVIOkHjpWKHrOkrYWb2o7tb9CbP6k5+lyjbP8GQ1TYDPr+qqpQ"}
+{"type":"tool_call","toolCallId":"call-052e0241-354d-4ceb-8104-ded9fa3f6c4f-2","title":"read_file","kind":"read","status":"pending","toolName":"read_file","rawInput":{"target_file":"<cwd>\\README.md"},"content":[],"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-052e0241-354d-4ceb-8104-ded9fa3f6c4f-2","status":null,"content":[],"rawOutput":null,"locations":[{"path":"<cwd>\\README.md"}]}
+{"type":"tool_call_update","toolCallId":"call-052e0241-354d-4ceb-8104-ded9fa3f6c4f-2","status":"completed","content":[{"type":"content","content":{"type":"text","text":"1→# Sample\n\nA scratch folder for a recorded run.\n"}}],"rawOutput":{"type":"ReadFile","FileContent":{"content":"1→# Sample\n\nA scratch folder for a recorded run.\n","content_concise":"1→# Sample\n\nA scratch folder for a recorded run.\n","absolute_path":"<cwd>\\README.md","offset":null,"raw_output":"# Sample\n\nA scratch folder for a recorded run.\n","total_lines":3}},"locations":[]}
+{"type":"thought","data":"I'll"}
+{"type":"thought","data":" append"}
+{"type":"thought","data":" \""}
+{"type":"thought","data":"Hello"}
+{"type":"thought","data":" from"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" test"}
+{"type":"thought","data":"\""}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" end"}
+{"type":"thought","data":" of"}
+{"type":"thought","data":" README"}
+{"type":"thought","data":".md"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" The"}
+{"type":"thought","data":" file"}
+{"type":"thought","data":" ends"}
+{"type":"thought","data":" at"}
+{"type":"thought","data":" line"}
+{"type":"thought","data":" "}
+{"type":"thought","data":"3"}
+{"type":"thought","data":" with"}
+{"type":"thought","data":" \""}
+{"type":"thought","data":"A"}
+{"type":"thought","data":" scratch"}
+{"type":"thought","data":" folder"}
+{"type":"thought","data":" for"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" recorded"}
+{"type":"thought","data":" run"}
+{"type":"thought","data":".\""}
+{"type":"thought","data":" I"}
+{"type":"thought","data":" should"}
+{"type":"thought","data":" add"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" newline"}
+{"type":"thought","data":" and"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" new"}
+{"type":"thought","data":" line"}
+{"type":"thought","data":".\n"}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"usage","usage":{"input_tokens":96,"output_tokens":122,"cache_read_input_tokens":15488,"cache_creation_input_tokens":0,"reasoning_tokens":47},"signature":"LDu20hSaVEwTR5r0GWaBc03gOmb4+iiZ/9umvAK+hsgSu6fin8pMpHzD3acE+zFnX+mpQP55Yu/u1BhJA6iOwebvXMgTFsSh6Fi4rtqKDl+kEeit58eM4xhdO9Xk5/DJIB8uJr5tE9BYv9beHyn8EmxmC9yVC0U2G5oSvkuRE0QgbGk2UhixKDNpPoLE60b236FlNkJkygm1Gf68Ry6KHjPkDyymbjBRP3zBGKKXIBWQ7/SkPAwroPhUxdbEznCcwHxfyVvWOKLV83LT2TCRU3GIqPdO/84"}
+{"type":"tool_call","toolCallId":"call-0b9b38b2-8aaa-448d-b19b-a4896de0c81e-3","title":"search_replace","kind":"edit","status":"pending","toolName":"search_replace","rawInput":{"file_path":"<cwd>\\README.md","old_string":"# Sample\n\nA scratch folder for a recorded run.","new_string":"# Sample\n\nA scratch folder for a recorded run.\nHello from the test\n"},"content":[],"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-0b9b38b2-8aaa-448d-b19b-a4896de0c81e-3","status":null,"content":[{"type":"diff","path":"<cwd>\\README.md","oldText":"# Sample\n\nA scratch folder for a recorded run.","newText":"# Sample\n\nA scratch folder for a recorded run.\nHello from the test\n","_meta":{"old_line":1,"new_line":1}}],"rawOutput":null,"locations":[{"path":"<cwd>\\README.md"}]}
+{"type":"tool_call_update","toolCallId":"call-0b9b38b2-8aaa-448d-b19b-a4896de0c81e-3","status":"completed","content":[{"type":"diff","path":"<cwd>\\README.md","oldText":"# Sample\n\nA scratch folder for a recorded run.","newText":"# Sample\n\nA scratch folder for a recorded run.\nHello from the test\n","_meta":{"details":[{"old_string":"# Sample\n\nA scratch folder for a recorded run.","old_line":1,"new_string":"# Sample\n\nA scratch folder for a recorded run.\nHello from the test\n","new_line":1,"context_before":"","context_after":"\n","line_prefix":""}]}}],"rawOutput":{"type":"SearchReplace","EditsApplied":{"old_string":"# Sample\n\nA scratch folder for a recorded run.","new_string":"# Sample\n\nA scratch folder for a recorded run.\nHello from the test\n","tool_output_for_prompt":"The file <cwd>\\README.md has been updated successfully.","tool_output_for_prompt_concise":"The file <cwd>\\README.md has been updated.","absolute_path":"<cwd>\\README.md","edits":{"details":[{"old_string":"# Sample\n\nA scratch folder for a recorded run.","old_line":1,"new_string":"# Sample\n\nA scratch folder for a recorded run.\nHello from the test\n","new_line":1,"context_before":"","context_after":"\n","line_prefix":""}]}}},"locations":[]}
+{"type":"thought","data":"Now"}
+{"type":"thought","data":" run"}
+{"type":"thought","data":" npm"}
+{"type":"thought","data":" test"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" There's"}
+{"type":"thought","data":" no"}
+{"type":"thought","data":" package"}
+{"type":"thought","data":".json"}
+{"type":"thought","data":" visible"}
+{"type":"thought","data":","}
+{"type":"thought","data":" so"}
+{"type":"thought","data":" npm"}
+{"type":"thought","data":" test"}
+{"type":"thought","data":" will"}
+{"type":"thought","data":" likely"}
+{"type":"thought","data":" fail"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" The"}
+{"type":"thought","data":" user"}
+{"type":"thought","data":" asked"}
+{"type":"thought","data":" me"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" try"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" run"}
+{"type":"thought","data":" it"}
+{"type":"thought","data":","}
+{"type":"thought","data":" so"}
+{"type":"thought","data":" I"}
+{"type":"thought","data":" should"}
+{"type":"thought","data":" run"}
+{"type":"thought","data":" it"}
+{"type":"thought","data":" and"}
+{"type":"thought","data":" report"}
+{"type":"thought","data":" the"}
+{"type":"thought","data":" result"}
+{"type":"thought","data":"."}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"usage","usage":{"input_tokens":259,"output_tokens":60,"cache_read_input_tokens":15488,"cache_creation_input_tokens":0,"reasoning_tokens":38},"signature":"cIfhP3OxzWg0m/lg8/P51T8+lQEGf037+KlKD0uCLipUDAeTvjq/TqOzyYczilij7xvoQwjComQd8iqA34Ld6nha9ZifyXBpEUi38ijwstN7LSPGN4jfqkjpkr4yX+fvjL9Z2pdhv9ORAgK6JjC14rfCkdYrzSsbf1n4TcOx5FvpgLy7rVlTeZw9+g/cExc7XMuN0PnCtpjGV/eU2WXuTqZe2ODMfOK+2UstnhzOs38Pr7oKehM5M1ah"}
+{"type":"tool_call","toolCallId":"call-f1298e64-f42c-439b-b830-5a5f6ce95702-4","title":"run_terminal_command","kind":"execute","status":"pending","toolName":"run_terminal_command","rawInput":{"command":"npm test","description":"Run the npm test script"},"content":[],"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-f1298e64-f42c-439b-b830-5a5f6ce95702-4","status":null,"content":[{"type":"content","content":{"type":"text","text":"Run the npm test script"}}],"rawOutput":null,"locations":[]}
+{"type":"tool_call_update","toolCallId":"call-f1298e64-f42c-439b-b830-5a5f6ce95702-4","status":"failed","content":[{"type":"content","content":{"type":"text","text":"Tool `run_terminal_command` was not executed: Denied by permission policy: deny rule on bash"}}],"rawOutput":null,"locations":[]}
+{"type":"thought","data":"The"}
+{"type":"thought","data":" shell"}
+{"type":"thought","data":" command"}
+{"type":"thought","data":" was"}
+{"type":"thought","data":" denied"}
+{"type":"thought","data":" by"}
+{"type":"thought","data":" a"}
+{"type":"thought","data":" permission"}
+{"type":"thought","data":" policy"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" The"}
+{"type":"thought","data":" user"}
+{"type":"thought","data":" asked"}
+{"type":"thought","data":" me"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" try"}
+{"type":"thought","data":" to"}
+{"type":"thought","data":" run"}
+{"type":"thought","data":" npm"}
+{"type":"thought","data":" test"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" I"}
+{"type":"thought","data":" tried"}
+{"type":"thought","data":" and"}
+{"type":"thought","data":" it"}
+{"type":"thought","data":" was"}
+{"type":"thought","data":" denied"}
+{"type":"thought","data":"."}
+{"type":"thought","data":" I"}
+{"type":"thought","data":" should"}
+{"type":"thought","data":" report"}
+{"type":"thought","data":" this"}
+{"type":"thought","data":" clearly"}
+{"type":"thought","data":".\n"}
+{"type":"text","data":"`"}
+{"type":"text","data":"README"}
+{"type":"text","data":".md"}
+{"type":"text","data":"`"}
+{"type":"text","data":" now"}
+{"type":"text","data":" ends"}
+{"type":"text","data":" with"}
+{"type":"text","data":" `"}
+{"type":"text","data":"Hello"}
+{"type":"text","data":" from"}
+{"type":"text","data":" the"}
+{"type":"text","data":" test"}
+{"type":"text","data":"`."}
+{"type":"text","data":"\n\n"}
+{"type":"text","data":"`"}
+{"type":"text","data":"npm"}
+{"type":"text","data":" test"}
+{"type":"text","data":"`"}
+{"type":"text","data":" did"}
+{"type":"text","data":" not"}
+{"type":"text","data":" run"}
+{"type":"text","data":"."}
+{"type":"text","data":" The"}
+{"type":"text","data":" shell"}
+{"type":"text","data":" blocked"}
+{"type":"text","data":" it"}
+{"type":"text","data":" with"}
+{"type":"text","data":" a"}
+{"type":"text","data":" permission"}
+{"type":"text","data":" policy"}
+{"type":"text","data":" deny"}
+{"type":"text","data":" rule"}
+{"type":"text","data":" on"}
+{"type":"text","data":" bash"}
+{"type":"text","data":","}
+{"type":"text","data":" so"}
+{"type":"text","data":" there"}
+{"type":"text","data":" is"}
+{"type":"text","data":" no"}
+{"type":"text","data":" test"}
+{"type":"text","data":" output"}
+{"type":"text","data":"."}
+{"type":"available_commands","tools":["run_terminal_command","read_file","search_replace","list_dir","grep","kill_command_or_subagent","todo_write","get_command_or_subagent_output","scheduler_create","scheduler_delete","scheduler_list","monitor","search_tool","use_tool","workflow","enter_plan_mode","exit_plan_mode","ask_user_question","send_feedback","web_search","web_fetch","image_gen","image_edit","image_to_video","reference_to_video","write"],"commands":["compact","always-approve","context","session-info","feedback","deep-research","workflow","goal","loop","built-in-browser","chrome-browser","computer-use","user:deep-research","user:docs","google-workspace","import-memory","morning","build-with-ai","code-review","create-skill","create-workflow","design","execute-plan","game-assets","bundled:imagine","implement","learn","long-running-background-tasks","pr-babysit","resume-claude","resume-codex","resume-cursor","review","skill-design-principles","statusline","threejs-frame-conventions","learn-traces"]}
+{"type":"usage","usage":{"input_tokens":92,"output_tokens":144,"cache_read_input_tokens":15744,"cache_creation_input_tokens":0,"reasoning_tokens":102},"signature":"cp7t2U/SYxMiGusWQVexVnPzPdqcB/akIZRwNPtJjpLYUUnrYf5FQxygIiodjj0sn+DDPWBv8lJN+475i+MEr2Ngq/L3sjuEyYWFbKuSVOinRUHzFmmQHvMfDQb2MJZvmAGST3N2HcPJLXaFxboka1mRa1RoN2PdSt0EY3z3LVCSr+IlroYEYehL+dey1vRipfV9eN+wNjyKibaJJVGpjddZ8W+q7STweta3iE3DE3Csc+Nse7lwjgRkZGeSRULNJF5MP40sI7P7YPaxVPzxYLxmdV358t5+jX6jYhHWrHLQxtl/1oYLmofRH/oia7CUBFe2hUuacxg7AGbr7A9x1WZ/b4mLSoVCnI9sODyHBHEiN0SWJ7pYl3S4RFTMp+FtO18+FY/sZ/UHXBkyBNB7VM/wgfQ0zTuPGuIblAa87zUYNoh2bvmhP8F+vBA4zpI0j9rC5D9EPxaPuDPCD0KySp6kc9UJ08iVB63Yy80JyoZ0oNBa5Y6D9KD8YqnBD27DMaFL2Q6QcVhDIuuGxhhFzFXCXepcCRsM/oRsQWMSlQiLUEwnl4qYPT+D8E29795gR6dxQfgA+XqTFG33m+q/j5KHILTkWDGiTiUm5vYXJIEqFC2676LClkvhe2l7qGgeCmylUyMshJ9fglN9il1vjPZUow+W5Yr1/g"}
+{"type":"end","stopReason":"end_turn","sessionId":"01a18d6b-7b98-7e51-bcad-2a80162c96f2","requestId":"960034e5-1a2c-4eda-8545-87a29fb68cc7","cwd":"<cwd>","usage":{"input_tokens":14308,"cache_read_input_tokens":63616,"cache_creation_input_tokens":0,"output_tokens":505,"reasoning_tokens":262,"total_tokens":78429},"num_turns":5,"total_cost_usd":0.063454,"total_cost_usd_ticks":634540000,"modelUsage":{"grok-4.7":{"inputTokens":14308,"outputTokens":505,"cacheReadInputTokens":63616,"cacheCreationInputTokens":0,"modelCalls":5,"costUSD":0.063454}}}

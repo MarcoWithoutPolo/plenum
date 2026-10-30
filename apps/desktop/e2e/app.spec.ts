@@ -94,10 +94,13 @@ test('chat streams a reply, then switches model and keeps the thread', async () 
   const box = page.getByRole('textbox', { name: 'Message' });
   await page.getByRole('button', { name: 'Choose model' }).click();
   const picker = page.getByRole('dialog', { name: 'Choose model' });
-  await expect(picker.getByRole('radiogroup', { name: 'Reasoning effort' })).toBeVisible();
-  await picker.getByRole('radio', { name: 'low', exact: true }).click(); // closes the picker
+  // Claude Code's own models, with its effort levels for the default model.
+  await expect(picker.getByRole('radiogroup', { name: 'Effort for Opus 5.5' })).toBeVisible();
+  await expect(picker.getByRole('option', { name: /^Fable 5\.1/ })).toBeVisible();
+  await expect(picker.getByRole('option', { name: /^Opus 4\.8/ })).toBeHidden(); // under Older
+  await picker.getByRole('radio', { name: 'Low', exact: true }).click(); // closes the picker
   await expect(picker).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Choose model' })).toContainText('low');
+  await expect(page.getByRole('button', { name: 'Choose model' })).toContainText('Low');
   await box.fill('How should I store app settings?');
   await box.press('Enter');
 
@@ -118,11 +121,12 @@ test('chat streams a reply, then switches model and keeps the thread', async () 
   expect(menu!.y + menu!.height).toBeLessThanOrEqual(viewport.height);
   await page.mouse.wheel(0, 2000);
   expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
-  await page
-    .getByRole('dialog', { name: 'Choose model' })
-    .getByRole('option', { name: /^Default/ })
-    .nth(1)
+  const dialog = page.getByRole('dialog', { name: 'Choose model' });
+  await dialog
+    .getByRole('navigation', { name: 'Providers' })
+    .getByRole('button', { name: /^Codex/ })
     .click();
+  await dialog.getByRole('option', { name: /^GPT-6-Astra/ }).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Choose model' })).toContainText('Codex');
 

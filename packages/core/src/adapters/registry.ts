@@ -3,6 +3,9 @@ import { ClaudeAdapter } from './claude.js';
 import { CodexAdapter } from './codex.js';
 import { AntigravityAdapter } from './antigravity.js';
 import { GeminiAdapter } from './gemini.js';
+import { CopilotAdapter } from './copilot.js';
+import { CursorAdapter } from './cursor.js';
+import { GrokAdapter } from './grok.js';
 import type { CliAdapterOptions } from './kit/index.js';
 import type { Adapter } from './types.js';
 
@@ -18,6 +21,9 @@ export const ADAPTER_FACTORIES: Partial<Record<ProviderId, (opts?: CliAdapterOpt
     codex: (opts) => new CodexAdapter(opts),
     antigravity: (opts) => new AntigravityAdapter(opts),
     gemini: (opts) => new GeminiAdapter(opts),
+    copilot: (opts) => new CopilotAdapter(opts),
+    cursor: (opts) => new CursorAdapter(opts),
+    grok: (opts) => new GrokAdapter(opts),
   };
 
 /** The real providers Conclave knows about, in display order. */

@@ -57,9 +57,14 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'New chat' }).click();
       await page.getByRole('button', { name: 'Choose model' }).click();
       await shot('picker-claude');
+      await page
+        .getByRole('dialog', { name: 'Choose model' })
+        .getByRole('navigation', { name: 'Providers' })
+        .getByRole('button', { name: /^Codex/ })
+        .click();
       await pickOption(page, 'GPT-6.1-Sol');
       await shot('picker-codex');
-      await page.getByRole('radio', { name: 'low', exact: true }).click();
+      await page.getByRole('radio', { name: 'Low', exact: true }).click();
 
       const box = page.getByRole('textbox', { name: 'Message' });
       await box.fill('How should I store app settings?');

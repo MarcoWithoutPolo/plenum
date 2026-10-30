@@ -35,6 +35,10 @@ export interface ProviderEntry {
   prefer: { planner: number; builder: number; reviewer: number; chat: number };
   /** Listed only for people who set it up themselves (an API key, a retired CLI). */
   hidden?: boolean;
+  /** What the CLI calls its effort setting ("Reasoning", "Thinking"). Defaults to "Effort". */
+  effortName?: string;
+  /** One sentence on what it is, for "AIs you can add". */
+  blurb?: string;
 }
 
 export const PROVIDERS: readonly ProviderEntry[] = [
@@ -48,6 +52,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     laneCap: 2,
     reportsUsage: true,
     prefer: { planner: 1, builder: 2, reviewer: 1, chat: 1 },
+    effortName: 'Effort',
+    blurb: "Anthropic's coding agent; uses your Claude plan.",
   },
   {
     id: 'codex',
@@ -59,6 +65,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     laneCap: 2,
     reportsUsage: true,
     prefer: { planner: 3, builder: 1, reviewer: 3, chat: 2 },
+    effortName: 'Reasoning',
+    blurb: "OpenAI's coding agent; uses your ChatGPT plan.",
   },
   {
     id: 'antigravity',
@@ -73,6 +81,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     },
     laneCap: 1,
     prefer: { planner: 2, builder: 3, reviewer: 2, chat: 3 },
+    effortName: 'Thinking',
+    blurb: "Google's agent CLI; uses your Google account.",
   },
   {
     id: 'copilot',
@@ -87,6 +97,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     },
     laneCap: 1,
     prefer: { planner: 5, builder: 5, reviewer: 5, chat: 5 },
+    effortName: 'Effort',
+    blurb: "GitHub's agent CLI; every GitHub account has Copilot Free.",
   },
   {
     id: 'cursor',
@@ -103,6 +115,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     },
     laneCap: 1,
     prefer: { planner: 4, builder: 4, reviewer: 4, chat: 4 },
+    effortName: 'Effort',
+    blurb: "Cursor's agent CLI, with many makers' models; Hobby plan is free.",
   },
   {
     id: 'grok',
@@ -120,6 +134,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     },
     laneCap: 1,
     prefer: { planner: 6, builder: 6, reviewer: 6, chat: 6 },
+    effortName: 'Reasoning',
+    blurb: "xAI's Grok Build CLI; a free grok.com account works.",
   },
   {
     id: 'amp',
@@ -132,6 +148,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     prefer: { planner: 8, builder: 8, reviewer: 8, chat: 8 },
     // Deferred past v0.9: its headless runs need a token the user creates.
     hidden: true,
+    effortName: 'Mode',
+    blurb: "Sourcegraph's agent; pays per use.",
   },
   {
     id: 'local',
@@ -142,6 +160,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     install: { docs: 'https://ollama.com/download' },
     laneCap: 1,
     prefer: { planner: 7, builder: 7, reviewer: 7, chat: 7 },
+    effortName: 'Context',
+    blurb: 'Models on your own computer through Ollama: free, private, offline.',
   },
   {
     id: 'gemini',

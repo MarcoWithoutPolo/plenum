@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Clock, Gauge, Plug, Search, Terminal } from 'lucide-react';
+import { Check, ChevronDown, Clock, Gauge, Plug, Plus, Search, Terminal } from 'lucide-react';
 import { Popover, onListKeyDown, type PopoverTriggerProps } from './Popover';
 
 /*
- * v0.9 model picker (preview). Providers on the left, the chosen provider's models on the
- * right, and that provider's own effort levels under them. Data comes from each CLI's own
- * model list; nothing here knows a provider by name.
+ * The model picker. Providers on the left, the chosen provider's models on the right, and that
+ * provider's own effort levels under them. Data comes from each CLI's own model list (see
+ * lib/picker.ts); nothing here knows a provider by name.
  */
 
 export interface PickerEffort {
@@ -46,6 +46,15 @@ export interface PickerProvider {
   models: PickerModel[];
   /** For providers that aren't connected yet. */
   install?: { command: string; signIn: string; cost: string };
+  /** Installed but signed out: sign-in is one click. */
+  installed?: boolean;
+}
+
+export interface PickerActions {
+  /** Open the Accounts screen. */
+  onOpenAccounts?: () => void;
+  /** Start the CLI's own sign-in in a terminal. */
+  onSignIn?: (provider: string) => void;
 }
 
 export interface PickerValue {
@@ -63,24 +72,48 @@ export function ModelPicker({
   onChange,
   recent = [],
   defaultOpen,
+  trigger,
+  align = 'left',
+  label = 'Choose model',
+  allowCustom = true,
+  ...actions
 }: {
   providers: PickerProvider[];
   value: PickerValue;
   onChange: (v: PickerValue) => void;
   recent?: PickerValue[];
   defaultOpen?: boolean;
-}) {
+  trigger?: (props: PopoverTriggerProps) => React.ReactNode;
+  align?: 'left' | 'right';
+  label?: string;
+  /** Offer "Other model id" for ids the CLI accepts but doesn't list. */
+  allowCustom?: boolean;
+} & PickerActions) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
+  // One provider (a council member, a team seat): no provider column.
+  const single = providers.length === 1;
   return (
     <Popover
-      label="Choose model"
-      width={640}
+      label={label}
+      align={align}
+      width={single ? 452 : 640}
       open={open}
       onOpenChange={setOpen}
-      trigger={(props) => <PickerButton {...props} value={value} providers={providers} />}
+      trigger={(props) =>
+        trigger ? trigger(props) : <PickerButton {...props} value={value} providers={providers} />
+      }
     >
-      {() => (
-        <PickerPanel providers={providers} value={value} onChange={onChange} recent={recent} />
+      {(close) => (
+        <PickerPanel
+          providers={providers}
+          value={value}
+          onChange={onChange}
+          recent={single ? [] : recent}
+          single={single}
+          allowCustom={allowCustom}
+          close={close}
+          {...actions}
+        />
       )}
     </Popover>
   );
@@ -90,7 +123,8 @@ function modelOf(p: PickerProvider | undefined, id: string | undefined) {
   return p?.models.find((m) => m.id === (id ?? p.defaultModel));
 }
 
-function describe(providers: PickerProvider[], v: PickerValue) {
+/** Labels for a value: provider name, model label and effort label. */
+export function describe(providers: PickerProvider[], v: PickerValue) {
   const p = providers.find((x) => x.id === v.provider);
   const m = v.model ? p?.models.find((x) => x.id === v.model) : undefined;
   const e = (m ?? modelOf(p, undefined))?.efforts?.find((x) => x.id === v.effort);
@@ -150,12 +184,20 @@ function PickerPanel({
   value,
   onChange,
   recent,
+  single,
+  allowCustom,
+  close,
+  onOpenAccounts,
+  onSignIn,
 }: {
   providers: PickerProvider[];
   value: PickerValue;
   onChange: (v: PickerValue) => void;
   recent: PickerValue[];
-}) {
+  single: boolean;
+  allowCustom: boolean;
+  close: () => void;
+} & PickerActions) {
   const [shown, setShown] = useState(value.provider);
   const [query, setQuery] = useState('');
   const search = useRef<HTMLInputElement>(null);
@@ -189,7 +231,7 @@ function PickerPanel({
   };
 
   return (
-    <div className="flex h-[500px] min-h-0 flex-col">
+    <div className={`flex min-h-0 flex-col ${single ? 'h-[440px]' : 'h-[500px]'}`}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
         <Search className="size-4 text-faint" aria-hidden />
         <input
@@ -197,7 +239,9 @@ function PickerPanel({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search every model: sonnet, flash, local…"
+          placeholder={
+            single ? `Search ${provider.name} models` : 'Search every model: sonnet, flash, local…'
+          }
           aria-label="Search models"
           className="h-7 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-faint"
         />
@@ -268,43 +312,45 @@ function PickerPanel({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <nav
-            aria-label="Providers"
-            onKeyDown={onListKeyDown}
-            className="flex w-[188px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-sunken/50 p-1.5"
-          >
-            {providers.map((p) => {
-              const on = p.id === provider.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  data-option
-                  aria-current={on ? 'true' : undefined}
-                  aria-label={`${p.name}: ${p.status}`}
-                  title={p.status}
-                  onClick={() => setShown(p.id)}
-                  className={`flex h-8 items-center gap-2.5 rounded-lg px-2 text-left outline-none transition ${
-                    on ? 'bg-panel shadow-card' : 'hover:bg-panel/70 focus-visible:bg-panel/70'
-                  }`}
-                >
-                  <Dot id={p.id} size={9} />
-                  <span
-                    className={`min-w-0 flex-1 truncate text-[13px] ${on ? 'font-semibold' : 'font-medium'} ${p.connected ? '' : 'text-muted'}`}
+          {!single && (
+            <nav
+              aria-label="Providers"
+              onKeyDown={onListKeyDown}
+              className="flex w-[188px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line bg-sunken/50 p-1.5"
+            >
+              {providers.map((p) => {
+                const on = p.id === provider.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    data-option
+                    aria-current={on ? 'true' : undefined}
+                    aria-label={`${p.name}: ${p.status}`}
+                    title={p.status}
+                    onClick={() => setShown(p.id)}
+                    className={`flex h-8 items-center gap-2.5 rounded-lg px-2 text-left outline-none transition ${
+                      on ? 'bg-panel shadow-card' : 'hover:bg-panel/70 focus-visible:bg-panel/70'
+                    }`}
                   >
-                    {p.name}
-                  </span>
-                  {value.provider === p.id ? (
-                    <Check className="size-3.5 shrink-0 text-accent" aria-hidden />
-                  ) : p.tone === 'warn' ? (
-                    <Clock className="size-3.5 shrink-0 text-warn" aria-hidden />
-                  ) : !p.connected ? (
-                    <Plug className="size-3.5 shrink-0 text-faint" aria-hidden />
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
+                    <Dot id={p.id} size={9} />
+                    <span
+                      className={`min-w-0 flex-1 truncate text-[13px] ${on ? 'font-semibold' : 'font-medium'} ${p.connected ? '' : 'text-muted'}`}
+                    >
+                      {p.name}
+                    </span>
+                    {value.provider === p.id ? (
+                      <Check className="size-3.5 shrink-0 text-accent" aria-hidden />
+                    ) : p.tone === 'warn' ? (
+                      <Clock className="size-3.5 shrink-0 text-warn" aria-hidden />
+                    ) : !p.connected ? (
+                      <Plug className="size-3.5 shrink-0 text-faint" aria-hidden />
+                    ) : null}
+                  </button>
+                );
+              })}
+            </nav>
+          )}
 
           <section aria-label={`${provider.name} models`} className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-baseline gap-2 px-4 pt-3 pb-1.5">
@@ -346,11 +392,40 @@ function PickerPanel({
                     selected={here ? (value.model ?? provider.defaultModel) : undefined}
                     onPick={(m) => pickModel(provider, m)}
                   />
+                  {here && value.model && !provider.models.some((m) => m.id === value.model) && (
+                    <Row selected title={value.model} hint="Custom model id" onClick={() => {}} />
+                  )}
+                  {allowCustom && (
+                    <CustomModel
+                      provider={provider}
+                      onPick={(id) => onChange({ provider: provider.id, model: id })}
+                    />
+                  )}
                 </div>
-                <Effort provider={provider} value={value} here={here} onChange={onChange} />
+                <Effort
+                  provider={provider}
+                  value={value}
+                  here={here}
+                  onChange={(v) => {
+                    onChange(v);
+                    close();
+                  }}
+                />
               </>
             ) : (
-              <Connect provider={provider} />
+              <Connect
+                provider={provider}
+                onOpenAccounts={() => {
+                  close();
+                  onOpenAccounts?.();
+                }}
+                {...(onSignIn && {
+                  onSignIn: () => {
+                    close();
+                    onSignIn(provider.id);
+                  },
+                })}
+              />
             )}
           </section>
         </div>
@@ -439,6 +514,56 @@ function ModelRows({
     </>
   );
 }
+function CustomModel({
+  provider,
+  onPick,
+}: {
+  provider: PickerProvider;
+  onPick: (id: string) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  if (text === null) {
+    return (
+      <button
+        type="button"
+        data-option
+        onClick={() => setText('')}
+        className="mt-0.5 flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[12.5px] text-muted outline-none hover:bg-sunken focus-visible:bg-sunken"
+      >
+        <Plus className="size-3.5" aria-hidden /> Other model id
+      </button>
+    );
+  }
+  return (
+    <form
+      className="px-1.5 py-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const id = text.trim();
+        if (/^[\w.:/[\]-]+$/.test(id)) {
+          onPick(id);
+          setText(null);
+        }
+      }}
+    >
+      <input
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.stopPropagation();
+            setText(null);
+          }
+        }}
+        placeholder={`${provider.name} model id, then Enter`}
+        aria-label={`Custom ${provider.name} model`}
+        className="h-8 w-full rounded-lg border border-line-strong bg-panel px-2.5 text-[12.5px] outline-none placeholder:text-faint focus:border-accent"
+      />
+    </form>
+  );
+}
+
 function Row({
   selected,
   title,
@@ -532,7 +657,7 @@ function Effort({
       <div className="mb-2 flex items-center gap-1.5">
         <Gauge className="size-3.5 text-muted" aria-hidden />
         <span id="picker-effort" className="text-[12px] font-semibold text-muted">
-          {name} for {model?.label}
+          {name} for {model?.label ?? 'the default model'}
         </span>
         {model?.fast && (
           <label className="ml-auto inline-flex items-center gap-1.5 text-[12px] text-muted">
@@ -560,6 +685,7 @@ function Effort({
               type="button"
               role="radio"
               aria-checked={on}
+              aria-label={l?.label ?? 'Auto'}
               title={l?.note ?? note}
               onClick={() => set(l?.id)}
               className={`h-7 min-w-0 flex-auto rounded-[10px] px-2 text-[11.5px] font-medium whitespace-nowrap transition ${
@@ -576,12 +702,21 @@ function Effort({
   );
 }
 
-function Connect({ provider }: { provider: PickerProvider }) {
+function Connect({
+  provider,
+  onOpenAccounts,
+  onSignIn,
+}: {
+  provider: PickerProvider;
+  onOpenAccounts: () => void;
+  onSignIn?: () => void;
+}) {
   return (
     <div className="flex flex-1 flex-col gap-3 px-4 pt-1 pb-4 text-[13px]">
       <p className="text-muted">
-        {provider.name} isn't connected. Install its CLI and sign in with your own account; Conclave
-        never sees your password.
+        {provider.installed
+          ? `${provider.name} is installed but not signed in. Sign in with your own account; Conclave never sees your password.`
+          : `${provider.name} isn't connected. Install its CLI and sign in with your own account; Conclave never sees your password.`}
       </p>
       {provider.install && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[12.5px]">
@@ -602,14 +737,26 @@ function Connect({ provider }: { provider: PickerProvider }) {
         </dl>
       )}
       <div className="mt-auto flex gap-2">
+        {provider.installed && onSignIn ? (
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white"
+          >
+            <Terminal className="size-3.5" /> Sign in
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenAccounts}
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white"
+          >
+            <Terminal className="size-3.5" /> Install and sign in
+          </button>
+        )}
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white"
-        >
-          <Terminal className="size-3.5" /> Install and sign in
-        </button>
-        <button
-          type="button"
+          onClick={onOpenAccounts}
           className="inline-flex items-center gap-1.5 rounded-full border border-line-strong px-3 py-1.5 text-[12.5px] font-medium"
         >
           <Plug className="size-3.5" /> Open Accounts

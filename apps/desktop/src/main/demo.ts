@@ -9,7 +9,7 @@ import {
   type RunRequest,
   type Store,
 } from '@conclave/core';
-import type { ProviderId } from '@conclave/shared';
+import { groupVariants, type ProviderId } from '@conclave/shared';
 
 interface DemoTask {
   title: string;
@@ -402,8 +402,24 @@ export function demoAdapters(): Adapter[] {
         resume: true,
         efforts: levels,
         status: { version: '2.1.302', detail: 'claude.ai, max plan' },
+        // As Claude Code's start-up handshake reports them (test/fixtures/claude).
         models: {
-          models: ['fable', 'opus', 'sonnet', 'haiku'].map((id) => ({ id })),
+          defaultModel: 'opus',
+          models: [
+            ['opus', 'Opus 5.5', 'Best for everyday, complex tasks'],
+            ['fable', 'Fable 5.1', 'Most capable for your hardest and longest-running tasks'],
+            ['sonnet', 'Sonnet 5.5', 'Efficient for routine tasks'],
+            ['haiku', 'Haiku 5.5', 'Fastest for quick answers'],
+            ['claude-opus-5', 'Opus 5', 'Best for everyday, complex tasks', true],
+            ['claude-opus-4-8', 'Opus 4.8', 'Best for everyday, complex tasks', true],
+          ].map(([id, label, description, older]) => ({
+            id: id as string,
+            label: label as string,
+            description: description as string,
+            efforts: levels,
+            maker: 'Claude',
+            ...(older ? { older: true } : {}),
+          })),
         },
         limits: [
           { window: 'five_hour', utilization: 0.32, resetsAt: hours(2.2) },
@@ -476,14 +492,17 @@ export function demoAdapters(): Adapter[] {
         displayName: 'Antigravity',
         vision: 'files',
         resume: true,
-        efforts: levels,
         status: { version: '1.4.6', detail: 'Google account · 6 models' },
+        // As `agy models` lists them; Gemini's thinking levels group into one model.
         models: {
-          models: [
+          models: groupVariants([
             { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash (High)' },
+            { id: 'gemini-3.8-flash-medium', label: 'Gemini 3.8 Flash (Medium)' },
+            { id: 'gemini-3.8-flash-low', label: 'Gemini 3.8 Flash (Low)' },
+            { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)' },
             { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)' },
             { id: 'gpt-oss-120b-medium', label: 'GPT-OSS 120B (Medium)' },
-          ],
+          ]),
         },
       },
     ),

@@ -1,0 +1,10 @@
+{"type":"system","subtype":"init","apiKeySource":"login","cwd":"<cwd>","session_id":"8d202487-085c-4c0e-b478-4d854815811b","model":"Auto","permissionMode":"default"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Reply with exactly: pong"}]},"session_id":"8d202487-085c-4c0e-b478-4d854815811b"}
+{"type":"thinking","subtype":"delta","text":"The","session_id":"8d202487-085c-4c0e-b478-4d854815811b","timestamp_ms":1793373959291}
+{"type":"thinking","subtype":"delta","text":" user wants a reply ","session_id":"8d202487-085c-4c0e-b478-4d854815811b","timestamp_ms":1793373959312}
+{"type":"thinking","subtype":"delta","text":"of","session_id":"8d202487-085c-4c0e-b478-4d854815811b","timestamp_ms":1793373959313}
+{"type":"thinking","subtype":"delta","text":" exactly \"pong\".","session_id":"8d202487-085c-4c0e-b478-4d854815811b","timestamp_ms":1793373959398}
+{"type":"thinking","subtype":"completed","session_id":"8d202487-085c-4c0e-b478-4d854815811b","timestamp_ms":1793373959399}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"pong"}]},"session_id":"8d202487-085c-4c0e-b478-4d854815811b","timestamp_ms":1793373959399}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"pong"}]},"session_id":"8d202487-085c-4c0e-b478-4d854815811b"}
+{"type":"result","subtype":"success","duration_ms":2515,"duration_api_ms":2515,"is_error":false,"result":"pong","session_id":"8d202487-085c-4c0e-b478-4d854815811b","request_id":"900dc728-7bf7-45fa-a874-22d3f6544c11","usage":{"inputTokens":7868,"outputTokens":27,"cacheReadTokens":3968,"cacheWriteTokens":0}}
