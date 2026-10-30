@@ -267,7 +267,17 @@ export const Approval = z.object({
   id: z.string(),
   projectId: z.string(),
   taskId: z.string().nullable(),
-  kind: z.enum(['push', 'pull_request', 'create_repo', 'install', 'network', 'question', 'other']),
+  // merge_base: a finished project's work, merged into your branch (and optionally pushed or as
+  // a pull request). It was called `push` before v0.9, though it never pushed (migration 17).
+  kind: z.enum([
+    'merge_base',
+    'pull_request',
+    'create_repo',
+    'install',
+    'network',
+    'question',
+    'other',
+  ]),
   summary: z.string(),
   payload: z.unknown().nullable(),
   status: ApprovalStatus,

@@ -19,6 +19,7 @@ let app: ElectronApplication;
 let page: Page;
 let home: string;
 let repo: string;
+let remote: string;
 
 const git = (...args: string[]) =>
   execFileSync(
@@ -54,6 +55,11 @@ test.beforeAll(async () => {
   );
   git('add', '-A');
   git('commit', '-q', '-m', 'init');
+  // A bare repo standing in for GitHub, so finishing can merge here and then push.
+  remote = mkdtempSync(join(tmpdir(), 'conclave-e2e-remote-'));
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main'], { cwd: remote });
+  git('remote', 'add', 'origin', remote);
+  git('push', '-q', '-u', 'origin', 'main');
 
   app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
@@ -73,6 +79,7 @@ test.afterAll(async () => {
   await app?.close();
   rmSync(home, { recursive: true, force: true });
   rmSync(repo, { recursive: true, force: true });
+  rmSync(remote, { recursive: true, force: true });
 });
 
 test('creates a project in three steps, with the test command guessed', async () => {
@@ -217,15 +224,31 @@ test('steers from the board and the chat, changing nothing until you apply', asy
   }
 });
 
-test('approving merges the work into the base branch', async () => {
-  await page
-    .getByRole('article', { name: /Ready to merge/ })
-    .getByRole('button', { name: 'Approve merge' })
-    .click();
-  await expect(page.getByRole('alert')).toContainText('Merged');
-  await expect(page.getByRole('article', { name: /Ready to merge/ })).toBeHidden();
+test('finishing says where the work goes, merges here and pushes to GitHub', async () => {
+  const card = page.getByRole('article', { name: /Ready to merge/ });
+  // Where it goes, named, and your folder against GitHub (from a fetch).
+  await expect(card).toContainText(
+    `Merges into main in your folder ${repo}. GitHub isn't changed.`,
+  );
+  await expect(card).toContainText('main here matches');
+  await card.getByRole('radio', { name: 'Merge here, then push' }).click();
+  await expect(card).toContainText('then pushes main to');
+  await expect(card.getByRole('radio', { name: 'Merge here, then push' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.waitForTimeout(300); // the highlight fades over
+  await page.screenshot({ path: join(shots, '8-finish.png') });
+  await card.getByRole('button', { name: 'Merge and push' }).click();
+  await expect(page.getByRole('alert')).toContainText('Merged here and pushed to GitHub');
+  await expect(card).toBeHidden();
   expect(git('show', 'main:greet.js')).toContain('Hello, ${name}!');
   expect(git('rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
+  // GitHub has it now, and the project says so.
+  expect(
+    execFileSync('git', ['show', 'main:greet.js'], { cwd: remote, encoding: 'utf8' }),
+  ).toContain('Hello, ${name}!');
+  await expect(page.getByText('main here matches')).toBeVisible();
 
   await page.getByRole('button', { name: /^Inbox/ }).click();
   await expect(page.getByRole('heading', { name: "You're all caught up" })).toBeVisible();

@@ -26,10 +26,13 @@ import {
   projectRoot,
   projectWorkspace,
   providerProblems,
+  pushBase,
+  runShell,
   pullRequestStatus,
   requestPublish,
   setUpGit,
   startDraft,
+  syncState,
   taskChanges,
   type BrainManager,
   type DraftStart,
@@ -411,6 +414,79 @@ export function registerProjectIpc(
     };
   });
 
+  // "Try it": the test command once, in the folder, the way the brain runs it after each task.
+  handle(IPC.projectsTryTest, async (folder: string, command: string) => {
+    const where = resolve(text(folder, 4096));
+    const cmd = text(command, 500).trim();
+    if (!cmd) return { ok: false, error: 'Type a command first.' };
+    if (!existsSync(where)) return { ok: false, error: 'That folder does not exist.' };
+    const win = getWindow();
+    const options = {
+      type: 'question' as const,
+      buttons: ['Run it', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Try the test command',
+      message: `Run ${cmd}?`,
+      detail: `Runs once in ${where}, as you would in a terminal, and shows how it ended. Stops after 5 minutes.`,
+    };
+    const choice = win
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options);
+    if (choice.response !== 0) return { ok: false, cancelled: true };
+    const run = await runShell(cmd, { cwd: where, timeoutMs: 5 * 60_000, maxOutput: 4000 });
+    return {
+      ok: true,
+      passed: run.code === 0 && !run.timedOut,
+      code: run.code,
+      timedOut: run.timedOut,
+      durationMs: run.durationMs,
+      tail: run.output.trim().split(/\r?\n/).slice(-12).join('\n'),
+    };
+  });
+
+  handle(IPC.projectsSyncState, async (projectId: string) => {
+    const project = projects.get(id(projectId));
+    if (!project) throw new Error('No such project');
+    return syncState(project.repoPath, project.baseBranch);
+  });
+
+  handle(IPC.projectsPushBase, async (projectId: string) => {
+    const project = projects.get(id(projectId));
+    if (!project) return { ok: false, error: 'No such project' };
+    const sync = await syncState(project.repoPath, project.baseBranch);
+    if (!sync.remote) return { ok: false, error: 'This project has no GitHub copy to push to.' };
+    if (sync.behind > 0) {
+      return {
+        ok: false,
+        error: `GitHub has ${sync.behind} commit(s) you don't have. Pull first.`,
+      };
+    }
+    const win = getWindow();
+    const options = {
+      type: 'question' as const,
+      buttons: ['Push', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Push to GitHub',
+      message: `Push ${project.baseBranch} to ${sync.remote}?`,
+      detail: `Sends ${sync.ahead} commit(s) from your folder to ${sync.url ?? sync.remote}. Never forced.`,
+    };
+    const choice = win
+      ? await dialog.showMessageBox(win, options)
+      : await dialog.showMessageBox(options);
+    if (choice.response !== 0) return { ok: false, cancelled: true };
+    const pushed = await pushBase(project.repoPath, project.baseBranch, sync.remote);
+    projects.log({
+      projectId: project.id,
+      kind: 'merge',
+      message: pushed.ok
+        ? `Pushed ${project.baseBranch} to ${sync.remote}`
+        : `Push didn't go through: ${pushed.error}`,
+    });
+    return pushed.ok ? { ok: true } : { ok: false, error: pushed.error };
+  });
+
   handle(IPC.projectsPermissionGaps, (permissions: unknown): PermissionGaps => {
     const run = builderPermissions(checkPermissions(permissions));
     const gaps: PermissionGaps = {};
@@ -509,14 +585,18 @@ export function registerProjectIpc(
         decision,
         typeof opts?.answer === 'string' ? text(opts.answer, 2000) : undefined,
         {
-          ...(opts?.via === 'pr' && { via: 'pr' as const }),
+          ...((opts?.via === 'pr' || opts?.via === 'merge_push') && { via: opts.via }),
           ...(opts?.draft && { draft: true }),
           github,
         },
       );
       if (pending) announce(pending.projectId, since);
       return result.ok
-        ? { ok: true, ...(result.url && { url: result.url }) }
+        ? {
+            ok: true,
+            ...(result.url && { url: result.url }),
+            ...(result.pushError && { pushError: result.pushError }),
+          }
         : { ok: false, error: result.error };
     },
   );
@@ -609,6 +689,7 @@ export async function inspectRepo(path: string): Promise<RepoInfo> {
         name: state.name,
         branch: state.branch,
         ...(state.suggestedTest && { suggestedTest: state.suggestedTest }),
+        ...(state.suggestedTestSource && { suggestedTestSource: state.suggestedTestSource }),
       };
     case 'nested':
       return { path, ok: true, root: state.root, name: state.name, branch: state.branch };

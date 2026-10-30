@@ -262,6 +262,8 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     addColumn(db, 'agent_runs', 'engine', 'TEXT');
     addColumn(db, 'agent_runs', 'credits', 'REAL');
   },
+  // v17: the approval that merges a finished project was named `push`, though it never pushed.
+  `UPDATE approvals SET kind = 'merge_base' WHERE kind = 'push';`,
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

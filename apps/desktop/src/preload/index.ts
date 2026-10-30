@@ -67,6 +67,9 @@ const api: ConclaveApi = {
     retryFailed: (projectId, filter, opts) =>
       invoke(IPC.projectsRetryFailed, projectId, filter, opts),
     permissionGaps: (permissions) => invoke(IPC.projectsPermissionGaps, permissions),
+    syncState: (id) => invoke(IPC.projectsSyncState, id),
+    tryTest: (folder, command) => invoke(IPC.projectsTryTest, folder, command),
+    pushBase: (id) => invoke(IPC.projectsPushBase, id),
     teamInsights: (routing) => invoke(IPC.projectsTeamInsights, routing),
     start: (id, at) => invoke(IPC.projectsStart, id, at),
     startCheck: (id) => invoke(IPC.projectsStartCheck, id),

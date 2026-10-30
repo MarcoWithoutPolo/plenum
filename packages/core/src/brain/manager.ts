@@ -10,7 +10,14 @@ import type {
   Task,
 } from '@conclave/shared';
 import type { EngineContext } from '../chat/service.js';
-import { Workspace, mergeCommitDiff, mergeIntoBase, worktreeReady } from '../workspace/git.js';
+import {
+  Workspace,
+  mergeCommitDiff,
+  mergeIntoBase,
+  pushBase,
+  syncState,
+  worktreeReady,
+} from '../workspace/git.js';
 import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
 import {
   PreviewServer,
@@ -45,17 +52,28 @@ export function isProjectRunning(home: string, projectId: string): boolean {
 }
 
 export type ApprovalOutcome =
-  { ok: true; approval: Approval; commit?: string; url?: string } | { ok: false; error: string };
+  | {
+      ok: true;
+      approval: Approval;
+      commit?: string;
+      url?: string;
+      /** Merged here, but the push to GitHub didn't go through. */
+      pushError?: string;
+    }
+  | { ok: false; error: string };
 
 export interface ApprovalOptions {
-  /** For a finished project's push: merge into your branch here (default) or open a pull request. */
-  via?: 'merge' | 'pr';
+  /**
+   * How a finished project's work lands: merged into your branch here (default), merged here and
+   * then pushed to GitHub, or as a pull request.
+   */
+  via?: 'merge' | 'merge_push' | 'pr';
   draft?: boolean;
   /** Injected for tests. */
   github?: GitHub;
 }
 
-/** Approve or reject an inbox item. Approving a `push` merges the work into the base branch. */
+/** Approve or reject an inbox item. Approving a `merge_base` merges the work into the base branch. */
 export async function decideApproval(
   ctx: EngineContext,
   home: string,
@@ -93,11 +111,12 @@ export async function decideApproval(
 
   let commit: string | undefined;
   let url: string | undefined;
+  let pushError: string | undefined;
   if (pending.kind === 'create_repo') {
     const published = await publishRepo(ctx, opts.github ?? new GitHub(), pending);
     if (!published.ok) return published;
     url = published.url;
-  } else if (pending.kind === 'push' && opts.via === 'pr') {
+  } else if (pending.kind === 'merge_base' && opts.via === 'pr') {
     if (isProjectRunning(home, project.id)) {
       return { ok: false, error: 'Stop the project before pushing its work.' };
     }
@@ -106,9 +125,22 @@ export async function decideApproval(
     });
     if (!pr.ok) return pr;
     url = pr.url;
-  } else if (pending.kind === 'push') {
+  } else if (pending.kind === 'merge_base') {
     if (isProjectRunning(home, project.id)) {
       return { ok: false, error: 'Stop the project before merging its work.' };
+    }
+    // Merge-then-push checks first: with GitHub ahead, the push would be refused after the merge.
+    let remote: string | undefined;
+    if (opts.via === 'merge_push') {
+      const sync = await syncState(project.repoPath, project.baseBranch);
+      if (!sync.remote) return { ok: false, error: 'This project has no GitHub copy to push to.' };
+      if (sync.behind > 0) {
+        return {
+          ok: false,
+          error: `GitHub has ${sync.behind} commit${sync.behind === 1 ? '' : 's'} on ${project.baseBranch} that you don't have. Pull first, then merge.`,
+        };
+      }
+      remote = sync.remote;
     }
     const merged = await mergeIntoBase(
       project.repoPath,
@@ -125,9 +157,32 @@ export async function decideApproval(
       message: `You approved: merged into ${project.baseBranch} (${merged.commit.slice(0, 8)})`,
       data: { commit: merged.commit },
     });
+    if (remote) {
+      const pushed = await pushBase(project.repoPath, project.baseBranch, remote);
+      if (pushed.ok) {
+        projects.log({
+          projectId: project.id,
+          kind: 'merge',
+          message: `Pushed ${project.baseBranch} to ${remote}`,
+        });
+      } else {
+        pushError = pushed.error;
+        projects.log({
+          projectId: project.id,
+          kind: 'merge',
+          message: `Merged here, but the push didn't go through: ${pushed.error}`,
+        });
+      }
+    }
   }
   const approval = projects.decide(approvalId, 'approved', url)!;
-  return { ok: true, approval, ...(commit && { commit }), ...(url && { url }) };
+  return {
+    ok: true,
+    approval,
+    ...(commit && { commit }),
+    ...(url && { url }),
+    ...(pushError && { pushError }),
+  };
 }
 
 /** The changes a task made: its merge for merged tasks, its live worktree while in progress. */

@@ -38,6 +38,7 @@ import {
   TeamEditor,
   inputClass,
   textareaClass,
+  TestCommandField,
 } from './form';
 import { relative } from './PlanUsage';
 import { api } from '@/lib/api';
@@ -668,16 +669,12 @@ export function ProjectSettingsDialog({
           />
         </Field>
         <div className="grid grid-cols-3 gap-4">
-          <Field label="Test command">
-            <input
-              value={test}
-              onChange={(e) => setTest(e.target.value)}
-              placeholder={project.proposedTestCommand ?? 'npm test'}
-              aria-label="Test command"
-              spellCheck={false}
-              className={`${inputClass} font-mono text-[12.5px]`}
-            />
-          </Field>
+          <TestCommandField
+            value={test}
+            onChange={setTest}
+            folder={project.repoPath}
+            placeholder={project.proposedTestCommand ?? 'npm test'}
+          />
           <Field label="Done when" optional>
             <input
               value={doneWhen}

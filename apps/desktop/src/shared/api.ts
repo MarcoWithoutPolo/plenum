@@ -1,5 +1,5 @@
 import type { AppSettings, SteeringMessage } from '@conclave/shared';
-import type { PreviewResult, SnapshotSet, StartCheck } from '@conclave/core';
+import type { PreviewResult, SnapshotSet, StartCheck, SyncState } from '@conclave/core';
 import type {
   AgentRun,
   ClarifyResult,
@@ -156,6 +156,20 @@ export interface RepoInfo {
   branch?: string;
   /** A test command guessed from the repo (package.json, Cargo.toml, ...). */
   suggestedTest?: string;
+  /** The file it came from. */
+  suggestedTestSource?: string;
+}
+
+export interface TryTestResult {
+  ok: boolean;
+  cancelled?: boolean;
+  error?: string;
+  passed?: boolean;
+  code?: number | null;
+  timedOut?: boolean;
+  durationMs?: number;
+  /** The last lines it printed. */
+  tail?: string;
 }
 
 export interface NewProjectInput {
@@ -207,8 +221,8 @@ export type TeamInsights = Record<'planner' | 'builder' | 'reviewer', { reasons:
 export interface DecideOptions {
   /** A reply to a question, or a note on an install/network request. */
   answer?: string;
-  /** For a finished project: merge here, or open (or update) a pull request. */
-  via?: 'merge' | 'pr';
+  /** For a finished project: merge here, merge here and push, or open (or update) a pull request. */
+  via?: 'merge' | 'merge_push' | 'pr';
   draft?: boolean;
 }
 
@@ -325,6 +339,12 @@ export interface ConclaveApi {
       opts?: RetryOptions,
     ): Promise<Task[]>;
     permissionGaps(permissions: Permissions): Promise<PermissionGaps>;
+    /** The project's branch here against GitHub, after a fetch (never a push). */
+    syncState(id: string): Promise<SyncState>;
+    /** Run a test command once in a folder, after the user confirms. */
+    tryTest(folder: string, command: string): Promise<TryTestResult>;
+    /** Push the project's branch to GitHub, after the user confirms. Never forced. */
+    pushBase(id: string): Promise<{ ok: boolean; cancelled?: boolean; error?: string }>;
     /** Why the brain would reorder this team, from measured speed, reliability and quota. */
     teamInsights(routing: Routing): Promise<TeamInsights>;
     /** Start now, or with `at`, wait until then first (the start-up check's "Wait until…"). */
@@ -351,7 +371,7 @@ export interface ConclaveApi {
       id: string,
       decision: 'approved' | 'rejected',
       opts?: DecideOptions,
-    ): Promise<{ ok: boolean; error?: string; url?: string }>;
+    ): Promise<{ ok: boolean; error?: string; url?: string; pushError?: string }>;
   };
   github: {
     status(): Promise<GitHubStatus>;
@@ -427,6 +447,9 @@ export const IPC = {
   projectsSkip: 'projects:skip',
   projectsRetryFailed: 'projects:retry-failed',
   projectsPermissionGaps: 'projects:permission-gaps',
+  projectsSyncState: 'projects:sync-state',
+  projectsTryTest: 'projects:try-test',
+  projectsPushBase: 'projects:push-base',
   projectsTeamInsights: 'projects:team-insights',
   projectsMoveTask: 'projects:move-task',
   projectsEditTask: 'projects:edit-task',

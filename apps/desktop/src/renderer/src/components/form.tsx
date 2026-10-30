@@ -9,7 +9,12 @@ import type {
   Seat,
 } from '@conclave/shared';
 import { effortLabel, preferred } from '@conclave/shared';
-import type { PermissionGaps, ProviderInfo, TeamInsights } from '../../../shared/api';
+import type {
+  PermissionGaps,
+  ProviderInfo,
+  TeamInsights,
+  TryTestResult,
+} from '../../../shared/api';
 import { Popover } from './Popover';
 import { SeatPicker, modelLabel } from './SeatPicker';
 import { ProviderDot } from './bits';
@@ -592,6 +597,97 @@ export function GapNotes({ routing, gaps }: { routing: Routing; gaps: Permission
       {hit.map((s) => (
         <p key={s.provider}>{gaps[s.provider]}</p>
       ))}
+    </div>
+  );
+}
+
+/* ── Test command ─────────────────────────────────────────────────────── */
+
+/**
+ * The test command, explained: what it is, where a suggestion came from, what an empty one
+ * means, and "Try it" to run it once and see how it ends.
+ */
+export function TestCommandField({
+  value,
+  onChange,
+  folder,
+  source,
+  placeholder = 'npm test',
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  /** Where it would run: the project's folder. */
+  folder?: string;
+  /** The file a suggestion came from ("package.json"). */
+  source?: string;
+  placeholder?: string;
+}) {
+  const [result, setResult] = useState<TryTestResult | null>(null);
+  const [trying, setTrying] = useState(false);
+  const cmd = value.trim();
+  const tryIt = async () => {
+    if (!folder || !cmd) return;
+    setTrying(true);
+    setResult(null);
+    const r = await api().projects.tryTest(folder, cmd);
+    setTrying(false);
+    if (!r.cancelled) setResult(r);
+  };
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <span className="text-[13px] font-medium">Test command</span>
+        {source && cmd && <span className="text-[11.5px] text-faint">From {source}</span>}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setResult(null);
+          }}
+          placeholder={placeholder}
+          aria-label="Test command"
+          spellCheck={false}
+          className="h-9 min-w-0 flex-1 rounded-xl border border-line-strong bg-panel px-3 font-mono text-[12.5px] outline-none placeholder:text-faint focus:border-accent"
+        />
+        {folder && (
+          <button
+            type="button"
+            onClick={() => void tryIt()}
+            disabled={!cmd || trying}
+            className="inline-flex h-9 shrink-0 items-center rounded-xl border border-line-strong bg-panel px-3 text-[12.5px] font-medium hover:bg-sunken disabled:opacity-50"
+          >
+            {trying ? 'Running…' : 'Try it'}
+          </button>
+        )}
+      </div>
+      <p className="mt-1.5 text-[12px] text-faint">
+        {cmd
+          ? 'The command that checks the project works. Conclave runs it after every change; a change merges only if it passes.'
+          : "No tests yet? The first task writes some and sets this up. You'll see it before it's used."}
+      </p>
+      {result &&
+        (result.error ? (
+          <p role="status" className="mt-1.5 text-[12px] text-danger">
+            {result.error}
+          </p>
+        ) : (
+          <div role="status" className="mt-2 rounded-xl border border-line bg-sunken px-3 py-2">
+            <p className={`text-[12.5px] font-medium ${result.passed ? 'text-ok' : 'text-danger'}`}>
+              {result.passed
+                ? `Passed in ${((result.durationMs ?? 0) / 1000).toFixed(1)}s`
+                : result.timedOut
+                  ? 'Still running after 5 minutes: stopped'
+                  : `Failed (exit ${result.code ?? '?'})`}
+            </p>
+            {result.tail && (
+              <pre className="selectable mt-1 max-h-32 overflow-auto font-mono text-[11.5px] whitespace-pre-wrap text-muted">
+                {result.tail}
+              </pre>
+            )}
+          </div>
+        ))}
     </div>
   );
 }

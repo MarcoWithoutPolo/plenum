@@ -250,7 +250,7 @@ describe('Pull requests', () => {
     });
     const approval = store.projects.requestApproval({
       projectId: project.id,
-      kind: 'push',
+      kind: 'merge_base',
       summary: 'Merge',
     });
     return { remote, repo, home, store, ctx, project, approval };

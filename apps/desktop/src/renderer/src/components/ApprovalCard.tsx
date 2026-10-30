@@ -1,6 +1,15 @@
-import { useState } from 'react';
-import { ArrowRight, CheckCircle2, GitMerge, GitPullRequest, UploadCloud } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  CloudUpload,
+  GitMerge,
+  GitPullRequest,
+  UploadCloud,
+} from 'lucide-react';
+import type { SyncState } from '@conclave/core';
 import type { Approval, Project } from '@conclave/shared';
+import { api } from '@/lib/api';
 import { Button } from './bits';
 import { Segmented } from './form';
 import { relative } from './PlanUsage';
@@ -27,20 +36,33 @@ export function ApprovalCard({
   const open = useApp((s) => s.open);
   const prOpen = project.github?.prState === 'open';
   const canPr = Boolean(project.github?.repo);
-  const [via, setVia] = useState<'merge' | 'pr'>(prOpen ? 'pr' : 'merge');
+  const finishing = approval.kind === 'merge_base';
+  // git reports paths with forward slashes; show them the way the system writes them.
+  const folder =
+    api().platform === 'win32' ? project.repoPath.replace(/\//g, '\\') : project.repoPath;
+  const sync = useSync(finishing ? project.id : undefined);
+  const [via, setVia] = useState<'merge' | 'merge_push' | 'pr'>(prOpen ? 'pr' : 'merge');
   const [draft, setDraft] = useState(false);
   const [busy, setBusy] = useState<'approved' | 'rejected' | null>(null);
+  // GitHub ahead of your folder: pushing after the merge would be refused, so it's not offered.
+  const blocked = via === 'merge_push' && (sync?.behind ?? 0) > 0;
 
   const act = async (d: 'approved' | 'rejected') => {
     setBusy(d);
-    await decide(approval.id, d, approval.kind === 'push' ? { via, ...(draft && { draft }) } : {});
+    await decide(approval.id, d, finishing ? { via, ...(draft && { draft }) } : {});
     setBusy(null);
   };
 
   const tasks = ((approval.payload as { tasks?: string[] } | null)?.tasks ?? []).slice(0, 8);
   const publish = approval.kind === 'create_repo';
   const command = (approval.payload as { command?: string } | null)?.command;
-  const Icon = publish ? UploadCloud : via === 'pr' ? GitPullRequest : GitMerge;
+  const Icon = publish
+    ? UploadCloud
+    : via === 'pr'
+      ? GitPullRequest
+      : via === 'merge_push'
+        ? CloudUpload
+        : GitMerge;
 
   const title = publish
     ? 'Publish to GitHub'
@@ -55,15 +77,25 @@ export function ApprovalCard({
       ? prOpen
         ? `Pushes ${project.integrationBranch} to ${project.github?.prBranch} on GitHub. Nothing else changes.`
         : `Pushes ${project.integrationBranch} to its own branch on ${project.github?.repo} and opens a pull request into ${project.baseBranch}. Never force-pushes.`
-      : `Merges ${project.integrationBranch} into your ${project.baseBranch} branch here. Nothing is pushed.`;
+      : via === 'merge_push'
+        ? `Merges into ${project.baseBranch} in your folder ${folder}, then pushes ${project.baseBranch} to ${sync?.url ?? 'GitHub'}. Never forced.`
+        : `Merges into ${project.baseBranch} in your folder ${folder}. GitHub isn't changed.`;
   const primary = publish
     ? 'Publish'
     : via === 'pr'
       ? prOpen
         ? 'Push to the pull request'
         : 'Open pull request'
-      : 'Approve merge';
-  const working = publish ? 'Publishing…' : via === 'pr' ? 'Pushing…' : 'Merging…';
+      : via === 'merge_push'
+        ? 'Merge and push'
+        : 'Approve merge';
+  const working = publish
+    ? 'Publishing…'
+    : via === 'pr'
+      ? 'Pushing…'
+      : via === 'merge_push'
+        ? 'Merging and pushing…'
+        : 'Merging…';
 
   const banner = variant === 'banner';
   return (
@@ -99,7 +131,8 @@ export function ApprovalCard({
               {command}
             </code>
           )}
-          {!publish && canPr && !prOpen && (
+          {finishing && sync?.remote && <SyncLine sync={sync} branch={project.baseBranch} />}
+          {finishing && !prOpen && (sync?.remote || canPr) && (
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <Segmented
                 size="sm"
@@ -108,7 +141,10 @@ export function ApprovalCard({
                 onChange={setVia}
                 options={[
                   { value: 'merge', label: 'Merge here' },
-                  { value: 'pr', label: 'Open a pull request' },
+                  ...(sync?.remote
+                    ? [{ value: 'merge_push' as const, label: 'Merge here, then push' }]
+                    : []),
+                  ...(canPr ? [{ value: 'pr' as const, label: 'Open a pull request' }] : []),
                 ]}
               />
               {via === 'pr' && (
@@ -166,12 +202,68 @@ export function ApprovalCard({
           <Button
             variant="primary"
             onClick={() => void act('approved')}
-            disabled={busy !== null || (running && !publish)}
+            disabled={busy !== null || (running && !publish) || blocked}
           >
             <Icon className="size-3.5" /> {busy === 'approved' ? working : primary}
           </Button>
         </span>
       </div>
     </article>
+  );
+}
+
+/** The project's branch against GitHub, fetched when shown (a fetch, never a push). */
+export function useSync(projectId: string | undefined, round = 0): SyncState | null {
+  const [sync, setSync] = useState<SyncState | null>(null);
+  useEffect(() => {
+    if (!projectId) return;
+    let live = true;
+    api()
+      .projects.syncState(projectId)
+      .then((s) => live && setSync(s))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [projectId, round]);
+  return sync;
+}
+
+/** "main here is 3 commits ahead of GitHub", in one line. */
+export function SyncLine({
+  sync,
+  branch,
+  onPush,
+}: {
+  sync: SyncState;
+  branch: string;
+  onPush?: () => void;
+}) {
+  const n = (k: number) => `${k} commit${k === 1 ? '' : 's'}`;
+  const where =
+    sync.url && /github\.com/i.test(sync.url) ? 'GitHub' : (sync.remote ?? 'the remote');
+  const text = sync.missing
+    ? `${where} doesn't have ${branch} yet.`
+    : sync.behind > 0
+      ? `${where} has ${n(sync.behind)} on ${branch} you don't have. Pull first before pushing.`
+      : sync.ahead > 0
+        ? `${branch} here is ${n(sync.ahead)} ahead of ${where}: not on ${where} yet.`
+        : `${branch} here matches ${where}.`;
+  return (
+    <p
+      className={`mt-2 flex flex-wrap items-center gap-x-2 text-[12.5px] ${sync.behind > 0 ? 'text-warn' : 'text-muted'}`}
+    >
+      <span>{text}</span>
+      {sync.error && <span className="text-faint">(Couldn't check just now: {sync.error})</span>}
+      {onPush && sync.behind === 0 && (sync.ahead > 0 || sync.missing) && (
+        <button
+          type="button"
+          onClick={onPush}
+          className="font-medium text-accent-ink hover:underline"
+        >
+          Push
+        </button>
+      )}
+    </p>
   );
 }

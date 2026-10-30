@@ -429,6 +429,105 @@ export async function mergeCommitDiff(
 
 export type PushResult = { ok: true; branch: string } | { ok: false; error: string };
 
+/** Your branch here against its copy on GitHub (or another remote), after a fetch. */
+export interface SyncState {
+  /** The remote's name ("origin"), when the repo has one. */
+  remote?: string;
+  /** Where it points, without any user name or token in it. */
+  url?: string;
+  /** Commits here that the remote doesn't have, and the other way round. */
+  ahead: number;
+  behind: number;
+  /** The remote doesn't have this branch yet. */
+  missing?: boolean;
+  fetchedAt: number;
+  /** The fetch failed (offline, signed out): counts are from the last fetch. */
+  error?: string;
+}
+
+/** A remote URL fit to show: user names and tokens taken out. */
+export function safeRemoteUrl(url: string): string {
+  return url.trim().replace(/^(\w+:\/\/)[^@/]*@/, '$1');
+}
+
+/**
+ * Compares `branch` with the remote's copy: `git fetch` (never a push), then counts. Uses the
+ * branch's upstream when it has one, otherwise `origin`.
+ */
+export async function syncState(repo: string, branch: string): Promise<SyncState> {
+  const fetchedAt = Date.now();
+  const upstream = (
+    await git(
+      repo,
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`],
+      true,
+    )
+  ).stdout.trim();
+  const remotes = (await git(repo, ['remote'], true)).stdout.split(/\r?\n/).filter(Boolean);
+  const remote = upstream.includes('/')
+    ? upstream.split('/')[0]!
+    : remotes.includes('origin')
+      ? 'origin'
+      : remotes[0];
+  if (!remote) return { ahead: 0, behind: 0, fetchedAt };
+  const remoteBranch = upstream.includes('/') ? upstream.slice(remote.length + 1) : branch;
+  const url = safeRemoteUrl((await git(repo, ['remote', 'get-url', remote], true)).stdout);
+  const fetch = await git(repo, ['fetch', '--quiet', remote, remoteBranch], true);
+  const error =
+    fetch.code === 0
+      ? undefined
+      : (fetch.stderr || fetch.error || 'git fetch failed').trim().split('\n').at(-1);
+  const ref = `refs/remotes/${remote}/${remoteBranch}`;
+  const has = (await git(repo, ['rev-parse', '--verify', '--quiet', ref], true)).code === 0;
+  if (!has) {
+    const count = (await git(repo, ['rev-list', '--count', branch], true)).stdout.trim();
+    return {
+      remote,
+      url,
+      ahead: Number(count) || 0,
+      behind: 0,
+      missing: true,
+      fetchedAt,
+      ...(error && { error }),
+    };
+  }
+  const counts = (
+    await git(repo, ['rev-list', '--left-right', '--count', `${branch}...${ref}`], true)
+  ).stdout
+    .trim()
+    .split(/\s+/)
+    .map(Number);
+  return {
+    remote,
+    url,
+    ahead: counts[0] ?? 0,
+    behind: counts[1] ?? 0,
+    fetchedAt,
+    ...(error && { error }),
+  };
+}
+
+/**
+ * Pushes your base branch to its remote, only when you asked for it: never forced, so a remote
+ * with commits you don't have refuses it ("pull first").
+ */
+export async function pushBase(repo: string, branch: string, remote: string): Promise<PushResult> {
+  if (!/^[\w./-]+$/.test(branch) || !/^[\w.-]+$/.test(remote)) {
+    return { ok: false, error: `Refusing to push ${branch} to ${remote}.` };
+  }
+  const push = await git(
+    repo,
+    ['push', '--porcelain', remote, `refs/heads/${branch}:refs/heads/${branch}`],
+    true,
+  );
+  if (push.code === 0) return { ok: true, branch };
+  const text = `${push.stdout}\n${push.stderr}`;
+  if (/rejected|non-fast-forward|fetch first/i.test(text)) {
+    return { ok: false, error: `${remote} has commits you don't have. Pull first, then push.` };
+  }
+  return { ok: false, error: `git push failed: ${text.trim().split('\n').at(-1)}` };
+}
+
 /**
  * Push a local branch to its own remote branch. Never forces and never targets
  * `protect` (the base branch). When the remote branch exists and has diverged, it tries

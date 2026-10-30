@@ -15,6 +15,9 @@ import {
   decideApproval,
   isProjectRunning,
   projectRoot,
+  pushBase,
+  safeRemoteUrl,
+  syncState,
   taskChanges,
 } from '../src/index.js';
 
@@ -278,6 +281,87 @@ describe('approving the merge', () => {
     expect(result).toMatchObject({ ok: true, approval: { status: 'rejected' } });
     expect(git(r, 'log', '--oneline')).not.toContain('Merge');
     expect(await decideApproval(ctx, home, approval.id, 'approved')).toMatchObject({ ok: false });
+  });
+
+  /** A bare repo standing in for GitHub, with main pushed to it. */
+  function withRemote(r: string) {
+    const remote = mkdtempSync(join(tmpdir(), 'conclave-remote-'));
+    git(remote, 'init', '-q', '--bare', '-b', 'main');
+    git(r, 'remote', 'add', 'origin', remote);
+    git(r, 'push', '-q', '-u', 'origin', 'main');
+    return remote;
+  }
+
+  it('compares your branch with GitHub after a fetch, never pushing', async () => {
+    const { repo: r } = await finished();
+    expect(await syncState(r, 'main')).toMatchObject({ ahead: 0, behind: 0 });
+    expect((await syncState(r, 'main')).remote).toBeUndefined();
+    const remote = withRemote(r);
+    expect(await syncState(r, 'main')).toMatchObject({ remote: 'origin', ahead: 0, behind: 0 });
+    git(r, 'commit', '-q', '--allow-empty', '-m', 'mine');
+    expect(await syncState(r, 'main')).toMatchObject({ ahead: 1, behind: 0 });
+    // Someone else pushes to GitHub: now it's both ways.
+    const other = mkdtempSync(join(tmpdir(), 'conclave-other-'));
+    git(other, 'clone', '-q', remote, '.');
+    git(
+      other,
+      '-c',
+      'user.name=O',
+      '-c',
+      'user.email=o@example.com',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'theirs',
+    );
+    git(other, 'push', '-q', 'origin', 'main');
+    expect(await syncState(r, 'main')).toMatchObject({ ahead: 1, behind: 1 });
+    expect(git(remote, 'log', '--oneline', 'main')).not.toContain('mine');
+    expect(safeRemoteUrl('https://user:tok123@github.com/a/b.git')).toBe(
+      'https://github.com/a/b.git',
+    );
+  });
+
+  it('merges here, then pushes to GitHub when asked', async () => {
+    const { ctx, home, repo: r, approval } = await finished();
+    const remote = withRemote(r);
+    const result = await decideApproval(ctx, home, approval.id, 'approved', undefined, {
+      via: 'merge_push',
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(result.ok && result.pushError).toBeFalsy();
+    expect(git(remote, 'log', '--oneline', '-1', 'main')).toContain('Merge conclave/integration');
+  });
+
+  it("refuses to merge and push while GitHub has commits you don't, and never forces", async () => {
+    const { ctx, home, repo: r, approval } = await finished();
+    const remote = withRemote(r);
+    const other = mkdtempSync(join(tmpdir(), 'conclave-other-'));
+    git(other, 'clone', '-q', remote, '.');
+    git(
+      other,
+      '-c',
+      'user.name=O',
+      '-c',
+      'user.email=o@example.com',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'theirs',
+    );
+    git(other, 'push', '-q', 'origin', 'main');
+    const result = await decideApproval(ctx, home, approval.id, 'approved', undefined, {
+      via: 'merge_push',
+    });
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining('Pull first') });
+    expect(git(r, 'log', '--oneline')).not.toContain('Merge'); // nothing merged either
+    expect(git(remote, 'log', '--oneline', '-1', 'main')).toContain('theirs');
+    expect(await pushBase(r, 'main', 'origin')).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Pull first'),
+    });
   });
 
   it('shows what a merged task changed', async () => {

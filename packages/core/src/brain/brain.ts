@@ -743,7 +743,7 @@ export class Brain {
       const prOpen = project.github?.prState === 'open';
       const approval = this.projects.requestApproval({
         projectId: this.projectId,
-        kind: 'push',
+        kind: 'merge_base',
         summary: prOpen
           ? `Push the new work to the pull request (${merged.length} task(s))`
           : `Merge ${project.integrationBranch} into ${project.baseBranch} (${merged.length} task(s))`,

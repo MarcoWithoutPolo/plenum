@@ -24,7 +24,7 @@ import {
   type ProjectDecision,
   type Task,
 } from '@conclave/shared';
-import { ApprovalCard } from '@/components/ApprovalCard';
+import { ApprovalCard, SyncLine, useSync } from '@/components/ApprovalCard';
 import { Dialog } from '@/components/Dialog';
 import { Popover } from '@/components/Popover';
 import { AddTask, SteeringPanel, TaskMenu } from '@/components/Steering';
@@ -362,6 +362,7 @@ function Header({
           {project.statusReason}
         </p>
       )}
+      {!running && project.status !== 'draft' && <FinishedSync project={project} />}
 
       <button
         type="button"
@@ -447,6 +448,27 @@ function Header({
         onClose={() => setConfirmRemove(false)}
       />
     </section>
+  );
+}
+
+/** Your branch here against GitHub while the project is idle, with Push when it's ahead. */
+function FinishedSync({ project }: { project: Project }) {
+  const [round, setRound] = useState(0);
+  const sync = useSync(project.id, round);
+  const showToast = useApp((s) => s.showToast);
+  if (!sync?.remote) return null;
+  return (
+    <SyncLine
+      sync={sync}
+      branch={project.baseBranch}
+      onPush={async () => {
+        const result = await api().projects.pushBase(project.id);
+        if (result.cancelled) return;
+        if (result.ok) showToast('info', `Pushed ${project.baseBranch} to GitHub.`);
+        else showToast('error', result.error ?? "The push didn't go through.");
+        setRound((r) => r + 1);
+      }}
+    />
   );
 }
 

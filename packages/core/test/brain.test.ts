@@ -186,7 +186,7 @@ describe('Brain', () => {
     expect(store.projects.get(project.id)?.status).toBe('done');
     const approvals = store.projects.approvals(project.id, 'pending');
     expect(approvals).toHaveLength(1);
-    expect(approvals[0]?.kind).toBe('push');
+    expect(approvals[0]?.kind).toBe('merge_base');
 
     const kinds = store.projects.events(project.id).map((e) => e.kind);
     expect(kinds).toEqual(
@@ -1524,7 +1524,7 @@ describe('Right-sized plans', () => {
     expect(outcome.kind === 'done' && outcome.reason).toContain('checked the whole result');
     expect(claude.requests.map((r) => r.role)).toEqual(['planner', 'reviewer']);
     expect(claude.requests[1]!.prompt).toContain('THIS IS THE LAST PLANNED TASK');
-    expect(store.projects.approvals(project.id, 'pending')[0]?.kind).toBe('push');
+    expect(store.projects.approvals(project.id, 'pending')[0]?.kind).toBe('merge_base');
   });
 
   it('hands the gaps a goal check finds to the next plan', async () => {

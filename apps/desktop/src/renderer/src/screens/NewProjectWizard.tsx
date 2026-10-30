@@ -40,6 +40,7 @@ import {
   defaultRouting,
   inputClass,
   textareaClass,
+  TestCommandField,
 } from '@/components/form';
 import { api } from '@/lib/api';
 import { useProjects } from '@/lib/projects';
@@ -709,22 +710,14 @@ export function NewProjectWizard({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Field
-              label="Test command"
-              hintBelow
-              hint={
-                test.trim() ? 'Must pass after every task.' : 'Empty: the first task sets one up.'
-              }
-            >
-              <input
-                value={test}
-                onChange={(e) => setTest(e.target.value)}
-                placeholder="npm test"
-                aria-label="Test command"
-                spellCheck={false}
-                className={`${inputClass} font-mono text-[12.5px]`}
-              />
-            </Field>
+            <TestCommandField
+              value={test}
+              onChange={setTest}
+              {...(folder?.kind === 'ready' && { folder: folder.root })}
+              {...(folder?.kind === 'ready' &&
+                folder.suggestedTestSource &&
+                test === folder.suggestedTest && { source: folder.suggestedTestSource })}
+            />
             <Field
               label="Done when"
               optional

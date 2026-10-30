@@ -20,6 +20,8 @@ export type FolderState =
       name: string;
       branch: string;
       suggestedTest?: string;
+      /** The file the suggestion came from. */
+      suggestedTestSource?: string;
     }
   | { kind: 'missing'; path: string }
   /** Not a git repository yet: "Set up git here". */
@@ -96,35 +98,56 @@ export async function inspectFolder(path: string): Promise<FolderState> {
   }
   const branch = await currentBranch(root);
   if (!same(root, path)) return { kind: 'nested', path, root, name: basename(root), branch };
-  const test = guessTestCommand(root);
+  const test = detectTestCommand(root);
   return {
     kind: 'ready',
     path,
     root,
     name: basename(root),
     branch,
-    ...(test && { suggestedTest: test }),
+    ...(test && { suggestedTest: test.command, suggestedTestSource: test.source }),
   };
 }
 
 export function guessTestCommand(root: string): string | undefined {
+  return detectTestCommand(root)?.command;
+}
+
+/**
+ * The command that checks this project works, read from the files that say so, and which file
+ * it came from ("package.json") so the wizard can tell you why it suggests it.
+ */
+export function detectTestCommand(root: string): { command: string; source: string } | undefined {
   const has = (f: string) => existsSync(join(root, f));
+  const read = (f: string) => {
+    try {
+      return readFileSync(join(root, f), 'utf8');
+    } catch {
+      return '';
+    }
+  };
   if (has('package.json')) {
     try {
-      const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
-        scripts?: Record<string, string>;
-      };
+      const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> };
       const test = pkg.scripts?.test;
       if (test && !/no test specified/.test(test)) {
-        return has('pnpm-lock.yaml') ? 'pnpm test' : has('yarn.lock') ? 'yarn test' : 'npm test';
+        const runner = has('pnpm-lock.yaml') ? 'pnpm' : has('yarn.lock') ? 'yarn' : 'npm';
+        return { command: `${runner} test`, source: 'package.json' };
       }
     } catch {
-      // unreadable package.json: no guess
+      // unreadable package.json: look at the others
     }
   }
-  if (has('Cargo.toml')) return 'cargo test';
-  if (has('go.mod')) return 'go test ./...';
-  if (has('pyproject.toml') || has('pytest.ini') || has('setup.py')) return 'pytest';
+  if (has('Cargo.toml')) return { command: 'cargo test', source: 'Cargo.toml' };
+  if (has('go.mod')) return { command: 'go test ./...', source: 'go.mod' };
+  if (has('pytest.ini')) return { command: 'pytest', source: 'pytest.ini' };
+  if (has('pyproject.toml') && /\[tool\.pytest|pytest/.test(read('pyproject.toml'))) {
+    return { command: 'pytest', source: 'pyproject.toml' };
+  }
+  if (has('setup.py') || has('pyproject.toml')) {
+    return { command: 'pytest', source: has('setup.py') ? 'setup.py' : 'pyproject.toml' };
+  }
+  if (/^test\s*:/m.test(read('Makefile'))) return { command: 'make test', source: 'Makefile' };
   return undefined;
 }
 

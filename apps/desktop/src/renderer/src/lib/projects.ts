@@ -63,7 +63,9 @@ function decidedText(kind: Approval['kind'] | undefined, decision: string, opts?
     default:
       return opts?.via === 'pr'
         ? 'Pull request opened.'
-        : 'Merged. The work is on your branch now.';
+        : opts?.via === 'merge_push'
+          ? 'Merged here and pushed to GitHub.'
+          : "Merged into your branch here. GitHub isn't changed.";
   }
 }
 
@@ -199,6 +201,10 @@ export const useProjects = create<ProjectsState>((set, get) => {
         if (!result.ok) {
           toast(result.error ?? 'That did not work.');
           return false;
+        }
+        if (result.pushError) {
+          toast(`Merged here, but the push didn't go through: ${result.pushError}`);
+          return true;
         }
         toast(decidedText(kind, decision, opts), 'info');
         return true;
