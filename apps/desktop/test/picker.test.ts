@@ -78,7 +78,23 @@ describe('picker data', () => {
     });
     // One maker: no chips. Several: one chip per maker.
     expect(c!.models.every((m) => m.group === undefined)).toBe(true);
-    expect(new Set(cur!.models.map((m) => m.group))).toEqual(new Set(['GPT', 'Claude']));
+    // A short list needs no chips; a long one of several makers gets one per maker.
+    expect(cur!.models.every((m) => m.group === undefined)).toBe(true);
+    const long = groupVariants(
+      [
+        'gpt-a',
+        'gpt-b',
+        'gpt-c',
+        'gpt-d',
+        'gpt-e',
+        'claude-a',
+        'claude-b',
+        'claude-c',
+        'grok-a',
+      ].map((id) => ({ id })),
+    );
+    const [many] = pickerProviders([{ ...cursor, models: long } as ProviderInfo]);
+    expect(new Set(many!.models.map((m) => m.group))).toEqual(new Set(['GPT', 'Claude', 'Grok']));
     expect(c!.models.find((m) => m.id === 'opus')!.efforts!.map((e) => e.label)).toEqual([
       'Low',
       'High',

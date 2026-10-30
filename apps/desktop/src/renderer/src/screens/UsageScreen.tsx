@@ -38,6 +38,7 @@ export function UsageScreen() {
       providers.some((x) => x.provider === p && x.auth === 'signed_in') ||
       usage?.week.some((t) => t.provider === p),
   );
+  const chart = foldSeries(shown, usage?.daily ?? []);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -109,7 +110,7 @@ export function UsageScreen() {
             </p>
           )}
 
-          <ActivityChart daily={usage?.daily ?? []} series={shown} />
+          <ActivityChart daily={chart.daily} series={chart.series} />
           <RecentRuns runs={usage?.recent ?? []} />
         </div>
       </div>
@@ -185,6 +186,39 @@ function ProviderUsage({
 
 /* ── Daily activity: stacked bars, one segment per provider ──────────── */
 
+/**
+ * No chart has more than six coloured series: past that, colour-blind readers can't tell them
+ * apart. The five busiest AIs keep their colours; the rest fold into a grey "Other".
+ */
+const MAX_SERIES = 6;
+const OTHER = 'other' as ProviderId;
+
+export function foldSeries(
+  series: ProviderId[],
+  daily: DailyActivity[],
+): { series: ProviderId[]; daily: DailyActivity[] } {
+  if (series.length <= MAX_SERIES) return { series, daily };
+  const runs = (p: ProviderId) =>
+    daily.filter((r) => r.provider === p).reduce((n, r) => n + r.runs, 0);
+  const busiest = new Set([...series].sort((a, b) => runs(b) - runs(a)).slice(0, MAX_SERIES - 1));
+  const kept = series.filter((p) => busiest.has(p));
+  const folded = new Map<string, DailyActivity>();
+  for (const r of daily) {
+    const provider = busiest.has(r.provider) ? r.provider : OTHER;
+    const key = `${r.day}/${provider}`;
+    const prev = folded.get(key);
+    folded.set(key, {
+      ...r,
+      provider,
+      runs: (prev?.runs ?? 0) + r.runs,
+      tokens: (prev?.tokens ?? 0) + r.tokens,
+    });
+  }
+  return { series: [...kept, OTHER], daily: [...folded.values()] };
+}
+
+const seriesName = (p: ProviderId) => (p === OTHER ? 'Other' : providerName(p));
+
 function ActivityChart({ daily, series }: { daily: DailyActivity[]; series: ProviderId[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const days = useMemo(() => {
@@ -221,7 +255,10 @@ function ActivityChart({ daily, series }: { daily: DailyActivity[]; series: Prov
           Requests per day
         </h2>
         <span className="text-[12px] text-faint">Last 14 days</span>
-        <ul className="ml-auto flex items-center gap-3" aria-label="Legend">
+        <ul
+          className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1"
+          aria-label="Legend"
+        >
           {series.map((p) => (
             <li key={p} className="flex items-center gap-1.5 text-[12px] text-muted">
               <span
@@ -229,7 +266,7 @@ function ActivityChart({ daily, series }: { daily: DailyActivity[]; series: Prov
                 style={{ background: `var(--${p})` }}
                 aria-hidden
               />
-              {providerName(p)}
+              {seriesName(p)}
             </li>
           ))}
         </ul>
@@ -301,7 +338,7 @@ function ActivityChart({ daily, series }: { daily: DailyActivity[]; series: Prov
                           className="size-2 rounded-[3px]"
                           style={{ background: `var(--${p})` }}
                         />
-                        <span className="flex-1">{providerName(p)}</span>
+                        <span className="flex-1">{seriesName(p)}</span>
                         <span className="font-medium text-ink tabular-nums">
                           {d.values[p] ?? 0}
                         </span>
@@ -329,7 +366,7 @@ function ActivityChart({ daily, series }: { daily: DailyActivity[]; series: Prov
           <tr>
             <th>Day</th>
             {series.map((p) => (
-              <th key={p}>{providerName(p)}</th>
+              <th key={p}>{seriesName(p)}</th>
             ))}
           </tr>
         </thead>

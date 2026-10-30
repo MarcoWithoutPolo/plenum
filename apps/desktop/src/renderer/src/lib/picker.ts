@@ -29,7 +29,7 @@ export function effortNote(level: string | undefined, model?: ModelOption): stri
 const BILLING = {
   plan: 'Your plan',
   credits: 'Pays per use',
-  'free-local': 'Free · on your hardware',
+  'free-local': 'Free, local',
 } as const;
 
 function toPickerModel(info: ProviderInfo, m: ModelOption, makers: number): PickerModel {
@@ -56,7 +56,8 @@ export function pickerProviders(providers: ProviderInfo[]): PickerProvider[] {
   return providers.map((info) => {
     const entry = providerEntry(info.provider);
     const connected = info.installed && info.auth === 'signed_in';
-    const makers = new Set(info.models.map((m) => m.maker ?? '')).size;
+    // Maker chips only help in a long list of many makers' models (Cursor's).
+    const makers = info.models.length > 8 ? new Set(info.models.map((m) => m.maker ?? '')).size : 1;
     const status = info.limit
       ? 'At its usage limit'
       : connected

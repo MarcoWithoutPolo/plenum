@@ -6,10 +6,12 @@ import {
   GitHub,
   type Adapter,
   type CommandResult,
+  type FakeOptions,
+  type FakeScript,
   type RunRequest,
   type Store,
 } from '@conclave/core';
-import { groupVariants, type ProviderId } from '@conclave/shared';
+import { groupVariants, markOlder, type ProviderId } from '@conclave/shared';
 
 interface DemoTask {
   title: string;
@@ -506,5 +508,114 @@ export function demoAdapters(): Adapter[] {
         },
       },
     ),
+    ...moreAIs(answer, projectAct),
+  ];
+}
+
+/**
+ * The AIs v0.9 added. Not installed in the demo by default, so every scenario keeps its
+ * three-AI team and they show under "AIs you can add". CONCLAVE_DEMO_TEAM=9 signs them all in.
+ */
+function moreAIs(
+  answer: (who: string) => FakeScript['reply'],
+  act: FakeScript['act'],
+): FakeAdapter[] {
+  const on = process.env.CONCLAVE_DEMO_TEAM === '9';
+  const status = (version: string, detail: string) =>
+    on
+      ? { version, detail }
+      : { installed: false, auth: 'unknown' as const, version: undefined, detail: undefined };
+  const fake = (id: string, name: string, delayMs: number, options: Partial<FakeOptions>) =>
+    new FakeAdapter({ reply: answer(name), delayMs, act }, { id, displayName: name, ...options });
+  return [
+    fake('copilot', 'GitHub Copilot', 35, {
+      vision: 'native',
+      status: status('1.0.105', 'GitHub account'),
+      models: {
+        defaultModel: 'auto',
+        models: [
+          {
+            id: 'auto',
+            label: 'Auto',
+            description: 'Copilot picks the best model your plan allows',
+          },
+          { id: 'gpt-6-luna', label: 'gpt-6-luna' },
+        ],
+      },
+    }),
+    fake('cursor', 'Cursor', 30, {
+      vision: 'files',
+      status: status('2026.10.22', 'Cursor account'),
+      // A slice of `cursor-agent models`, grouped as the real list is.
+      models: {
+        defaultModel: 'auto',
+        models: markOlder(
+          groupVariants([
+            { id: 'auto', label: 'Auto' },
+            { id: 'composer-2.5', label: 'Composer 2.5' },
+            { id: 'composer-2.5-fast', label: 'Composer 2.5 Fast' },
+            { id: 'claude-opus-5-5-low', label: 'Claude Opus 5.5 1M Low' },
+            { id: 'claude-opus-5-5-high', label: 'Claude Opus 5.5 1M High' },
+            { id: 'claude-opus-5-5-xhigh', label: 'Claude Opus 5.5 1M Extra High' },
+            { id: 'claude-opus-5-5-high-fast', label: 'Claude Opus 5.5 1M High Fast' },
+            { id: 'claude-opus-4-8-high', label: 'Claude Opus 4.8 1M High' },
+            { id: 'gpt-5.6-sol-low', label: 'GPT-5.6 Sol 1M Low' },
+            { id: 'gpt-5.6-sol-high', label: 'GPT-5.6 Sol 1M High' },
+            { id: 'gpt-5.6-sol-xhigh', label: 'GPT-5.6 Sol 1M Extra High' },
+            { id: 'grok-4.7-low', label: 'Grok 4.7 Low' },
+            { id: 'grok-4.7-high', label: 'Grok 4.7 High' },
+            { id: 'gemini-3.8-flash-high', label: 'Gemini 3.8 Flash' },
+            { id: 'kimi-k3-high', label: 'Kimi K3 High' },
+            { id: 'claude-sonnet-5-5-high', label: 'Claude Sonnet 5.5 High' },
+            { id: 'gpt-5.3-codex', label: 'Codex 5.3' },
+            { id: 'gpt-5.3-codex-high', label: 'Codex 5.3 High' },
+          ]),
+        ),
+      },
+    }),
+    fake('grok', 'Grok Build', 30, {
+      vision: 'files',
+      status: status('1.0.70', 'grok.com account'),
+      models: {
+        defaultModel: 'grok-4.7',
+        models: [
+          {
+            id: 'grok-4.7',
+            label: 'Grok 4.7',
+            efforts: ['low', 'medium', 'high', 'xhigh'],
+            maker: 'Grok',
+          },
+        ],
+      },
+    }),
+    fake('local', 'Local models', 45, {
+      status: status('0.32.14', '3 models on this computer · OpenCode 1.19.5 builds'),
+      models: {
+        defaultModel: 'gpt-oss:20b',
+        models: [
+          {
+            id: 'gpt-oss:20b',
+            label: 'GPT-OSS 20B',
+            description: '20.9B · MXFP4 · uses tools',
+            tags: ['14 GB', 'fits', '128k context'],
+            maker: 'GPT',
+          },
+          {
+            id: 'qwen2.5-coder:14b',
+            label: 'Qwen2.5 Coder 14B',
+            description: '14.8B · Q4_K_M · answers only',
+            tags: ['9.0 GB', 'fits', '32k context'],
+            maker: 'Qwen',
+          },
+          {
+            id: 'llama3.2:1b',
+            label: 'Llama 3.2 1B',
+            description: '1.2B · Q8_0 · answers only',
+            tags: ['1.3 GB', 'fits', '128k context'],
+            maker: 'Llama',
+          },
+        ],
+      },
+    }),
   ];
 }

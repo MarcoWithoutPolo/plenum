@@ -49,6 +49,7 @@ test('runs with a locked-down renderer', async () => {
     'council',
     'decisions',
     'github',
+    'local',
     'onInstallLog',
     'onOpenProject',
     'openExternal',

@@ -8,6 +8,7 @@ import {
   localEngine,
   openCodeArgs,
   openCodeConfig,
+  prettyName,
   type ProcessOptions,
 } from '../src/index.js';
 import { fixturePath, replay } from './helpers.js';
@@ -89,6 +90,8 @@ describe('Local models', () => {
     });
     const list = await new LocalAdapter({ fetch: http, hardware: () => gpu }).models();
     expect(list.models.map((m) => m.id)).toEqual(['gpt-oss:20b', 'llama4:scout']);
+    // Default: the biggest model that fits in GPU memory.
+    expect(list.defaultModel).toBe('gpt-oss:20b');
     expect(list.models[0]!.tags).toEqual(['14 GB', 'fits', '128k context']);
     expect(list.models[1]!.tags).toContain('too big');
     expect(list.models[0]!.description).toContain('uses tools');
@@ -143,6 +146,13 @@ describe('Local models', () => {
     expect(localEngine('reviewer', true)).toBe('ollama');
     expect(localEngine('builder', false)).toBe('opencode');
     expect(localEngine('builder', false, 1)).toBe('ollama');
+  });
+
+  it('names models the way their makers write them', () => {
+    expect(prettyName('gpt-oss:20b')).toBe('GPT-OSS 20B');
+    expect(prettyName('llama3.2:1b')).toBe('Llama 3.2 1B');
+    expect(prettyName('qwen2.5-coder:14b')).toBe('Qwen2.5 Coder 14B');
+    expect(prettyName('mistral:latest')).toBe('Mistral');
   });
 
   it('tells whether a model fits this machine', () => {

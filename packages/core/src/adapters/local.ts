@@ -282,19 +282,29 @@ export class LocalAdapter implements Adapter {
         maker: makerOf(m.name),
       });
     }
-    // Biggest model that fits first: usually the most capable one this machine runs well.
-    return { models: out };
+    const best = bestFit(models, hw);
+    return { models: out, ...(best && { defaultModel: best }) };
   }
 
-  run(request: RunRequest): AsyncIterable<AgentEvent> {
+  async *run(request: RunRequest): AsyncGenerator<AgentEvent> {
     assertSafeModel(request.model);
+    // "Default" is the biggest downloaded model that fits this machine.
+    const model = request.model ?? (await this.defaultModel());
     const engine = localEngine(request.role, request.readOnly, request.permissions?.level);
-    return engine === 'opencode' ? this.build(request) : this.answer(request);
+    yield* engine === 'opencode' ? this.build(request, model) : this.answer(request, model);
+  }
+
+  private async defaultModel(): Promise<string> {
+    try {
+      const { models } = await this.api<{ models: { name: string; size: number }[] }>('/api/tags');
+      return bestFit(models, this.hardware()) ?? '';
+    } catch {
+      return '';
+    }
   }
 
   /** Answers straight from Ollama's chat API, streamed. */
-  private answer(request: RunRequest): AsyncIterable<AgentEvent> {
-    const model = request.model ?? '';
+  private answer(request: RunRequest, model: string): AsyncIterable<AgentEvent> {
     const job = request.role === 'reviewer' || request.role === 'planner' ? 'review' : 'chat';
     // Enough for the prompt (about 3.5 characters a token) plus the answer.
     const numCtx = Math.min(
@@ -323,8 +333,7 @@ export class LocalAdapter implements Adapter {
   }
 
   /** Builds with OpenCode on the chosen model, given a context it can work in. */
-  private async *build(request: RunRequest): AsyncGenerator<AgentEvent> {
-    const model = request.model ?? '';
+  private async *build(request: RunRequest, model: string): AsyncGenerator<AgentEvent> {
     const alias = await this.ensureContext(model, CONTEXT.build);
     const dir = mkdtempSync(join(tmpdir(), 'conclave-opencode-'));
     try {
@@ -414,15 +423,39 @@ export class LocalAdapter implements Adapter {
   }
 }
 
-function prettyName(id: string): string {
+/** The biggest model that fits in GPU memory, else the smallest one (it at least runs). */
+export function bestFit(
+  models: { name: string; size: number }[],
+  hw: Hardware,
+): string | undefined {
+  const own = models.filter((m) => !m.name.startsWith(ALIAS_PREFIX));
+  const fitting = own.filter((m) => fitOf(m.size / 1e9, hw) === 'gpu');
+  const pick = fitting.length
+    ? fitting.reduce((a, b) => (b.size > a.size ? b : a))
+    : own.reduce<(typeof own)[number] | undefined>(
+        (a, b) => (!a || b.size < a.size ? b : a),
+        undefined,
+      );
+  return pick?.name;
+}
+
+const ACRONYMS: Record<string, string> = { gpt: 'GPT', oss: 'OSS', glm: 'GLM', qwq: 'QwQ' };
+
+/** "gpt-oss:20b" → "GPT-OSS 20B", "llama3.2:1b" → "Llama 3.2 1B", "qwen2.5-coder:14b" → "Qwen2.5 Coder 14B". */
+export function prettyName(id: string): string {
   const [name = id, tag] = id.split(':');
   const words = name
     .replace(/^.*\//, '')
     .split(/[-_]/)
-    .map((w) => (/^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)));
-  return [words.join(' '), tag && tag !== 'latest' ? tag.toUpperCase() : '']
-    .filter(Boolean)
-    .join(' ');
+    .map((w) => {
+      if (ACRONYMS[w]) return ACRONYMS[w]!;
+      const split = /^(llama|gemma|phi|mistral|granite)(\d.*)$/.exec(w);
+      if (split) return `${split[1]!.charAt(0).toUpperCase()}${split[1]!.slice(1)} ${split[2]}`;
+      return /^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1);
+    });
+  // Acronym pairs read as one name: GPT-OSS.
+  const joined = words.join(' ').replace(/\b(GPT) (OSS)\b/, '$1-$2');
+  return [joined, tag && tag !== 'latest' ? tag.toUpperCase() : ''].filter(Boolean).join(' ');
 }
 
 export function openCodeArgs(model: string, brief: string, cwd: string): string[] {

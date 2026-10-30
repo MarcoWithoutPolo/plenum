@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, Plus, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Plus, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import type {
   AskPolicy,
   PermissionLevel,
@@ -8,7 +8,7 @@ import type {
   Routing,
   Seat,
 } from '@conclave/shared';
-import { preferred } from '@conclave/shared';
+import { effortLabel, preferred } from '@conclave/shared';
 import type { PermissionGaps, ProviderInfo, TeamInsights } from '../../../shared/api';
 import { Popover } from './Popover';
 import { SeatPicker, modelLabel } from './SeatPicker';
@@ -162,6 +162,8 @@ export function TeamEditor({
   );
 }
 
+const SHOWN_SEATS = 3;
+
 /** An ordered list of seats: each one editable with the seat picker, removable, and an Add button. */
 export function SeatList({
   seats,
@@ -175,10 +177,16 @@ export function SeatList({
   const providers = useApp((s) => s.providers);
   const ready = readyProviders(providers);
   const unused = ready.filter((p) => !seats.some((s) => s.provider === p.provider));
+  // With many AIs, a role shows its first three; the rest open on request, in order.
+  const [all, setAll] = useState(false);
+  const shown = all ? seats : seats.slice(0, SHOWN_SEATS);
+  const hidden = seats.length - shown.length;
+  const moveUp = (i: number) =>
+    onChange(seats.map((s, j) => (j === i - 1 ? seats[i]! : j === i ? seats[i - 1]! : s)));
 
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-      {seats.map((seat, i) => {
+      {shown.map((seat, i) => {
         const info = providers.find((p) => p.provider === seat.provider);
         const gap = gaps?.[seat.provider];
         return (
@@ -211,10 +219,23 @@ export function SeatList({
                     )}
                     {providerName(s.provider)}
                     <span className="font-normal text-muted">{modelLabel(info, s.model)}</span>
-                    {s.effort && <span className="font-normal text-faint">· {s.effort}</span>}
+                    {s.effort && (
+                      <span className="font-normal text-faint">· {effortLabel(s.effort)}</span>
+                    )}
                   </button>
                 )}
               />
+              {all && i > 0 && (
+                <button
+                  type="button"
+                  aria-label={`Move ${providerName(seat.provider)} up`}
+                  title="Move up"
+                  onClick={() => moveUp(i)}
+                  className="grid size-5.5 place-items-center rounded-full text-faint hover:bg-sunken hover:text-ink"
+                >
+                  <ArrowLeft className="size-3" />
+                </button>
+              )}
               <button
                 type="button"
                 aria-label={`Remove ${providerName(seat.provider)}`}
@@ -227,6 +248,24 @@ export function SeatList({
           </span>
         );
       })}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll(true)}
+          className="inline-flex h-7.5 items-center rounded-full bg-sunken px-2.5 text-[12px] font-medium text-muted hover:text-ink"
+        >
+          +{hidden} more
+        </button>
+      )}
+      {all && seats.length > SHOWN_SEATS && (
+        <button
+          type="button"
+          onClick={() => setAll(false)}
+          className="inline-flex h-7.5 items-center rounded-full px-2 text-[12px] font-medium text-faint hover:text-ink"
+        >
+          Show fewer
+        </button>
+      )}
       {unused.length > 0 && (
         <Popover
           label="Add an AI"
