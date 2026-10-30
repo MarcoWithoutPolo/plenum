@@ -198,3 +198,81 @@ in both themes, 44 × 44 px touch targets, no sideways scrolling at 390 px, no c
 - **Change to the v0.8 plan:** contrast and touch-target checks join the free visual checks (C4). They're measured
   from the page, cost no tokens, and send work back like failing tests. The AI visual review stays for what can't be
   measured.
+
+> **Correction (2026-10-30).** The contrast misses above, except Antigravity's, were the hidden check's fault, not the
+> contenders'. It switched the page from light to dark and measured at once, while pages with a colour transition on
+> their buttons (a 120 ms fade, common) were still mid-fade: one "failed" build measured 1.12:1 right after the switch
+> and nothing below 4.5:1 half a second later. The check now waits for the page's transitions to finish (it still fails
+> a page with truly unreadable text). Re-scored on the code still on disk:
+>
+> | Contender         | Was             | Now                                           |
+> | ----------------- | --------------- | --------------------------------------------- |
+> | Conclave v0.7     | 11/12 and 12/12 | 12/12 and 12/12                               |
+> | Claude alone      | 12/12 and 11/12 | 12/12 and 12/12                               |
+> | Codex alone       | 12/12           | 12/12                                         |
+> | Antigravity alone | 10/12           | 10/12 (contrast and touch targets, both real) |
+>
+> So "looks are where everyone slips" was wrong: only Antigravity slips here. The free checks still earn their place
+> (they cost nothing and catch what Antigravity misses), but this project can't show one tool beating another on
+> looks. See v0.8 below for what it does show.
+
+## v0.8 (2026-10-25 to 2026-10-30)
+
+### The CLI projects: no slower for the new features
+
+Two runs each, 2026-10-25. Codex was at its usage limit for most of it (⚠ in the raw results), so Claude and
+Antigravity did most of the building and reviewing: the slowest pairing, as in v0.7's final runs.
+
+| Project   | Conclave v0.7    | Conclave v0.8                |
+| --------- | ---------------- | ---------------------------- |
+| textkit   | 7/7 · 2.7 min    | 7/7 ×2 · 3.1 and 2.9 min     |
+| calc      | 7/7 · 6.3 min    | 7/7 ×2 · 3.2 and 5.5 min     |
+| inventory | 7/7 · 3.3 min    | 7/7 ×2 · 2.5 and 5.3 min     |
+| ledger    | 12/12 · 15.3 min | 12/12 ×2 · 21.4 and 29.0 min |
+
+Every hidden test passed. Nothing here is a web page, so no screenshots were taken; the time differences come from
+who had usage left, not from v0.8. Ledger was slow because Antigravity reviewed most of it while Codex was out.
+
+### Kanban: all 12/12 with the corrected check
+
+| Team                                  | Screenshots, free checks | Visual review | Runs | Hidden checks | Time                |
+| ------------------------------------- | ------------------------ | ------------- | ---- | ------------- | ------------------- |
+| Usual team, Codex at its limit        | on                       | on            | 2    | 12/12 ×2      | 6.4 and 8.8 min     |
+| Usual team, Codex at its limit        | on                       | off           | 2    | 12/12 ×2      | 7.5 and 6.4 min     |
+| Codex on GPT-6-Luna (a lighter model) | on                       | on            | 2    | 12/12 ×2      | 3.9 and 6.1 min     |
+| Codex on GPT-6-Luna                   | on                       | off           | 2    | 12/12 ×2      | 6.6 min (one timed) |
+| Antigravity builds, Claude reviews    | on                       | on            | 2    | 12/12 ×2      | 13.8 and 30.7 min   |
+| Antigravity builds, Claude reviews    | off (as v0.7)            | off           | 2    | 12/12 ×2      | 13.4 and 15.6 min   |
+
+(The first four rows scored 11/12 three times on the old check; re-scored, all 12/12. See the correction above.)
+
+- **The free checks caught a real problem once.** In the Antigravity run that took 30.7 minutes, the tests passed on
+  the second attempt, but the free checks found 2 problems in its screenshots and sent it back. That attempt scores
+  11/12 on the hidden checks (text contrast below 4.5:1); the fixed one scores 12/12. Without the checks, Conclave
+  would have merged it. This is what v0.8 is for, and it cost no tokens: just a 7-minute third attempt.
+- **Antigravity inside Conclave doesn't repeat its solo mistakes.** Alone it scored 10/12. Inside Conclave, with
+  Claude planning and reviewing, all 4 runs got 12/12, screenshots or not. The plan and the review already ask for
+  the things it forgot alone; the checks are the safety net for when it still gets them wrong.
+- **Visual review is cheap:** about 3,000–3,700 image tokens per project, 0.1–0.8% of the input tokens. It found
+  nothing the free checks hadn't.
+- **What this can't show:** that v0.8 beats v0.7 on this project. Most teams get kanban right without screenshots.
+  One catch in 10 runs with screenshots on is real evidence the checks work, not evidence of how often they matter.
+  A project whose looks are harder to get right is needed for that.
+
+### Live scenarios 9–14 (in the real app, real CLIs)
+
+| #   | Scenario                                                      | Result                                                                                                                                                                                    |
+| --- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 9   | Live preview of a web project while it's built                | 6/6 (on the re-run)                                                                                                                                                                       |
+| 10  | Screenshots and free checks send a broken page back           | 5/5                                                                                                                                                                                       |
+| 11  | A slow reviewer: a backup is asked after the time budget      | not triggered in its own runs; it fired live during scenario 9 ("Antigravity hasn't answered in 98 seconds; asking Codex too", then "Antigravity approved first; stopped Codex's review") |
+| 12  | Visual review by an AI that sees images                       | 2/2                                                                                                                                                                                       |
+| 13  | Start-up check when an AI is at its limit; "wait until" start | 6/6                                                                                                                                                                                       |
+| 14  | Stop and skip one task while others carry on                  | 4/4                                                                                                                                                                                       |
+
+### Done when
+
+v0.8's plan said it's done when a web project's looks are checked before merging, at little cost, without slowing
+non-web projects. It is: the free checks caught and fixed a real contrast failure that would otherwise have merged,
+visual review costs under 1% of tokens, and the CLI projects score as before. The benchmark doesn't show v0.8 beating
+v0.7 on kanban because, once the hidden check was fixed, almost everyone already gets kanban right.

@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/MarcoWithoutPolo/conclave/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MarcoWithoutPolo/conclave/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Status: private beta" src="https://img.shields.io/badge/status-v0.7%20private%20beta-7c5cff" />
+  <img alt="Status: private beta" src="https://img.shields.io/badge/status-v0.8%20private%20beta-7c5cff" />
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555" />
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue" /></a>
 </p>
@@ -76,6 +76,7 @@ We measure it. [`bench/`](bench/) gives the same goal to Claude Code, Codex and 
 
 - **Quality held:** Conclave passed every hidden test in all eight runs. Codex alone and Antigravity alone each missed one.
 - **v0.7 is 3–4× faster than v0.6**, with 3–6× fewer tokens, and on small projects it's on par with Codex alone.
+- **v0.8 keeps that and checks the looks.** On the four projects above it passed every hidden test again (2 runs each). A fifth project, a kanban web app with 12 hidden checks in a real browser, scored 12/12 in all 12 runs. In one, the free screenshot checks sent back a build whose text was too faint in dark mode, which would otherwise have merged. Visual review costs under 1% of tokens.
 - **It's slower than Claude alone.** A second AI reviews every change, and when Codex is out of usage, that reviewer is Antigravity, which is slow. Claude alone is the fastest single tool on well-specified work. Conclave's case is the review, carrying on through usage limits (Codex ran out mid-benchmark; Conclave lost nothing), and long unattended runs.
 
 Full results, per-role timings and what changed between runs: [bench/RESULTS.md](bench/RESULTS.md).
@@ -133,13 +134,12 @@ Data lives in `~/.conclave` (set `CONCLAVE_HOME` to move it).
 
 ## Project status
 
-v0.7 is complete: right-sized plans, lanes, shared limits, steering and notifications. It was tested live on real Claude, Codex, Antigravity and GitHub accounts across eight scenarios. Scenario 8 runs two projects at once with lanes, steers one by chat mid-run, sets quiet hours and Pause everything, and checks the desktop notification. See [docs/DIRECTION.md](docs/DIRECTION.md) and [bench/RESULTS.md](bench/RESULTS.md).
+v0.8 is complete: live preview of web projects, screenshots in light and dark on desktop and phone, free contrast and touch-target checks, visual review by an AI that sees images, a review time budget and a start-up check. It was tested live on real Claude, Codex and Antigravity accounts across six more scenarios (9–14). See [docs/PLAN-v0.8.md](docs/PLAN-v0.8.md) and [bench/RESULTS.md](bench/RESULTS.md).
 
-| Next | Focus                                                                                          |
-| ---- | ---------------------------------------------------------------------------------------------- |
-| v0.8 | **See it:** live preview of web projects, screenshot-based visual review, a review time budget |
-| v0.9 | **More AIs:** GitHub Copilot, Cursor, OpenCode, Amp                                            |
-| v1.0 | **Ship it:** installer, auto-update, tray notifications, an MCP server for other AI tools      |
+| Next | Focus                                                                                     |
+| ---- | ----------------------------------------------------------------------------------------- |
+| v0.9 | **More AIs:** GitHub Copilot, Cursor, OpenCode, Amp                                       |
+| v1.0 | **Ship it:** installer, auto-update, tray notifications, an MCP server for other AI tools |
 
 The full plan is in [docs/PLAN-v2.md](docs/PLAN-v2.md).
 

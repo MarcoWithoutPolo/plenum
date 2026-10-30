@@ -205,6 +205,20 @@ async function pageBackground() {
   }, PAGE_HELPERS);
 }
 
+/**
+ * Switch the colour scheme and let the page settle: a page with colour transitions (a 120 ms
+ * fade on its buttons) is mid-fade right after the switch, which is no reader's experience.
+ */
+async function scheme(colorScheme) {
+  await page.emulateMedia({ colorScheme });
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))),
+      new Promise((r) => setTimeout(r, 2000)),
+    ]),
+  );
+}
+
 async function sampleBoard() {
   await fresh();
   await add('Plan the release');
@@ -214,22 +228,22 @@ async function sampleBoard() {
 
 test('dark mode follows the system setting', async () => {
   await sampleBoard();
-  await page.emulateMedia({ colorScheme: 'light' });
+  await scheme('light');
   const light = await pageBackground();
-  await page.emulateMedia({ colorScheme: 'dark' });
+  await scheme('dark');
   const dark = await pageBackground();
-  await page.emulateMedia({ colorScheme: 'light' });
+  await scheme('light');
   assert.ok(light > 0.6, `light background luminance ${light.toFixed(2)}`);
   assert.ok(dark < 0.2, `dark background luminance ${dark.toFixed(2)}`);
 });
 
 test('text is readable in light and dark (contrast at least 4.5:1)', async () => {
   await sampleBoard();
-  await page.emulateMedia({ colorScheme: 'light' });
+  await scheme('light');
   const light = await lowContrast();
-  await page.emulateMedia({ colorScheme: 'dark' });
+  await scheme('dark');
   const dark = await lowContrast();
-  await page.emulateMedia({ colorScheme: 'light' });
+  await scheme('light');
   assert.deepStrictEqual({ light, dark }, { light: [], dark: [] });
 });
 
