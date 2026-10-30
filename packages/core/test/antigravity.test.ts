@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { AgentEvent } from '@conclave/shared';
-import { AntigravityAdapter, antigravityArgs, collect, parseModels } from '../src/index.js';
+import {
+  AntigravityAdapter,
+  CHAT_NOTE,
+  antigravityArgs,
+  collect,
+  parseModels,
+} from '../src/index.js';
 import { fixturePath, replay } from './helpers.js';
 
 describe('AntigravityAdapter (recorded agy 1.4.6 output)', () => {
@@ -20,7 +26,9 @@ describe('AntigravityAdapter (recorded agy 1.4.6 output)', () => {
     expect(result.usage).toEqual({ inputTokens: 6881, cachedInputTokens: 0, outputTokens: 1 });
     for (const e of result.events) expect(AgentEvent.safeParse(e).success).toBe(true);
     // The prompt rides on --print, because agy has no stdin prompt in print mode.
-    expect(exec.calls[0]?.args[0]).toBe('--print=Reply with: pong');
+    expect(exec.calls[0]?.args[0]).toBe(`--print=${CHAT_NOTE}
+
+Reply with: pong`);
     expect(exec.calls[0]?.stdin).toBeUndefined();
   });
 
@@ -132,7 +140,10 @@ describe('Antigravity and shell commands', () => {
     expect(builder.args[0]).toMatch(/^--print=IMPORTANT: This session has no shell/);
     expect(builder.args[0]).toContain('Build it');
     const chat = antigravityArgs({ prompt: 'hi', cwd: '.', role: 'chat' });
-    expect(chat.args[0]).toBe('--print=hi');
+    // Answers are told not to run commands (one once gave up after trying).
+    expect(chat.args[0]).toBe(`--print=${CHAT_NOTE}
+
+hi`);
     const full = antigravityArgs({
       prompt: 'Build it',
       cwd: '.',
@@ -141,9 +152,15 @@ describe('Antigravity and shell commands', () => {
       permissions: { level: 5, network: true },
     });
     expect(full.args[0]).toBe('--print=Build it');
-    expect(antigravityArgs({ prompt: '/help', cwd: '.', role: 'chat' }).args[0]).toBe(
-      '--print=Request: /help',
-    );
+    expect(
+      antigravityArgs({
+        prompt: '/help',
+        cwd: '.',
+        role: 'builder',
+        readOnly: false,
+        permissions: { level: 5, network: true },
+      }).args[0],
+    ).toBe('--print=Request: /help');
   });
 });
 

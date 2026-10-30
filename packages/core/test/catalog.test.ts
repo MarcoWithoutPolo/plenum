@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Engine, FakeAdapter, Store } from '../src/index.js';
+import { Engine, FakeAdapter, Store, recordUsage } from '../src/index.js';
 
 describe('model catalogs', () => {
   it('asks the CLI once, then serves the cache until it is an hour old', async () => {
@@ -46,6 +46,34 @@ describe('model catalogs', () => {
     });
     const list = await engine.catalog('fake');
     expect(list.fetchedAt).toBe(0);
+    engine.close();
+  });
+});
+
+describe('models a CLI refuses', () => {
+  it('stop being offered after one refusal', async () => {
+    const adapter = new FakeAdapter({
+      fail: 'ActionRequiredError: Model unavailable on Free',
+    } as never);
+    Object.assign(adapter, {
+      models: async () => ({ models: [{ id: 'auto' }, { id: 'pro-only' }] }),
+    });
+    const engine = new Engine({ adapters: [adapter], store: new Store(':memory:') });
+    await engine.catalog('fake');
+    recordUsage(
+      engine.store,
+      { seat: { provider: 'fake', model: 'pro-only' }, role: 'chat', source: 'chat' },
+      {
+        ok: false,
+        text: '',
+        usage: {},
+        quotas: [],
+        errors: ['ActionRequiredError: Model unavailable on Free Free includes Auto.'],
+        durationMs: 1,
+        events: [],
+      },
+    );
+    expect((await engine.catalog('fake')).models.map((m) => m.id)).toEqual(['auto']);
     engine.close();
   });
 });

@@ -184,6 +184,10 @@ export function antigravityPermissionGap(permissions: RunPermissions): string | 
 export const NO_SHELL_NOTE =
   'IMPORTANT: This session has no shell. Running any command (git, npm, node, tests, anything) is denied and ends your turn with no answer. Use only your file tools to read, search and edit files. The system runs the tests itself.';
 
+/** For answers: no commands, so a denied one never ends the turn without an answer. */
+export const CHAT_NOTE =
+  'Answer directly from what you know. Do not run any command: commands are denied here and end your turn with no answer.';
+
 const NO_SHELL_REMINDER =
   'Reminder: do not run any command, not even the tests; the system runs them after you finish.';
 
@@ -207,6 +211,8 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     extra.push('--add-dir', dir);
   }
   if (!fullAccess && !chat) prompt = `${NO_SHELL_NOTE}\n\n${prompt}\n\n${NO_SHELL_REMINDER}`;
+  // Answers too: in a council it once ran a command to look around, and gave no answer.
+  if (chat) prompt = `${CHAT_NOTE}\n\n${prompt}`;
   // Slash-command expansion stays on (turning it off makes agy ignore --mode), so a prompt
   // must never start with "/".
   if (prompt.trimStart().startsWith('/')) prompt = `Request: ${prompt}`;

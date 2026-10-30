@@ -148,13 +148,22 @@ test('scenario 19: the picker sets model and effort per provider', async () => {
       m.ok === 1 && m.model === 'gpt-6-luna' && m.effort === 'low',
       JSON.stringify(m).slice(0, 160),
     );
-    // Cursor's free plan includes Grok 4.7: its effort is part of the id.
+    // Cursor puts the effort in the id. Its free plan runs Grok 4.7 only at fixed settings, so
+    // the High id is refused: Conclave sends it as-is, and then stops offering it.
     await pick('Cursor', /^Grok 4\.7/, 'High', 'Grok');
     m = last();
+    const hidden = query<{ unavailable: string }>(
+      "SELECT unavailable FROM model_catalogs WHERE provider = 'cursor'",
+    )[0]?.unavailable;
     check(
-      'Cursor ran Grok 4.7 High (its effort is in the id) on the free plan',
-      m.ok === 1 && /grok.?4\.7/i.test(m.model ?? '') && !m.effort,
+      'Cursor got the id that carries the effort',
+      /grok.?4\.7.*high/i.test(m.model ?? '') && !m.effort,
       JSON.stringify(m).slice(0, 160),
+    );
+    check(
+      'a model the plan refuses is no longer offered',
+      m.ok === 1 || /grok-4\.7-high/.test(hidden ?? ''),
+      hidden ?? 'nothing hidden',
     );
     await pick('Grok', /^Grok 4\.7/, 'Extra High');
     m = last();

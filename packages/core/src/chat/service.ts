@@ -148,7 +148,15 @@ export function recordUsage(
 ): void {
   recordQuotas(store, run.seat.provider, result);
   store.usage.record({ ...run, result });
+  // A model the CLI refused ("unavailable on Free", "not found") stops being offered.
+  if (!result.ok && run.seat.model && result.errors.some((e) => MODEL_REFUSED.test(e))) {
+    store.catalogs.markUnavailable(run.seat.provider, run.seat.model);
+  }
 }
+
+/** CLI messages that mean "this account can't use that model", not "the task failed". */
+export const MODEL_REFUSED =
+  /model (?:is )?unavailable|unavailable on (?:your|the|free)|not available (?:on|for|in) your|unknown model|model .*not found|invalid model|isn't downloaded/i;
 
 export function recordQuotas(store: Store, provider: ProviderId, result: RunResult): void {
   const at = Date.now();

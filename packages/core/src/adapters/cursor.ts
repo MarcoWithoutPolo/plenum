@@ -79,7 +79,8 @@ export class CursorAdapter implements Adapter {
       auth: 'unknown',
     };
     // "✓ Logged in as <email>": only the fact is kept, never the account name.
-    const auth = await runCommand(this.command, ['status'], { timeoutMs: 30_000 });
+    // Its launcher goes through PowerShell, slow when every CLI is checked at once.
+    const auth = await runCommand(this.command, ['status'], { timeoutMs: 90_000 });
     const text = `${auth.stdout}\n${auth.stderr}`;
     if (/logged in/i.test(text) && !/not logged in/i.test(text)) {
       status.auth = 'signed_in';
@@ -100,7 +101,7 @@ export class CursorAdapter implements Adapter {
 
   /** `cursor-agent models`: about 270 ids, grouped into one row per model with its efforts. */
   async models(): Promise<ModelList> {
-    const result = await runCommand(this.command, ['models'], { timeoutMs: 60_000 });
+    const result = await runCommand(this.command, ['models'], { timeoutMs: 120_000 });
     return parseCursorModels(result.stdout);
   }
 
