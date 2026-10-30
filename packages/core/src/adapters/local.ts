@@ -291,7 +291,21 @@ export class LocalAdapter implements Adapter {
     // "Default" is the biggest downloaded model that fits this machine.
     const model = request.model ?? (await this.defaultModel());
     const engine = localEngine(request.role, request.readOnly, request.permissions?.level);
-    yield* engine === 'opencode' ? this.build(request, model) : this.answer(request, model);
+    const stream = engine === 'opencode' ? this.build(request, model) : this.answer(request, model);
+    // Say which engine ran, for the Usage screen. Local runs never resume, so the id isn't reused.
+    let told = false;
+    for await (const event of stream) {
+      if (!told && event.type !== 'session') {
+        const { runId, at } = event;
+        yield { type: 'session', provider: 'local', runId, at, sessionId: runId, model, engine };
+      }
+      told = true;
+      if (event.type === 'session') yield { ...event, engine };
+      // OpenCode passes Ollama's "model 'x' not found" through as is; say it the same way chat does.
+      else if (event.type === 'error' && /model .*not found/i.test(event.message))
+        yield { ...event, message: explainOllamaError(event.message, model) };
+      else yield event;
+    }
   }
 
   private async defaultModel(): Promise<string> {

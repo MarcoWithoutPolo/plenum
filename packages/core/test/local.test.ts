@@ -42,6 +42,7 @@ describe('Local models', () => {
     );
     expect(result.text).toBe('Pong');
     expect(result.ok).toBe(true);
+    expect(result.engine).toBe('ollama');
     expect(result.usage).toMatchObject({
       inputTokens: expect.any(Number),
       outputTokens: expect.any(Number),
@@ -127,6 +128,8 @@ describe('Local models', () => {
       expect.objectContaining({ type: 'tool.call', tool: 'edit' }),
     );
     expect(result.usage?.inputTokens).toBeGreaterThan(0);
+    // The Usage screen records which engine ran.
+    expect(result.engine).toBe('opencode');
   });
 
   it('denies shell and web below level 5 in the OpenCode config', () => {

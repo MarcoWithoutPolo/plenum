@@ -27,6 +27,8 @@ export const AgentEvent = z.discriminatedUnion('type', [
     type: z.literal('session'),
     sessionId: z.string(),
     model: z.string().optional(),
+    /** What ran it when one provider has several (local models: "ollama" or "opencode"). */
+    engine: z.string().optional(),
   }),
   z.object({ ...base, type: z.literal('message.delta'), text: z.string() }),
   z.object({ ...base, type: z.literal('message.done'), text: z.string() }),

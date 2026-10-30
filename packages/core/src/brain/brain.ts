@@ -18,7 +18,7 @@ import { limitResetsAt, looksLikeLimit } from '../adapters/kit/index.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
 import { collect, type RunResult } from '../collect.js';
-import { recordUsage, type EngineContext } from '../chat/service.js';
+import { MODEL_REFUSED, recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
 import { Governor } from '../governor/governor.js';
 import { runShell } from '../process.js';
@@ -155,6 +155,8 @@ export class Brain {
   private signal: AbortSignal | undefined;
   /** Each running task's own abort, so one lane can stop (a task skipped mid-run). */
   private readonly taskAborts = new Map<string, AbortController>();
+  /** Builder seats whose CLI refused the model this run ("not found", "unavailable on your plan"). */
+  private readonly refusedSeats = new Set<string>();
 
   constructor(
     private readonly ctx: EngineContext,
@@ -759,6 +761,13 @@ export class Brain {
     }
   }
 
+  /** A seat whose model its CLI refused, this run or earlier (the picker hides those too). */
+  private isRefused(seat: Seat): boolean {
+    if (!seat.model) return false;
+    if (this.refusedSeats.has(`${seat.provider}@${seat.model}`)) return true;
+    return this.ctx.store.catalogs.get(seat.provider)?.unavailable.includes(seat.model) ?? false;
+  }
+
   /* ── One task: build → test → review → merge ───────────────────────── */
 
   /** One task's attempt, with its own abort for skipping it mid-run. */
@@ -780,13 +789,30 @@ export class Brain {
     const plan = builderPlan(project, task, this.ctx.adapters);
     // A seat whose CLI can't enforce these permissions never gets the task.
     const gaps: string[] = [];
+    const refused: string[] = [];
     const seats = plan.seats.filter((s) => {
+      // A model its CLI refused (gone from Ollama, not on your plan) never gets the task.
+      if (this.isRefused(s)) {
+        refused.push(seatLabel(s));
+        return false;
+      }
       const gap = this.ctx.adapters.get(s.provider)?.permissionGap?.(permissions);
       if (gap) gaps.push(gap);
       return !gap;
     });
     if (seats.length === 0) {
-      const reason = `No builder on the team can work at these permissions. ${[...new Set(gaps)].join(' ')}`;
+      const reason = [
+        ...(gaps.length
+          ? [
+              `No builder on the team can work at these permissions. ${[...new Set(gaps)].join(' ')}`,
+            ]
+          : []),
+        ...(refused.length
+          ? [
+              `${refused.join(', ')} refused ${refused.length > 1 ? 'their models' : 'its model'}; pick another in the team.`,
+            ]
+          : []),
+      ].join(' ');
       this.projects.setStatus(this.projectId, 'paused', reason);
       this.log('stop', reason, { task });
       return { kind: 'idle', reason };
@@ -808,6 +834,9 @@ export class Brain {
     const builder = pick.seat;
     const note = plan.note && pick.seat === plan.seats[0] ? ` (${plan.note})` : '';
 
+    // Who built the last real attempt: escalation switches away from them, not from a builder
+    // that was turned away before starting.
+    const builtBefore = task.builtBy;
     task = this.projects.updateTask(task.id, { status: 'building', builtBy: builder.provider });
     this.log(
       'task',
@@ -870,6 +899,7 @@ export class Brain {
       // Not the task's fault: back to the queue for whoever has headroom.
       this.projects.updateTask(task.id, {
         status: 'queued',
+        builtBy: builtBefore,
         lastFailure: this.failureOf(
           'limit',
           `${seatLabel(builder)} hit a usage limit`,
@@ -886,6 +916,18 @@ export class Brain {
         { task, provider: builder.provider, data: { message: built.rateLimited.message } },
       );
       return { kind: 'retry', task, reason: 'Builder hit a usage limit' };
+    }
+    if (!built.ok && builder.model && built.errors.some((e) => MODEL_REFUSED.test(e))) {
+      // Not the task's fault either: the next builder on the team takes it.
+      this.refusedSeats.add(`${builder.provider}@${builder.model}`);
+      this.projects.updateTask(task.id, { status: 'queued', builtBy: builtBefore });
+      await this.workspace.removeTaskTree(task.id);
+      this.log(
+        'wait',
+        `${seatLabel(builder)} refused the model (${failure(built).split('\n')[0]!.slice(0, 240)}); the next builder takes the task`,
+        { task, provider: builder.provider },
+      );
+      return { kind: 'retry', task, reason: 'Builder refused its model' };
     }
     if (!built.ok) {
       return this.sendBack(project, task, {

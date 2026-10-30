@@ -334,6 +334,38 @@ describe('Brain', () => {
     ).toBe(true);
   });
 
+  it('hands the task to the next builder when a CLI refuses the model, without an attempt', async () => {
+    let plans = 0;
+    const { store, brain, project, claude, codex } = await setup({
+      codex: {
+        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'Created sum.js'),
+        failWhen: (req) => (req.model === 'gone:7b' ? "model 'gone:7b' not found" : undefined),
+      },
+      claude: {
+        reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? PLAN : DONE) : 'built'),
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a + b')(req);
+        },
+      },
+    });
+    store.projects.update(project.id, {
+      routing: {
+        ...project.routing,
+        builder: [{ provider: 'codex', model: 'gone:7b' }, { provider: 'claude' }],
+        reviewer: [{ provider: 'codex' }],
+      },
+    });
+    const outcome = await brain.run({ maxRounds: 10, sleep: async () => undefined });
+    expect(outcome.kind).toBe('done');
+    expect(codex.requests.filter((r) => r.model === 'gone:7b')).toHaveLength(1);
+    const [task] = store.projects.listTasks(project.id);
+    expect([task?.builtBy, task?.attempts]).toEqual(['claude', 0]);
+    expect(claude.requests.map((r) => r.role)).toContain('builder');
+    expect(store.projects.events(project.id).some((e) => /refused the model/.test(e.message))).toBe(
+      true,
+    );
+  });
+
   it('lets the builder review only when the team has no other reviewer', async () => {
     const { store, brain, project, codex } = await setup({
       codex: {
@@ -2101,5 +2133,41 @@ describe('createProject', () => {
     expect(off).toMatchObject({ adaptiveTeam: false, visualReview: false, maxParallel: 3 });
     const on = await createProject(store, seats, { repoPath: makeRepo(), goal: 'g' });
     expect(on).toMatchObject({ adaptiveTeam: true, visualReview: true, maxParallel: 1 });
+  });
+});
+
+describe('Escalation past a limit', () => {
+  it('reaches the third builder when the second is at its usage limit', async () => {
+    let plans = 0;
+    const { store, brain, project, claude } = await setup({
+      gemini: {
+        reply: (req) => (req.role === 'reviewer' ? APPROVE : 'built'),
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a - b')(req);
+        },
+      },
+      codex: {
+        reply: '',
+        limitWhen: () => ({ message: 'Codex weekly limit', resetsAt: Date.now() + 3_600_000 }),
+      },
+      claude: {
+        reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? PLAN : DONE) : 'built'),
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a + b')(req);
+        },
+      },
+    });
+    store.projects.update(project.id, {
+      routing: {
+        ...project.routing,
+        builder: [{ provider: 'gemini' }, { provider: 'codex' }, { provider: 'claude' }],
+        reviewer: [{ provider: 'gemini' }],
+      },
+    });
+    await brain.run({ maxRounds: 20, sleep: async () => undefined });
+    // Codex was turned away before starting, so Gemini still counts as the one that failed.
+    const [task] = store.projects.listTasks(project.id);
+    expect([task?.status, task?.builtBy]).toEqual(['merged', 'claude']);
+    expect(claude.requests.map((r) => r.role)).toContain('builder');
   });
 });

@@ -276,3 +276,74 @@ v0.8's plan said it's done when a web project's looks are checked before merging
 non-web projects. It is: the free checks caught and fixed a real contrast failure that would otherwise have merged,
 visual review costs under 1% of tokens, and the CLI projects score as before. The benchmark doesn't show v0.8 beating
 v0.7 on kanban because, once the hidden check was fixed, almost everyone already gets kanban right.
+
+## v0.9 (2026-10-30, one run each)
+
+The four new AIs alone, each at permission level 2 (edits only: the strongest level Conclave can enforce for all of
+them), and Conclave with two new teams. All on free plans except Claude and Codex.
+
+```bash
+npx tsx --conditions=development bench/run.ts --projects textkit,calc,inventory,ledger,kanban --contenders cursor,copilot,grok,local
+```
+
+### Each new AI alone
+
+| Project   | Copilot (Free)                 | Cursor (Hobby, Auto) | Grok Build (free) | Local: GPT-OSS 20B (RTX 4070 Ti SUPER) |
+| --------- | ------------------------------ | -------------------- | ----------------- | -------------------------------------- |
+| textkit   | **7/7** · 1.2 min              | **7/7** · 2.2 min    | 7/7 · 8.3 min ⚠   | 5/7 · 1.6 min · 2 nudges               |
+| calc      | **7/7** · 1.2 min              | 7/7 · 8.6 min ⚠      | out of usage      | 0/7 · 3.4 min · 2 nudges               |
+| inventory | **7/7** · 0.8 min              | out of usage         | out of usage      | 0/7 · 0.2 min                          |
+| ledger    | 11/12 · 5.5 min · 1 nudge      | out of usage         | out of usage      | 0/12 · 0.7 min                         |
+| kanban    | 11/12 · 1.5 min (touch target) | out of usage         | out of usage      | 0/12 · 2.0 min · 2 nudges              |
+
+⚠ hit its free plan's limit during the run. "Out of usage": turned away at the first prompt ("You've hit your usage
+limit", "You've reached your free Grok Build usage limit"). Copilot doesn't report tokens.
+
+- **Copilot Free is the surprise:** the fastest contender in any v0.9 run, 7/7 on every small project, and one miss each
+  on ledger and kanban (a button under 44 px on phones).
+- **Cursor and Grok on free plans last about one project.** Cursor's Hobby plan finished textkit and calc, then
+  refused; Grok's free allowance ran out during textkit. Their scores here say nothing about the models, only about
+  how far a free plan goes.
+- **A 20B local model can't do these goals alone.** It edits files, but its code fails most hidden tests, and its own
+  tests fail too. It is free and private, not a builder you leave alone.
+
+### Conclave with the new AIs
+
+| Project   | Five-AI team¹        | Local model first in line² |
+| --------- | -------------------- | -------------------------- |
+| textkit   | **7/7** · 3.3 min    | **7/7** · 5.6 min          |
+| calc      | **7/7** · 5.6 min    | **7/7** · 11.2 min³        |
+| inventory | **7/7** · 3.3 min    | **7/7** · 7.8 min³         |
+| ledger    | **12/12** · 13.9 min | **12/12** · 29.6 min       |
+| kanban    | **12/12** · 6.8 min  | **12/12** · 9.3 min        |
+
+1. Claude plans; Codex, Cursor, then Claude build; Claude, Antigravity, then Grok review. Level 3.
+2. Claude plans; local GPT-OSS 20B, Codex, then Claude build; Claude, then Antigravity review. Level 2, where local
+   models can build.
+3. Re-run after the escalation fix below; the first run scored 4/7 and 0/7.
+
+- **The five-AI team got every hidden test**, at v0.8's speed. But Cursor and Grok never ran in it: the solo runs
+  had already used up their free plans, so Codex and Claude built and Claude and Antigravity reviewed, as before.
+  Codex then ran out during kanban, and Claude took over without anyone stepping in.
+- **A local builder costs time, not quality, once Conclave works around it.** Its attempts fail the tests, and the
+  task moves on to the next builder. The first run found two bugs in that hand-off, both fixed in v0.9:
+  - a builder turned away by a usage limit counted as "the one who failed", so escalation went back to the local
+    model instead of on to Claude (calc and inventory first scored 4/7 and 0/7 this way, and 7/7 each after the fix);
+  - a model the CLI doesn't have (a team naming a model since deleted from Ollama) was retried over and over; now
+    it hands the task to the next builder without using an attempt.
+- **What wasn't measured:** one run each, not two. The plan's comparison of local reviews through Ollama against
+  OpenCode wasn't run separately (reviews always go through Ollama, which scenario 18 checked live). Grok and Cursor
+  couldn't be measured inside a team on free plans.
+
+### Live scenarios 15–21 (in the real app, real CLIs)
+
+| #   | Scenario                                                                   | Result                                                                                 |
+| --- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 15  | Each new AI chats, then joins a council with Claude, Codex and Antigravity | 12/12: seven AIs answered one council round and the answers merged                     |
+| 16  | Cursor builds at level 2, a different AI reviews; no shell or network use  | passed (with 18 and 20: 7/7)                                                           |
+| 17  | A local model builds through OpenCode; never paused for usage              | 2/2                                                                                    |
+| 18  | Local model chats and reviews through Ollama; a model too big says so      | passed                                                                                 |
+| 19  | The picker's model and effort reach each CLI as flags                      | 5/5; a model Cursor's free plan refused is now hidden from the picker                  |
+| 20  | "Merge here, then push"; a second run behind the remote is refused         | passed, against a bare local repository standing in for GitHub                         |
+| 21  | A new AI at its usage limit hands off and says when it's back              | from recorded messages (unit tests); the live limits above confirm the wording matches |
+| 11  | (again) A short review budget asks a backup reviewer and stops the loser   | 4/4, forced with a 20-second budget                                                    |

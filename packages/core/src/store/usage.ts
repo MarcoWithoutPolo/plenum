@@ -55,7 +55,7 @@ export class UsageStore {
     source: RunSource;
     refId?: string | null;
     taskId?: string | null;
-    result: Pick<RunResult, 'ok' | 'rateLimited' | 'usage' | 'durationMs' | 'model'>;
+    result: Pick<RunResult, 'ok' | 'rateLimited' | 'usage' | 'durationMs' | 'model' | 'engine'>;
     /** Estimated tokens spent on screenshots (part of the input tokens). */
     imageTokens?: number;
     /** Stopped because another run answered first: not a failure, and not a speed sample. */
@@ -65,8 +65,8 @@ export class UsageStore {
     this.db
       .prepare(
         `INSERT INTO agent_runs (provider, model, effort, role, source, ref_id, task_id, ok, rate_limited,
-           input_tokens, cached_tokens, output_tokens, cost_usd, duration_ms, at, image_tokens, cancelled)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           input_tokens, cached_tokens, output_tokens, cost_usd, duration_ms, at, image_tokens, cancelled, engine)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.seat.provider,
@@ -86,6 +86,7 @@ export class UsageStore {
         Date.now(),
         Math.round(input.imageTokens ?? 0),
         input.cancelled ? 1 : 0,
+        input.result.engine ?? null,
       );
   }
 

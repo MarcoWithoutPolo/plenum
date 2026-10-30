@@ -5,6 +5,8 @@ export interface RunResult {
   text: string;
   sessionId?: string;
   model?: string;
+  /** What ran it, when the adapter says (local models: "ollama" or "opencode"). */
+  engine?: string;
   usage: Usage;
   rateLimited?: { message: string; resetsAt?: number };
   quotas: { window: string; utilization?: number; resetsAt?: number }[];
@@ -35,6 +37,7 @@ export async function collect(
       case 'session':
         result.sessionId = event.sessionId;
         if (event.model) result.model = event.model;
+        if (event.engine) result.engine = event.engine;
         break;
       case 'message.delta':
         deltas += event.text;

@@ -25,6 +25,10 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   AntigravityAdapter,
+  CopilotAdapter,
+  CursorAdapter,
+  GrokAdapter,
+  LocalAdapter,
   Brain,
   ClaudeAdapter,
   CodexAdapter,
@@ -76,7 +80,10 @@ const parallel = Number(values.parallel);
 const team = values.team
   ? Object.fromEntries(
       values.team.split(',').map((part) => {
-        const [role, providers] = part.split(':') as [string, string];
+        // Split at the first colon only: model names have their own ("local@gpt-oss:20b").
+        const at = part.indexOf(':');
+        const role = part.slice(0, at);
+        const providers = part.slice(at + 1);
         return [
           role,
           providers.split('+').map((seat) => {
@@ -91,9 +98,9 @@ const team = values.team
 const variant = `${
   values.team
     ? `-${values.team
-        .replace(/([a-z])[a-z]*:/g, '$1=')
+        .replace(/(?:^|,)([a-z])[a-z]*:/g, (m, r: string) => `${m.startsWith(',') ? ',' : ''}${r}=`)
         .replace(/,/g, '-')
-        .replace(/[@.]/g, '_')}`
+        .replace(/[@.:]/g, '_')}`
     : ''
 }${parallel > 1 ? `-${parallel}l` : ''}`;
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -119,7 +126,10 @@ const git = (cwd: string, ...args: string[]) =>
   ).trim();
 
 /** Each tool in its strongest safe headless mode: edit files, run the tests, no network. */
-const SINGLE: Record<string, { make: () => Adapter; permissions: RunPermissions; note: string }> = {
+const SINGLE: Record<
+  string,
+  { make: () => Adapter; permissions: RunPermissions; note: string; model?: string }
+> = {
   claude: {
     make: () => new ClaudeAdapter(),
     permissions: { level: 3, network: false, commands: ['npm test', 'node --test'] },
@@ -134,6 +144,28 @@ const SINGLE: Record<string, { make: () => Adapter; permissions: RunPermissions;
     make: () => new AntigravityAdapter(),
     permissions: { level: 2, network: false },
     note: 'level 2: edits only (agy headless has no allow-listed commands)',
+  },
+  // v0.9: the new AIs, each at the strongest level Conclave can enforce for it (level 2).
+  cursor: {
+    make: () => new CursorAdapter(),
+    permissions: { level: 2, network: false },
+    note: 'level 2: edits only (print mode without --force), Auto on the free plan',
+  },
+  copilot: {
+    make: () => new CopilotAdapter(),
+    permissions: { level: 2, network: false },
+    note: 'level 2: write allowed, shell and URLs denied, Copilot Free',
+  },
+  grok: {
+    make: () => new GrokAdapter(),
+    permissions: { level: 2, network: false },
+    note: 'level 2: write and search_replace allowed, commands and web denied, free account',
+  },
+  local: {
+    make: () => new LocalAdapter(),
+    permissions: { level: 2, network: false },
+    model: 'gpt-oss:20b',
+    note: 'level 2: gpt-oss:20b through OpenCode, edits only, on an RTX 4070 Ti SUPER',
   },
 };
 
@@ -218,7 +250,13 @@ async function score(project: string, codeDir: string): Promise<Result['hidden']
         .filter((name) => name !== 'failing tests:'),
     ),
   ];
-  rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  // A browser from the hidden tests can still hold the folder on Windows; a leftover temp folder
+  // is not worth losing the run over.
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  } catch {
+    /* left in the temp folder */
+  }
   return { pass, fail, total, ...(failed.length && { failed }) };
 }
 
@@ -259,6 +297,7 @@ async function runSingle(
         role: 'builder',
         readOnly: false,
         permissions: spec.permissions,
+        ...(spec.model && { model: spec.model }),
         timeoutMs: Math.max(60_000, deadline - Date.now()),
         ...(sessionId && adapter.capabilities.resume && { sessionId }),
       }),
