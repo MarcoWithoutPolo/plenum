@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { removeDir, runCommand, type CommandResult } from '../process.js';
 
 export class GitError extends Error {
@@ -54,6 +54,29 @@ export async function headCommit(path: string): Promise<string> {
 export async function commitIdentity(cwd: string): Promise<string[]> {
   const email = await git(cwd, ['config', 'user.email'], true);
   return email.code === 0 && email.stdout.trim() ? [] : IDENTITY;
+}
+
+/**
+ * Whether a linked worktree is fully checked out. `git worktree add` makes the folder first and
+ * fills it afterwards, holding a "locked" file (reason "initializing") in the worktree's admin
+ * folder until the checkout is done. A worktree whose add was killed keeps that file, so it
+ * never counts as ready.
+ */
+export function worktreeReady(path: string): boolean {
+  let pointer: string;
+  try {
+    pointer = readFileSync(join(path, '.git'), 'utf8').trim();
+  } catch {
+    return false;
+  }
+  const m = /^gitdir:\s*(.+)$/m.exec(pointer);
+  if (!m) return false;
+  const admin = isAbsolute(m[1]!) ? m[1]! : resolve(path, m[1]!);
+  return (
+    existsSync(join(admin, 'HEAD')) &&
+    existsSync(join(admin, 'index')) &&
+    !existsSync(join(admin, 'locked'))
+  );
 }
 
 /** Runs async jobs one at a time, in the order they arrive. */
@@ -113,6 +136,17 @@ export class Workspace {
     await git(this.repo, ['worktree', 'prune'], true);
     if (!(await branchExists(this.repo, this.integrationBranch))) {
       await git(this.repo, ['branch', this.integrationBranch, base]);
+    }
+    if (existsSync(this.integrationPath) && !worktreeReady(this.integrationPath)) {
+      // A checkout that never finished (the run was stopped mid-way): start it again.
+      // Twice --force: git won't otherwise remove a worktree still locked "initializing".
+      await git(
+        this.repo,
+        ['worktree', 'remove', '--force', '--force', this.integrationPath],
+        true,
+      );
+      await removeDir(this.integrationPath, 20);
+      await git(this.repo, ['worktree', 'prune'], true);
     }
     if (!existsSync(this.integrationPath)) {
       mkdirSync(dirname(this.integrationPath), { recursive: true });

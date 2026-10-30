@@ -10,7 +10,7 @@ import type {
   Task,
 } from '@conclave/shared';
 import type { EngineContext } from '../chat/service.js';
-import { Workspace, mergeCommitDiff, mergeIntoBase } from '../workspace/git.js';
+import { Workspace, mergeCommitDiff, mergeIntoBase, worktreeReady } from '../workspace/git.js';
 import { Brain, storeGovernor, type RoundOutcome } from './brain.js';
 import {
   PreviewServer,
@@ -489,7 +489,9 @@ export class BrainManager {
   private previewDir(project: Project, taskId?: string): string {
     const workspace = projectWorkspace(this.home, project);
     if (taskId) return workspace.taskPath(taskId);
-    return existsSync(workspace.integrationPath) ? workspace.integrationPath : project.repoPath;
+    // Only once its checkout is complete: a half-made one has no package.json yet, so the preview
+    // would ask about one folder and check the approval against another.
+    return worktreeReady(workspace.integrationPath) ? workspace.integrationPath : project.repoPath;
   }
 
   /**

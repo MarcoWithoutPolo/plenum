@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { request } from 'node:http';
 import { join } from 'node:path';
@@ -12,8 +12,10 @@ import {
   createProject,
   detectPreview,
   findLocalUrl,
+  projectWorkspace,
   reachableUrl,
   removeDir,
+  worktreeReady,
 } from '../src/index.js';
 
 const dirs: string[] = [];
@@ -248,7 +250,7 @@ describe('BrainManager.preview', () => {
       goal: 'g',
     });
     const brains = new BrainManager({ store, adapters: adapterMap([]), cwd: home }, home);
-    return { store, project, brains };
+    return { store, project, brains, home };
   }
 
   it('opens a static site at once, and stops it', async () => {
@@ -296,6 +298,39 @@ describe('BrainManager.preview', () => {
     expect(() => brains.allowPreviewCommand(project.id, 'npm run start')).toThrow(
       /no longer matches/,
     );
+  });
+
+  it('ignores a merged-work worktree that is still being checked out', async () => {
+    // On a slow machine `git worktree add` makes the folder first and fills it afterwards. A
+    // preview opened then asked about your folder and checked the approval against the half-made
+    // one (no package.json yet), so Allow failed with "no longer matches".
+    const { project, brains, home } = await manager({
+      'index.html': '',
+      'server.js': '',
+      'package.json': pkg({ scripts: { dev: 'node server.js' } }),
+    });
+    const workspace = projectWorkspace(home, project);
+    await workspace.prepare(project.baseBranch);
+    expect(worktreeReady(workspace.integrationPath)).toBe(true);
+
+    // Mid-checkout: git's "initializing" lock is still there and the files aren't yet.
+    const admin = readFileSync(join(workspace.integrationPath, '.git'), 'utf8')
+      .replace(/^gitdir:\s*/, '')
+      .trim();
+    writeFileSync(join(admin, 'locked'), 'initializing');
+    rmSync(join(workspace.integrationPath, 'package.json'));
+    expect(worktreeReady(workspace.integrationPath)).toBe(false);
+
+    expect(await brains.preview(project.id)).toMatchObject({
+      kind: 'needs_approval',
+      command: 'npm run dev',
+    });
+    expect(() => brains.allowPreviewCommand(project.id, 'npm run dev')).not.toThrow();
+
+    // The next run starts that checkout again instead of keeping a broken one.
+    await workspace.prepare(project.baseBranch);
+    expect(worktreeReady(workspace.integrationPath)).toBe(true);
+    expect(existsSync(join(workspace.integrationPath, 'package.json'))).toBe(true);
   });
 
   it('says plainly when there is nothing to preview', async () => {
