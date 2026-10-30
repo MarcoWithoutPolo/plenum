@@ -247,6 +247,21 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   },
   // v15: the review time budget. A review stopped because another one answered first.
   (db) => addColumn(db, 'agent_runs', 'cancelled', 'INTEGER NOT NULL DEFAULT 0'),
+  // v16: more AIs. Each CLI's model list, cached; which engine ran a local model; credits spent.
+  (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS model_catalogs (
+        provider       TEXT PRIMARY KEY,
+        models         TEXT NOT NULL,
+        default_model  TEXT,
+        default_effort TEXT,
+        fetched_at     INTEGER NOT NULL,
+        unavailable    TEXT NOT NULL DEFAULT '[]'
+      );
+    `);
+    addColumn(db, 'agent_runs', 'engine', 'TEXT');
+    addColumn(db, 'agent_runs', 'credits', 'REAL');
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

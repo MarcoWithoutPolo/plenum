@@ -8,6 +8,7 @@ import { UsageStore } from './usage.js';
 import { SettingsStore } from './settings.js';
 import { SteeringStore } from './steering.js';
 import { SnapshotStore } from './snapshots.js';
+import { CatalogStore } from './catalogs.js';
 
 export { newId };
 
@@ -43,6 +44,7 @@ export class Store {
   readonly settings: SettingsStore;
   readonly steering: SteeringStore;
   readonly snapshots: SnapshotStore;
+  readonly catalogs: CatalogStore;
 
   constructor(db: DatabaseSync | string = openDatabase()) {
     this.db = typeof db === 'string' ? openDatabase(db) : db;
@@ -52,6 +54,7 @@ export class Store {
     this.settings = new SettingsStore(this.db);
     this.steering = new SteeringStore(this.db);
     this.snapshots = new SnapshotStore(this.db);
+    this.catalogs = new CatalogStore(this.db);
   }
 
   close(): void {

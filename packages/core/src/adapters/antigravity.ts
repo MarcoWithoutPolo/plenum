@@ -1,11 +1,16 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { AgentEvent, ProviderStatus, Role } from '@conclave/shared';
+import {
+  groupVariants,
+  markOlder,
+  type AgentEvent,
+  type ProviderStatus,
+  type Role,
+} from '@conclave/shared';
 import { runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
 import {
-  assertSafeEffort,
   assertSafeModel,
   assertSafeSession,
   defaultExec,
@@ -53,8 +58,8 @@ export class AntigravityAdapter implements Adapter {
   readonly id = 'antigravity' as const;
   readonly displayName = 'Antigravity';
   readonly capabilities: Capabilities = {
+    // Efforts are part of the model ids (gemini-3.8-flash-high); see models().
     models: [],
-    efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
     readOnly: true,
     resume: true,
     streaming: true,
@@ -116,7 +121,8 @@ export class AntigravityAdapter implements Adapter {
 
   async models(): Promise<ModelList> {
     const result = await runCommand(this.command, ['models'], { timeoutMs: 30_000 });
-    return { models: parseModels(result.stdout) };
+    // Gemini's thinking levels are separate ids; grouped, they become one model's efforts.
+    return { models: markOlder(groupVariants(parseModels(result.stdout))) };
   }
 
   async *run(request: RunRequest): AsyncGenerator<AgentEvent> {
@@ -183,7 +189,6 @@ const NO_SHELL_REMINDER =
 
 export function antigravityArgs(request: RunRequest): { args: string[]; cleanup: () => void } {
   assertSafeModel(request.model);
-  assertSafeEffort(request.effort);
   const fullAccess = !(request.readOnly ?? true) && request.permissions?.level === 5;
   const chat = request.role === 'chat' || request.role === 'synthesizer' || !request.role;
   let prompt = request.prompt;
@@ -213,7 +218,6 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
     'stream-json',
     ...modeArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions),
     ...(request.model ? ['--model', request.model] : []),
-    ...(request.effort ? ['--effort', request.effort] : []),
     ...(request.sessionId ? ['--conversation', request.sessionId] : []),
     ...extra,
   ];

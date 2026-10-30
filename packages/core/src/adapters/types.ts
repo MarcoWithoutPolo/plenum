@@ -1,4 +1,4 @@
-import type { AgentEvent, ProviderId, ProviderStatus, Role } from '@conclave/shared';
+import type { AgentEvent, ModelList, ProviderId, ProviderStatus, Role } from '@conclave/shared';
 import type { RunPermissions } from './permissions.js';
 
 export interface RunRequest {
@@ -66,18 +66,5 @@ export interface Adapter {
   limits?(): Promise<{ window: string; utilization: number; resetsAt?: number }[]>;
 }
 
-export interface ModelOption {
-  id: string;
-  label?: string;
-  /** One line on what the model is for, when the CLI provides it. */
-  description?: string;
-  efforts?: string[];
-  defaultEffort?: string;
-}
-
-export interface ModelList {
-  models: ModelOption[];
-  /** What "Default" means right now (the CLI's configured model). */
-  defaultModel?: string;
-  defaultEffort?: string;
-}
+// Model lists live in @conclave/shared (models.ts), where the picker groups them too.
+export type { ModelList, ModelOption } from '@conclave/shared';

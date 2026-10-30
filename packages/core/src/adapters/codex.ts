@@ -1,4 +1,4 @@
-import type { AgentEvent, ProviderStatus } from '@conclave/shared';
+import { markOlder, type AgentEvent, type ProviderStatus } from '@conclave/shared';
 import { runCommand } from '../process.js';
 import {
   assertSafeEffort,
@@ -19,7 +19,13 @@ import {
   type Exec,
   type LineParser,
 } from './kit/index.js';
-import { codexHome, readCodexDefaults, readCodexLimits, readCodexModels } from './codex-home.js';
+import {
+  codexHome,
+  parseCodexModels,
+  readCodexDefaults,
+  readCodexLimits,
+  readCodexModels,
+} from './codex-home.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
 
 export interface CodexAdapterOptions extends CliAdapterOptions {
@@ -87,14 +93,24 @@ export class CodexAdapter implements Adapter {
 
   async models(): Promise<ModelList> {
     const defaults = readCodexDefaults(this.home);
+    let listed = readCodexModels(this.home);
+    if (!listed.length) {
+      // No cache yet (a fresh install): ask the CLI, which fetches the plan's models.
+      const result = await runCommand(this.command, ['debug', 'models'], { timeoutMs: 30_000 });
+      if (result.code === 0) listed = parseCodexModels(result.stdout);
+    }
     return {
-      models: readCodexModels(this.home).map((m) => ({
-        id: m.id,
-        label: m.label,
-        ...(m.description && { description: m.description }),
-        efforts: m.efforts,
-        ...(m.defaultEffort && { defaultEffort: m.defaultEffort }),
-      })),
+      models: markOlder(
+        listed.map((m) => ({
+          id: m.id,
+          label: m.label,
+          ...(m.description && { description: m.description }),
+          efforts: m.efforts,
+          ...(m.defaultEffort && { defaultEffort: m.defaultEffort }),
+          ...(m.effortNotes && { effortNotes: m.effortNotes }),
+          maker: 'GPT',
+        })),
+      ),
       ...(defaults.model && { defaultModel: defaults.model }),
       ...(defaults.effort && { defaultEffort: defaults.effort }),
     };

@@ -12,6 +12,7 @@ export * from './collect.js';
 export * from './process.js';
 export * from './store/db.js';
 export * from './store/store.js';
+export * from './store/catalogs.js';
 export * from './store/projects.js';
 export * from './store/settings.js';
 export * from './store/steering.js';

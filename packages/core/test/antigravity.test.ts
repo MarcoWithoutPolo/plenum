@@ -80,24 +80,19 @@ describe('antigravityArgs', () => {
     expect(mode('builder', false)).toBe('accept-edits');
   });
 
-  it('passes model, effort and resume', () => {
+  it('passes model and resume; the effort is the model id, never a flag', () => {
     const { args } = antigravityArgs({
       prompt: 'x',
       cwd: '.',
       model: 'gemini-3.8-flash-low',
-      effort: 'low',
+      // A seat saved before v0.9 may still carry one; its default model rejects xhigh and max.
+      effort: 'xhigh',
       sessionId: 'abc-1',
     });
     expect(args).toEqual(
-      expect.arrayContaining([
-        '--model',
-        'gemini-3.8-flash-low',
-        '--effort',
-        'low',
-        '--conversation',
-        'abc-1',
-      ]),
+      expect.arrayContaining(['--model', 'gemini-3.8-flash-low', '--conversation', 'abc-1']),
     );
+    expect(args).not.toContain('--effort');
   });
 
   it('moves very long prompts into a file the agent can read, and cleans it up', () => {

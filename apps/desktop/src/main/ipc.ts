@@ -41,7 +41,11 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
       statuses.map(async (status) => {
         const a = engine.adapters.get(status.provider)!;
         const pkg = INSTALL_PACKAGES[status.provider];
-        const listed = await a.models?.().catch(() => undefined);
+        // Signed-out CLIs usually can't list models; don't wait on them.
+        const listed =
+          status.auth === 'signed_out' || !status.installed
+            ? undefined
+            : await engine.catalog(status.provider).catch(() => undefined);
         const models = listed?.models.length
           ? listed.models
           : a.capabilities.models.map((id) => ({ id }));

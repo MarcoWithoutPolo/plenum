@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { AgentEvent } from '@conclave/shared';
-import { ClaudeAdapter, claudeArgs, collect } from '../src/index.js';
-import { replay } from './helpers.js';
+import { ClaudeAdapter, claudeArgs, collect, parseClaudeModels } from '../src/index.js';
+import { fixturePath, replay } from './helpers.js';
 
 describe('ClaudeAdapter (recorded Claude Code 2.1 output)', () => {
   it('turns a chat run into session, text, usage, quota and done events', async () => {
@@ -119,5 +120,23 @@ describe('claudeArgs with screenshots', () => {
     expect(() => claudeArgs({ prompt: 'x', cwd: '.', images: [`${dir}${sep}notes.txt`] })).toThrow(
       /Not a screenshot/,
     );
+  });
+});
+
+describe('Claude model list', () => {
+  it('reads every model from the start-up handshake, with efforts and the default', () => {
+    const recorded = JSON.parse(readFileSync(fixturePath('claude/initialize-models.json'), 'utf8'));
+    const list = parseClaudeModels(recorded);
+    expect(list.defaultModel).toBe('opus');
+    const ids = list.models.map((m) => m.id);
+    expect(ids).toEqual(expect.arrayContaining(['opus', 'fable', 'sonnet', 'haiku']));
+    expect(ids).not.toContain('default');
+    expect(list.models.find((m) => m.id === 'opus')).toMatchObject({
+      label: 'Opus 5.5',
+      efforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    });
+    // Pinned earlier versions fold under "Older models".
+    expect(list.models.find((m) => m.id === 'claude-opus-4-8')?.older).toBe(true);
+    expect(list.models.find((m) => m.id === 'opus')?.older).toBeUndefined();
   });
 });

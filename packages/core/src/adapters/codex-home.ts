@@ -16,12 +16,23 @@ export interface CodexModel {
   description?: string;
   defaultEffort?: string;
   efforts: string[];
+  /** What each reasoning level does, in Codex's words. */
+  effortNotes?: Record<string, string>;
 }
 
 /** Models the signed-in plan can pick, as the CLI last fetched them, best first. */
 export function readCodexModels(home = codexHome()): CodexModel[] {
   try {
-    const cache = JSON.parse(readFileSync(join(home, 'models_cache.json'), 'utf8')) as {
+    return parseCodexModels(readFileSync(join(home, 'models_cache.json'), 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+/** The model cache's format, which `codex debug models` prints too. */
+export function parseCodexModels(json: string): CodexModel[] {
+  try {
+    const cache = JSON.parse(json) as {
       models?: {
         slug?: string;
         display_name?: string;
@@ -29,19 +40,26 @@ export function readCodexModels(home = codexHome()): CodexModel[] {
         visibility?: string;
         priority?: number;
         default_reasoning_level?: string;
-        supported_reasoning_levels?: { effort?: string }[];
+        supported_reasoning_levels?: { effort?: string; description?: string }[];
       }[];
     };
     return (cache.models ?? [])
       .filter((m) => m.slug && m.visibility !== 'hide')
       .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-      .map((m) => ({
-        id: m.slug!,
-        label: m.display_name ?? m.slug!,
-        ...(m.description && { description: m.description }),
-        ...(m.default_reasoning_level && { defaultEffort: m.default_reasoning_level }),
-        efforts: (m.supported_reasoning_levels ?? []).flatMap((r) => (r.effort ? [r.effort] : [])),
-      }));
+      .map((m) => {
+        const levels = (m.supported_reasoning_levels ?? []).filter((r) => r.effort);
+        const notes = Object.fromEntries(
+          levels.flatMap((r) => (r.description ? [[r.effort!, r.description]] : [])),
+        );
+        return {
+          id: m.slug!,
+          label: m.display_name ?? m.slug!,
+          ...(m.description && { description: m.description }),
+          ...(m.default_reasoning_level && { defaultEffort: m.default_reasoning_level }),
+          efforts: levels.map((r) => r.effort!),
+          ...(Object.keys(notes).length && { effortNotes: notes }),
+        };
+      });
   } catch {
     return [];
   }

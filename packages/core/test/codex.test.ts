@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { AgentEvent } from '@conclave/shared';
-import { CodexAdapter, CodexParser, codexArgs, collect, limitResetsAt } from '../src/index.js';
+import {
+  CodexAdapter,
+  CodexParser,
+  codexArgs,
+  collect,
+  limitResetsAt,
+  parseCodexModels,
+} from '../src/index.js';
 import { fixturePath, replay } from './helpers.js';
 
 const home = fixturePath('codex/home');
@@ -34,8 +41,15 @@ describe('CodexAdapter (recorded codex-cli 0.163 output)', () => {
           description: 'Fast everyday model.',
           efforts: ['low'],
           defaultEffort: 'low',
+          maker: 'GPT',
         },
-        { id: 'gpt-b', label: 'GPT-B', efforts: ['low', 'medium'], defaultEffort: 'medium' },
+        {
+          id: 'gpt-b',
+          label: 'GPT-B',
+          efforts: ['low', 'medium'],
+          defaultEffort: 'medium',
+          maker: 'GPT',
+        },
       ],
       defaultModel: 'gpt-a',
       defaultEffort: 'ultra',
@@ -183,5 +197,27 @@ describe('limitResetsAt', () => {
     expect(events).toEqual([
       expect.objectContaining({ type: 'rate_limit', resetsAt: expect.any(Number) }),
     ]);
+  });
+});
+
+describe('Codex model list', () => {
+  it("keeps Codex's description of each reasoning level", () => {
+    const [model] = parseCodexModels(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-x',
+            supported_reasoning_levels: [
+              { effort: 'low', description: 'Fast responses with lighter reasoning' },
+              { effort: 'ultra' },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(model).toMatchObject({
+      efforts: ['low', 'ultra'],
+      effortNotes: { low: 'Fast responses with lighter reasoning' },
+    });
   });
 });

@@ -1,5 +1,11 @@
 import { dirname } from 'node:path';
-import type { ProviderStatus, Role, Usage } from '@conclave/shared';
+import {
+  markOlder,
+  type ModelOption,
+  type ProviderStatus,
+  type Role,
+  type Usage,
+} from '@conclave/shared';
 import { safeCommands, type RunPermissions } from './permissions.js';
 import { runCommand } from '../process.js';
 import {
@@ -19,7 +25,13 @@ import {
   type EventBody,
   type Exec,
 } from './kit/index.js';
-import type { Adapter, Capabilities, LoginCommand, RunRequest } from './types.js';
+import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+
+const INITIALIZE = {
+  type: 'control_request',
+  request_id: 'conclave-models',
+  request: { subtype: 'initialize' },
+};
 
 const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const READ_ONLY_TOOLS = 'Read,Grep,Glob';
@@ -87,6 +99,41 @@ export class ClaudeAdapter implements Adapter {
     };
   }
 
+  /**
+   * Every model the signed-in account can use, from the CLI's own start-up handshake
+   * (stream-json `initialize`): no prompt is sent, so it costs no usage.
+   */
+  async models(): Promise<ModelList> {
+    const result = await runCommand(
+      this.command,
+      [
+        '-p',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--strict-mcp-config',
+      ],
+      {
+        stdin: `${JSON.stringify(INITIALIZE)}\n`,
+        timeoutMs: 30_000,
+      },
+    );
+    for (const line of result.stdout.split(/\r?\n/)) {
+      if (!line.includes('control_response')) continue;
+      try {
+        const message: unknown = JSON.parse(line);
+        if (!isRecord(message) || !isRecord(message.response)) continue;
+        const listed = parseClaudeModels(message.response.response);
+        if (listed.models.length) return listed;
+      } catch {
+        // not the handshake line
+      }
+    }
+    return { models: [] };
+  }
+
   run(request: RunRequest) {
     return runCli(
       'claude',
@@ -102,6 +149,45 @@ export class ClaudeAdapter implements Adapter {
       new ClaudeParser(),
     );
   }
+}
+
+/**
+ * The `models` of Claude Code's initialize response: aliases (opus, sonnet) and pinned ids, each
+ * with its effort levels. "Default" names the model the CLI picks on its own.
+ */
+export function parseClaudeModels(response: unknown): ModelList {
+  if (!isRecord(response) || !Array.isArray(response.models)) return { models: [] };
+  const resolved: Record<string, string> = {};
+  let defaultResolved: string | undefined;
+  const models: ModelOption[] = [];
+  for (const m of response.models) {
+    if (!isRecord(m)) continue;
+    const id = str(m.value);
+    if (!id || !/^[\w.:/[\]-]+$/.test(id)) continue;
+    const target = str(m.resolvedModel);
+    if (id === 'default') {
+      defaultResolved = target;
+      continue;
+    }
+    if (target) resolved[id] = target;
+    const efforts = Array.isArray(m.supportedEffortLevels)
+      ? m.supportedEffortLevels.flatMap((e) => (typeof e === 'string' ? [e] : []))
+      : [];
+    const label = str(m.displayName);
+    const description = str(m.description);
+    models.push({
+      id,
+      ...(label && { label }),
+      ...(description && { description }),
+      ...(efforts.length && { efforts }),
+      maker: 'Claude',
+    });
+  }
+  // The alias that stands for the default, so "Default" is marked on its model.
+  const defaultModel = models.find(
+    (m) => defaultResolved && resolved[m.id] === defaultResolved,
+  )?.id;
+  return { models: markOlder(models, resolved), ...(defaultModel && { defaultModel }) };
 }
 
 export function claudeArgs(request: RunRequest): string[] {
