@@ -149,7 +149,9 @@ const SINGLE: Record<
   cursor: {
     make: () => new CursorAdapter(),
     permissions: { level: 2, network: false },
-    note: 'level 2: edits only (print mode without --force), Auto on the free plan',
+    // Pinned to a Grok model: on The X Subscription, Claude and GPT in Cursor bill per use.
+    model: 'grok-4.7-high',
+    note: 'level 2: edits only (print mode without --force), Grok 4.7 High on X Premium',
   },
   copilot: {
     make: () => new CopilotAdapter(),
@@ -159,7 +161,7 @@ const SINGLE: Record<
   grok: {
     make: () => new GrokAdapter(),
     permissions: { level: 2, network: false },
-    note: 'level 2: write and search_replace allowed, commands and web denied, free account',
+    note: 'level 2: write and search_replace allowed, commands and web denied, X Premium',
   },
   local: {
     make: () => new LocalAdapter(),

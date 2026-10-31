@@ -290,7 +290,12 @@ export class LocalAdapter implements Adapter {
     assertSafeModel(request.model);
     // "Default" is the biggest downloaded model that fits this machine.
     const model = request.model ?? (await this.defaultModel());
-    const engine = localEngine(request.role, request.readOnly, request.permissions?.level);
+    // CONCLAVE_LOCAL_REVIEWS=opencode sends reviews through OpenCode, read-only: for the
+    // benchmark that compares the two engines (v0.9 C11). Ollama is faster for answers.
+    const engine =
+      request.role === 'reviewer' && process.env.CONCLAVE_LOCAL_REVIEWS === 'opencode'
+        ? 'opencode'
+        : localEngine(request.role, request.readOnly, request.permissions?.level);
     const stream = engine === 'opencode' ? this.build(request, model) : this.answer(request, model);
     // Say which engine ran, for the Usage screen. Local runs never resume, so the id isn't reused.
     let told = false;
@@ -354,7 +359,9 @@ export class LocalAdapter implements Adapter {
       const config = join(dir, 'opencode.json');
       writeFileSync(
         config,
-        JSON.stringify(openCodeConfig(this.host(), alias, request.permissions)),
+        JSON.stringify(
+          openCodeConfig(this.host(), alias, request.permissions, request.readOnly ?? false),
+        ),
       );
       // The task goes in an attached file: no command-line limits or quoting on Windows.
       const brief = join(dir, 'instructions.md');
@@ -489,8 +496,13 @@ export function openCodeArgs(model: string, brief: string, cwd: string): string[
 }
 
 /** OpenCode's config for one run: the model on this Ollama, and what it may do. */
-export function openCodeConfig(host: string, model: string, permissions?: RunPermissions) {
-  const full = permissions?.level === 5;
+export function openCodeConfig(
+  host: string,
+  model: string,
+  permissions?: RunPermissions,
+  readOnly = false,
+) {
+  const full = permissions?.level === 5 && !readOnly;
   return {
     $schema: 'https://opencode.ai/config.json',
     provider: {
@@ -506,7 +518,7 @@ export function openCodeConfig(host: string, model: string, permissions?: RunPer
     model: `ollama/${model}`,
     permission: full
       ? { edit: 'allow', bash: 'allow', webfetch: 'allow' }
-      : { edit: 'allow', bash: 'deny', webfetch: 'deny' },
+      : { edit: readOnly ? 'deny' : 'allow', bash: 'deny', webfetch: 'deny' },
     share: 'disabled',
     autoupdate: false,
   };

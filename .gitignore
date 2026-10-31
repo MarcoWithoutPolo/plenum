@@ -18,5 +18,8 @@ test-results/
 playwright-report/
 apps/desktop/e2e/screenshots/
 
+# Local CI runs (npm run ci:local)
+ci-local/
+
 # Benchmark runs (summaries are committed by hand)
 bench/results/

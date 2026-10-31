@@ -142,6 +142,10 @@ describe('Local models', () => {
       'allow',
     );
     expect(openCodeArgs('m', 'brief.md', '/w')[1]).toMatch(/^Follow/);
+    // A review through OpenCode (the engine comparison) may not edit, at any level.
+    expect(openCodeConfig('http://h:1', 'm', { level: 5, network: true }, true).permission).toEqual(
+      { edit: 'deny', bash: 'deny', webfetch: 'deny' },
+    );
   });
 
   it('picks the engine by job, and says when OpenCode is missing for building', async () => {
