@@ -97,6 +97,11 @@ export interface RunOptions {
   maxSleepMs?: number;
   /** Injected for tests. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
+  /**
+   * How many wake-ups (settings changes) there have been. One that came while the brain was busy
+   * deciding to wait, not yet asleep, would otherwise be missed: the next wait is skipped instead.
+   */
+  wakes?: () => number;
   /** Start later: wait until `at`, showing `reason` (the start-up check's "Wait until…"). */
   startAt?: { at: number; reason: string };
 }
@@ -307,6 +312,7 @@ export class Brain {
     const sleep = options.sleep ?? interruptibleSleep;
     const maxSleep = options.maxSleepMs ?? 30 * 60_000;
     let last: RoundOutcome = { kind: 'idle', reason: 'No rounds run' };
+    let seen = options.wakes?.() ?? 0;
     for (let i = 0; i < (options.maxRounds ?? Infinity); i++) {
       if (options.signal?.aborted) {
         if (this.project().status !== 'stopped') this.stop('Stopped by you');
@@ -334,7 +340,8 @@ export class Brain {
           ? Math.min(maxSleep, Math.max(30_000, last.until - Date.now()))
           : 5 * 60_000;
         this.projects.setStatus(this.projectId, 'waiting', last.reason);
-        await sleep(ms, options.signal);
+        if ((options.wakes?.() ?? 0) === seen) await sleep(ms, options.signal);
+        seen = options.wakes?.() ?? 0;
         if (this.project().status === 'waiting') this.projects.setStatus(this.projectId, 'running');
       }
     }
@@ -355,6 +362,7 @@ export class Brain {
     let last: RoundOutcome = { kind: 'idle', reason: 'No rounds run' };
     let waitUntil: number | null | undefined;
     let waitReason = '';
+    let seen = options.wakes?.() ?? 0;
     // Tasks that just couldn't start (a limit, no free builder): left alone until something changes.
     const parked = new Set<string>();
     const drain = async () => {
@@ -404,7 +412,8 @@ export class Brain {
             ? Math.min(maxSleep, Math.max(30_000, waitUntil - Date.now()))
             : 5 * 60_000;
           this.projects.setStatus(this.projectId, 'waiting', waitReason);
-          await sleep(ms, options.signal);
+          if ((options.wakes?.() ?? 0) === seen) await sleep(ms, options.signal);
+          seen = options.wakes?.() ?? 0;
           if (this.project().status === 'waiting')
             this.projects.setStatus(this.projectId, 'running');
           waitUntil = undefined;

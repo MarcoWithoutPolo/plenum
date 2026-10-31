@@ -59,7 +59,8 @@ test('scenario 15: the new AIs chat and join a council', async () => {
   try {
     const seats = [
       { provider: 'copilot' },
-      { provider: 'cursor' },
+      // A Grok model: on The X Subscription, Claude and GPT in Cursor bill per use.
+      { provider: 'cursor', model: 'grok-4.7-high' },
       { provider: 'grok' },
       // 1B models miss exact instructions ("bubble" for pong); a 14B one follows them.
       { provider: 'local', model: 'qwen2.5-coder:14b' },
@@ -236,7 +237,7 @@ test('scenarios 16, 18 and 20: Cursor builds, a local model reviews, merge and p
         goal: 'A tiny string helpers module: strings.js exporting capitalize(s) and slugify(s) (lowercase, words joined by hyphens, punctuation dropped), with node:test tests in test/strings.test.js covering empty strings, spaces and punctuation. npm test runs node --test. Keep it to those two functions.',
         routing: {
           planner: [{ provider: 'claude', model: 'haiku' }],
-          builder: [{ provider: 'cursor' }],
+          builder: [{ provider: 'cursor', model: 'grok-4.7-high' }],
           reviewer: [
             { provider: 'local', model: 'gpt-oss:20b' },
             { provider: 'claude', model: 'haiku' },
@@ -425,7 +426,7 @@ test('scenario 21: Cursor and Grok at their limits hand off and say when they ar
         routing: {
           planner: [{ provider: 'claude', model: 'haiku' }],
           builder: [
-            { provider: 'cursor' },
+            { provider: 'cursor', model: 'grok-4.7-high' },
             { provider: 'grok' },
             { provider: 'claude', model: 'haiku' },
           ],

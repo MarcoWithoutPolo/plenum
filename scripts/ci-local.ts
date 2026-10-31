@@ -5,8 +5,9 @@
  *
  * - Each target starts from a fresh clone of the committed HEAD, as actions/checkout does, so a
  *   file that only exists in this folder can't make it pass.
- * - Windows uses portable Node from E:\ci-cache (or CI_NODE_DIR), limited to as many cores as
- *   GitHub's Windows runners have (4), where the e2e flakes show up.
+ * - Windows uses portable Node from E:\ci-cache (or CI_NODE_DIR), and keeps its clones, npm cache
+ *   and temp files there too, off the system drive. Its e2e runs on as many cores as GitHub's
+ *   Windows runners have (4), where the flakes show up.
  * - Linux runs in Docker on Ubuntu 24.04 like ubuntu-latest, 4 CPUs and 16 GB, and also runs the
  *   desktop e2e under a virtual display, which CI skips.
  * - macOS can't run here: the full matrix on GitHub covers it.
@@ -38,6 +39,9 @@ const { values } = parseArgs({
 });
 const NODE = { 22: 'v22.23.4', 24: 'v24.22.2' } as const;
 const cacheDir = process.env.CI_NODE_DIR ?? 'E:\\ci-cache';
+// Clones (each with its own node_modules) go here too, not to the system drive's temp folder.
+const workDir = join(cacheDir, 'work');
+mkdirSync(workDir, { recursive: true });
 const repeat = Math.max(1, Number(values['e2e-repeat']));
 const cores = Math.max(1, Number(values.cores));
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -106,9 +110,19 @@ async function windows(major: 22 | 24): Promise<Result> {
   if (!existsSync(nodeDir)) {
     return { target, steps: [{ name: 'setup', ok: false, seconds: 0, note: `no ${nodeDir}` }] };
   }
-  const work = mkdtempSync(join(tmpdir(), `ci-${target}-`));
+  const work = mkdtempSync(join(workDir, `${target}-`));
+  // Its own temp folder beside the clone (not inside: some tests need a folder outside any repo).
+  const temp = mkdtempSync(join(workDir, `${target}-tmp-`));
   execFileSync('git', ['clone', '-q', '--no-local', root, work]);
-  const env = { ...process.env, PATH: `${nodeDir};${process.env.PATH}`, CI: 'true' };
+  const env = {
+    ...process.env,
+    PATH: `${nodeDir};${process.env.PATH}`,
+    CI: 'true',
+    // npm's cache and the app's temp files stay off the system drive as well.
+    npm_config_cache: join(cacheDir, 'npm-cache'),
+    TEMP: temp,
+    TMP: temp,
+  };
   const log = join(out, `${target}.log`);
   // Children inherit the affinity, so the app under test gets the same cores as a runner.
   // `start /b /wait` drops the exit code, so the command leaves it in a file.
@@ -142,7 +156,7 @@ async function windows(major: 22 | 24): Promise<Result> {
     // Like CI, a failed step ends the job; a failed e2e repeat still lets the others run.
     if (r.code !== 0 && !name.startsWith('e2e')) break;
   }
-  rmSync(work, { recursive: true, force: true, maxRetries: 3 });
+  for (const dir of [work, temp]) rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   return { target, steps };
 }
 
@@ -151,8 +165,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libgtk-3-0 libgbm1 libasound2t64 libxss1 libxtst6 \\
     libxrandr2 libxcomposite1 libxdamage1 libxkbcommon0 libpango-1.0-0 libcairo2 libsecret-1-0 \\
     && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSLO https://nodejs.org/dist/${version}/node-${version}-linux-x64.tar.xz \\
-    && curl -fsSL https://nodejs.org/dist/${version}/SHASUMS256.txt | grep " node-${version}-linux-x64.tar.xz$" | sha256sum -c - \\
+RUN curl -fsSLO --retry 5 --retry-all-errors https://nodejs.org/dist/${version}/node-${version}-linux-x64.tar.xz \\
+    && curl -fsSL --retry 5 --retry-all-errors https://nodejs.org/dist/${version}/SHASUMS256.txt | grep " node-${version}-linux-x64.tar.xz$" | sha256sum -c - \\
     && tar -xJf node-${version}-linux-x64.tar.xz -C /usr/local --strip-components=1 && rm node-${version}-linux-x64.tar.xz
 RUN useradd -m ci && git config --system --add safe.directory '*'
 USER ci

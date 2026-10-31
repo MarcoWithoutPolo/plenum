@@ -215,6 +215,8 @@ export class BrainManager {
   private readonly governor: Governor;
   /** Sleeping brains (waiting for usage, quiet hours, a cap); wake() ends their sleep now. */
   private readonly sleepers = new Set<() => void>();
+  /** Counts wake() calls, so a brain that wasn't asleep yet still sees one. */
+  private wakes = 0;
   private readonly sleep = (ms: number, signal?: AbortSignal) =>
     new Promise<void>((resolve) => {
       const timer = setTimeout(done, ms);
@@ -247,6 +249,7 @@ export class BrainManager {
    * now instead of at the end of its sleep. A scheduled start still waits for its time.
    */
   wake(): void {
+    this.wakes++;
     for (const done of [...this.sleepers]) done();
   }
 
@@ -323,6 +326,7 @@ export class BrainManager {
       .run({
         signal: controller.signal,
         sleep: this.sleep,
+        wakes: () => this.wakes,
         ...(later && {
           startAt: {
             at: later,

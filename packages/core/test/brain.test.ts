@@ -270,6 +270,28 @@ describe('Brain', () => {
     expect(store.projects.get(project.id)?.status).toBe('paused');
   });
 
+  it("doesn't sleep through a wake-up that came while it was deciding to wait", async () => {
+    const { store, brain, project } = await setup();
+    store.settings.update({ limits: { pauseAll: true } });
+    // Pause everything goes off (and wakes everyone) after the brain saw it on, before it slept.
+    let calls = 0;
+    const slept: number[] = [];
+    const outcome = await brain.run({
+      maxRounds: 10,
+      sleep: async (ms) => void slept.push(ms),
+      // Counted once at the start (paused), then again just before sleeping: by then it changed.
+      wakes: () => {
+        if (++calls === 2) store.settings.update({ limits: { pauseAll: false } });
+        return calls >= 2 ? 1 : 0;
+      },
+    });
+    expect(outcome.kind).toBe('done');
+    expect(slept).toEqual([]);
+    expect(store.projects.events(project.id).some((e) => /paused everything/.test(e.message))).toBe(
+      true,
+    );
+  });
+
   it('pauses after several tasks in a row fail', async () => {
     let n = 0;
     const { store, brain, project } = await setup({

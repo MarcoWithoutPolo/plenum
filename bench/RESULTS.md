@@ -322,9 +322,11 @@ limit", "You've reached your free Grok Build usage limit"). Copilot doesn't repo
    models can build.
 3. Re-run after the escalation fix below; the first run scored 4/7 and 0/7.
 
-- **The five-AI team got every hidden test**, at v0.8's speed. But Cursor and Grok never ran in it: the solo runs
-  had already used up their free plans, so Codex and Claude built and Claude and Antigravity reviewed, as before.
-  Codex then ran out during kanban, and Claude took over without anyone stepping in.
+- **The five-AI team got every hidden test**, at v0.8's speed. But Cursor and Grok never ran in it. Cursor
+  can't build at level 3 at all (it can't limit which commands run), so it was never a candidate; Grok was third in
+  line to review and never reached, and both were out of free usage anyway. Codex and Claude built and Claude and
+  Antigravity reviewed, as before. Codex then ran out during kanban, and Claude took over without anyone stepping in.
+  (Corrected 2026-10-31: this first said only the free plans kept them out.)
 - **A local builder costs time, not quality, once Conclave works around it.** Its attempts fail the tests, and the
   task moves on to the next builder. The first run found two bugs in that hand-off, both fixed in v0.9:
   - a builder turned away by a usage limit counted as "the one who failed", so escalation went back to the local
