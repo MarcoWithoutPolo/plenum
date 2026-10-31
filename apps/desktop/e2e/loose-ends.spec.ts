@@ -58,8 +58,12 @@ test('stop and skip a building task; Pause everything off resumes at once', asyn
 
     // Pause everything: the project waits; off again, it carries on within seconds.
     await sidebar.getByRole('button', { name: 'Settings' }).click();
+    // The switch stays disabled (showing off) until Settings has loaded: wait for it, or a
+    // click lands on nothing and the pause never changes.
     const pause = page.getByRole('switch', { name: 'Pause everything' });
+    await expect(pause).toBeEnabled();
     await pause.check({ force: true });
+    await expect(pause).toBeChecked();
     await sidebar.getByRole('button', { name: /^Projects/ }).click();
     await page
       .getByRole('button', { name: /^conclave-e2e-loose-/ })
@@ -69,7 +73,10 @@ test('stop and skip a building task; Pause everything off resumes at once', asyn
       timeout: 30_000,
     });
     await sidebar.getByRole('button', { name: 'Settings' }).click();
-    await page.getByRole('switch', { name: 'Pause everything' }).uncheck({ force: true });
+    await expect(pause).toBeEnabled();
+    await expect(pause).toBeChecked();
+    await pause.uncheck({ force: true });
+    await expect(pause).not.toBeChecked();
     const off = Date.now();
     await sidebar.getByRole('button', { name: /^Projects/ }).click();
     await page

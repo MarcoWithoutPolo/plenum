@@ -483,6 +483,7 @@ for (const scheme of ['light', 'dark'] as const) {
         .click();
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(out, `${scheme}-settings.png`) });
+      await expect(page.getByRole('switch', { name: 'Pause everything' })).toBeEnabled();
       await page.getByRole('switch', { name: 'Pause everything' }).check({ force: true });
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(out, `${scheme}-settings-paused.png`) });
