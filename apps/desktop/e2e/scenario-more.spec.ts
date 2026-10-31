@@ -19,9 +19,8 @@ import {
 } from './scenario-kit.js';
 
 // Private tests, scenarios 15–20 (v0.9), on your real accounts and Conclave data. They spend real
-// usage (Copilot Free counts premium requests). Pick them: CONCLAVE_SCENARIO=15,16,17,18,19,20.
-// Scenario 21 (a new AI at its usage limit) is covered by recorded messages in unit tests: none
-// of the new AIs can be pushed to its limit on purpose.
+// usage (Copilot Free counts premium requests). Pick them: CONCLAVE_SCENARIO=15,…,21.
+// Scenario 21 needs Cursor and Grok out of usage, which free plans reach quickly.
 const which = (process.env.CONCLAVE_SCENARIO ?? '').split(',').map((s) => s.trim());
 
 type Reply = {
@@ -402,6 +401,87 @@ test('scenario 17: a local model builds through OpenCode', async () => {
     await api('projects.stop', id);
   } finally {
     console.log(`\nSCENARIO 17: ${checks.filter((c) => c.ok).length} of ${checks.length} passed`);
+    await app.close();
+  }
+  expect(checks.filter((c) => !c.ok)).toEqual([]);
+});
+
+// ── 21: an AI at its usage limit hands off and says when it's back ──────────────────────────
+// Run while Cursor's and Grok's plans are out of usage (free plans run out quickly).
+test('scenario 21: Cursor and Grok at their limits hand off and say when they are back', async () => {
+  test.skip(!which.includes('21'), 'set CONCLAVE_SCENARIO=21 (with Cursor and Grok out of usage)');
+  test.setTimeout(45 * 60_000);
+  const { checks, check } = checker();
+  const { app, page, shot, api } = await launch('21');
+  try {
+    const name = `limits-${stamp}`;
+    const id = await runProject(
+      page,
+      api,
+      {
+        repoPath: mathRepo('21', name),
+        name,
+        goal: 'A tiny clamp module: clamp.js exporting clamp(n, min, max), with node:test tests in test/clamp.test.js for values below, inside and above the range. npm test runs node --test. Keep it to that one function.',
+        routing: {
+          planner: [{ provider: 'claude', model: 'haiku' }],
+          builder: [
+            { provider: 'cursor' },
+            { provider: 'grok' },
+            { provider: 'claude', model: 'haiku' },
+          ],
+          reviewer: [{ provider: 'grok' }, { provider: 'antigravity' }, { provider: 'codex' }],
+        },
+        adaptiveTeam: false,
+        maxAttempts: 2,
+        askPolicy: 'decide',
+      },
+      30,
+    );
+    await shot('done');
+    const log = events(id);
+    for (const [provider, label] of [
+      ['cursor', 'Cursor'],
+      ['grok', 'Grok'],
+    ] as const) {
+      const hit = log.find((e) => e.provider === provider && /hit a usage limit/.test(e.message));
+      check(
+        `21: ${label} was turned away and said why`,
+        Boolean(hit),
+        hit?.message.slice(0, 160) ?? '',
+      );
+    }
+    const t = tasks(id);
+    const merged = t.filter((x) => x.status === 'merged');
+    check(
+      '21: the work moved on and merged',
+      merged.length > 0 && merged.every((x) => x.built_by !== 'cursor' && x.built_by !== 'grok'),
+      t
+        .map((x) => `${x.title}: ${x.status}, built by ${x.built_by}, reviewed by ${x.reviewed_by}`)
+        .join('; '),
+    );
+    const attempts = query<{ attempts: number }>(
+      'SELECT attempts FROM tasks WHERE project_id = ?',
+      id,
+    );
+    check(
+      '21: a usage limit never used up an attempt',
+      !log.some((e) => /Gave up/.test(e.message)) && attempts.every((a) => a.attempts <= 1),
+      attempts.map((a) => a.attempts).join(', '),
+    );
+    const startCheck = await api<{
+      notes: { provider: string; text: string; until: number | null }[];
+    }>('projects.startCheck', id);
+    for (const provider of ['cursor', 'grok']) {
+      const note = startCheck.notes.find((n) => n.provider === provider);
+      check(
+        `21: the start-up check says when ${provider} is back`,
+        Boolean(note && note.until && / until /.test(note.text)),
+        note?.text ?? 'no note',
+      );
+    }
+    await shot('after');
+  } finally {
+    console.log(`\nSCENARIO 21: ${checks.filter((c) => c.ok).length} of ${checks.length} passed`);
     await app.close();
   }
   expect(checks.filter((c) => !c.ok)).toEqual([]);
