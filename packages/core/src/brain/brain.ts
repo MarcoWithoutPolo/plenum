@@ -770,11 +770,12 @@ export class Brain {
     }
   }
 
-  /** A seat whose model its CLI refused, this run or earlier (the picker hides those too). */
+  /**
+   * A seat whose model its CLI refused during this run. An older refusal (the picker's) doesn't
+   * count: the plan may have changed since, and one try finds out at no cost to the task.
+   */
   private isRefused(seat: Seat): boolean {
-    if (!seat.model) return false;
-    if (this.refusedSeats.has(`${seat.provider}@${seat.model}`)) return true;
-    return this.ctx.store.catalogs.get(seat.provider)?.unavailable.includes(seat.model) ?? false;
+    return Boolean(seat.model && this.refusedSeats.has(`${seat.provider}@${seat.model}`));
   }
 
   /* ── One task: build → test → review → merge ───────────────────────── */

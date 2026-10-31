@@ -151,6 +151,8 @@ export function recordUsage(
   // A model the CLI refused ("unavailable on Free", "not found") stops being offered.
   if (!result.ok && run.seat.model && result.errors.some((e) => MODEL_REFUSED.test(e))) {
     store.catalogs.markUnavailable(run.seat.provider, run.seat.model);
+  } else if (result.ok && run.seat.model) {
+    store.catalogs.markAvailable(run.seat.provider, run.seat.model);
   }
 }
 

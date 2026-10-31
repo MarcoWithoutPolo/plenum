@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Engine, FakeAdapter, Store, recordUsage } from '../src/index.js';
+import { Engine, FakeAdapter, REFUSAL_TTL, Store, recordUsage } from '../src/index.js';
 
 describe('model catalogs', () => {
   it('asks the CLI once, then serves the cache until it is an hour old', async () => {
@@ -74,6 +74,30 @@ describe('models a CLI refuses', () => {
       },
     );
     expect((await engine.catalog('fake')).models.map((m) => m.id)).toEqual(['auto']);
+    engine.close();
+  });
+
+  it('offer it again after a plan upgrade: a day later, or as soon as it works', async () => {
+    const adapter = new FakeAdapter({});
+    Object.assign(adapter, {
+      models: async () => ({ models: [{ id: 'auto' }, { id: 'pro-only' }] }),
+    });
+    const engine = new Engine({ adapters: [adapter], store: new Store(':memory:') });
+    await engine.catalog('fake');
+    const ids = async () => (await engine.catalog('fake')).models.map((m) => m.id);
+    engine.store.catalogs.markUnavailable('fake', 'pro-only', Date.now() - REFUSAL_TTL - 1);
+    expect(await ids()).toEqual(['auto', 'pro-only']);
+    engine.store.catalogs.markUnavailable('fake', 'pro-only');
+    expect(await ids()).toEqual(['auto']);
+    recordUsage(
+      engine.store,
+      { seat: { provider: 'fake', model: 'pro-only' }, role: 'chat', source: 'chat' },
+      { ok: true, text: 'pong', usage: {}, quotas: [], errors: [], durationMs: 1, events: [] },
+    );
+    expect(await ids()).toEqual(['auto', 'pro-only']);
+    // Rows from before marks carried a time (bare ids) have lapsed.
+    engine.store.db.prepare(`UPDATE model_catalogs SET unavailable = '["pro-only"]'`).run();
+    expect(await ids()).toEqual(['auto', 'pro-only']);
     engine.close();
   });
 });
