@@ -63,6 +63,7 @@ const { values } = parseArgs({
     shots: { type: 'string', default: 'on' },
     /** A reviewer that can see also looks at the screenshots (web projects; needs --shots on). */
     visual: { type: 'string', default: 'on' },
+    'review-effort': { type: 'string', default: 'same' },
     runs: { type: 'string', default: '1' },
     'timeout-min': { type: 'string', default: '40' },
     nudges: { type: 'string', default: '2' },
@@ -339,6 +340,7 @@ async function runConclave(
     askPolicy: 'decide',
     maxParallel: parallel,
     visualReview: values.visual !== 'off',
+    reviewEffort: values['review-effort'] === 'light' ? 'light' : 'same',
     ...(team && { routing: team }),
     permissions: {
       level: Number(values.level) as 1 | 2 | 3 | 4 | 5,
@@ -351,7 +353,7 @@ async function runConclave(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const notes = [
     `team: plans ${projectRow.routing.planner.map(seatName).join('>')}, builds ${projectRow.routing.builder.map(seatName).join('>')}, reviews ${projectRow.routing.reviewer.map(seatName).join('>')}`,
-    `level ${values.level}, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)`,
+    `level ${values.level}, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)${projectRow.reviewEffort === 'light' ? ', light reviews' : ''}`,
   ];
   let ok = false;
   let snapshotter: ChromeSnapshotter | undefined;
@@ -407,6 +409,14 @@ async function runConclave(
     .approvals(projectRow.id)
     .filter((a) => a.kind === 'question').length;
   const events = engine.store.projects.events(projectRow.id);
+  // How the loop went (v0.9.1): the same patterns read v0.9's logs, where the new ones are 0.
+  const said = (re: RegExp) => events.filter((e) => re.test(e.message)).length;
+  notes.push(
+    `loop: ${said(/^(Building|Attempt \d+):/)} builds, ${said(/^Reviewing with/)} reviews, ` +
+      `${said(/^Sent back \(/)} send-backs (${said(/^Continuing from/)} continued from kept work), ` +
+      `${said(/parked until a reviewer/)} parked, ${said(/; asking .+ instead$/)} planner failovers, ` +
+      `${said(/went quiet/)} stalls, ${said(/for a second opinion/)} second opinions`,
+  );
   const t0 = events[0]?.at ?? Date.now();
   const timeline = events.map(
     (e) =>

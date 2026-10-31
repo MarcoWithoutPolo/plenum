@@ -30,6 +30,7 @@ import {
   type LineParser,
 } from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+import { QUIET_MS } from './types.js';
 
 /**
  * Prompts go on the command line: agy has no stdin prompt in print mode, and
@@ -63,6 +64,7 @@ export class AntigravityAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: true,
+    quietMs: QUIET_MS,
     // Headless agy has no image option, but it reads image files with its own tools (shown
     // live, test/live-vision.test.ts): screenshots are named in the prompt, their folders added.
     vision: 'files',

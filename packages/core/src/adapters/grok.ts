@@ -25,6 +25,7 @@ import {
   type Exec,
 } from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+import { QUIET_MS } from './types.js';
 
 /** The levels `--effort` accepts (its own error lists them: "use one of: xhigh, high, medium, low"). */
 const GROK_EFFORTS = ['low', 'medium', 'high', 'xhigh'];
@@ -49,6 +50,7 @@ export class GrokAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: true,
+    quietMs: QUIET_MS,
     vision: 'files',
   };
   private readonly exec: Exec;

@@ -133,6 +133,8 @@ export interface BuilderExtras extends PromptExtras {
   decideAndTell?: boolean;
   /** A web project whose pages are screenshotted: explain sample states. */
   web?: boolean;
+  /** The previous attempt's commit is already in the worktree; fix it instead of starting over. */
+  kept?: string;
 }
 
 /** For web projects: how to show the screenshots the page in use, not just as it loads. */
@@ -150,7 +152,11 @@ YOUR TASK: ${task.title}
 ${task.spec}
 ${
   task.feedback
-    ? `\nTHE PREVIOUS ATTEMPT WAS SENT BACK. Fix this:\n${task.feedback.slice(0, 6000)}\n`
+    ? `\nTHE PREVIOUS ATTEMPT WAS SENT BACK. ${
+        extras.kept
+          ? `It is already in this folder (commit ${extras.kept.slice(0, 8)}): change what the feedback asks, keep what works, and don't start over unless the feedback says the approach is wrong. `
+          : ''
+      }Fix this:\n${task.feedback.slice(0, 6000)}\n`
     : ''
 }
 ${extras.installed ? `\nTHE SYSTEM ALREADY RAN: ${extras.installed}\n` : ''}
@@ -204,7 +210,8 @@ Approve unless there is a real problem: a bug, a missed requirement from the tas
 
 ${extras.shots ? shotsSection(extras.shots, project.designDirection) : ''}${extras.goalCheck ? goalCheckSection(extras.goalCheck) : ''}Reply with ONLY one JSON object and nothing else:
 {"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"${extras.shots ? ', "visual": [{"shot": "the screenshot label", "issue": "what looks wrong and how to fix it", "box": [x1, y1, x2, y2]}]' : ''}${extras.goalCheck ? ', "goal_met": true or false, "goal_gaps": ["what is still missing from the goal"]' : ''}}
-If the change hinges on a product decision only the user can make, add "question": "...", "options": ["...", "..."], "recommended": "..." and set "approve": false.`;
+If the change hinges on a product decision only the user can make, add "question": "...", "options": ["...", "..."], "recommended": "..." and set "approve": false.
+The builder's next attempt starts from this change and fixes what you list. Only if the whole approach is wrong, so that fixing parts of it won't do, add "restart": true.`;
 }
 
 function goalCheckSection(check: { merged: string[]; doneWhen: string | null }): string {

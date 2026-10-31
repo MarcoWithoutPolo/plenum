@@ -177,6 +177,8 @@ export function taskVerb(task: Task): string {
     case 'replaced':
       return 'Replaced';
     default:
+      if (task.kept?.ready) return 'Built, waiting for a reviewer';
+      if (task.kept) return 'Queued to fix its last attempt';
       return task.attempts ? 'Queued for retry' : 'Queued';
   }
 }

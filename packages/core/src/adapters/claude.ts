@@ -26,6 +26,7 @@ import {
   type Exec,
 } from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+import { QUIET_MS } from './types.js';
 
 const INITIALIZE = {
   type: 'control_request',
@@ -52,6 +53,7 @@ export class ClaudeAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: true,
+    quietMs: QUIET_MS,
     // Its Read tool opens image files.
     vision: 'files',
   };

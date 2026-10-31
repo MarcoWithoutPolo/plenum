@@ -13,7 +13,14 @@ import type {
   Task,
   TaskFailure,
 } from '@conclave/shared';
-import { IN_FLIGHT, PROVIDERS, visualIssueLine } from '@conclave/shared';
+import {
+  IN_FLIGHT,
+  PROVIDERS,
+  findVariant,
+  resolveModel,
+  sortEfforts,
+  visualIssueLine,
+} from '@conclave/shared';
 import { limitResetsAt, looksLikeLimit } from '../adapters/kit/index.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
@@ -40,7 +47,7 @@ import type { PlannedTask } from './json.js';
 import { rankSeats, seatStats, withPriors, type RankRole } from '../governor/rank.js';
 import { QUESTION_KINDS } from './answers.js';
 import { isRunnableInstall, parseAssumptions, parseQuestion } from './questions.js';
-import { builderPlan, countsAsAttempt } from './recovery.js';
+import { builderPlan, countsAsAttempt, sentBackBy } from './recovery.js';
 import { findReplacement } from './similar.js';
 
 export interface BrainOptions {
@@ -48,6 +55,8 @@ export interface BrainOptions {
   home: string;
   governor?: Governor;
   maxTasksPerPlan?: number;
+  /** Stall window for every CLI, instead of each adapter's own (tests). */
+  quietMs?: number;
   /** Pause after this many tasks in a row fail with nothing merged in between. */
   maxFailureStreak?: number;
   /** Questions one task may ask before its agent must decide for itself. */
@@ -126,6 +135,12 @@ export function storeGovernor(store: EngineContext['store']): Governor {
 }
 
 /** How many tasks one AI may build at once across projects, by default (lanes). */
+/** Kept attempts in a row that may fail before the next one starts fresh (v0.9.1 F1). */
+const KEPT_STREAK = 2;
+/** How long a builder that went quiet sits out, if anyone else can build (F4). */
+const STALL_PAUSE = 60 * 60_000;
+const seatKey = (s: Seat) => `${s.provider}@${s.model ?? ''}@${s.effort ?? ''}`;
+
 export const LANE_CAPS: Partial<Record<ProviderId, number>> = Object.fromEntries(
   PROVIDERS.map((p) => [p.id, p.laneCap]),
 );
@@ -162,6 +177,10 @@ export class Brain {
   private readonly taskAborts = new Map<string, AbortController>();
   /** Builder seats whose CLI refused the model this run ("not found", "unavailable on your plan"). */
   private readonly refusedSeats = new Set<string>();
+  /** Builders that went quiet during this run, until when they sit out (F4). */
+  private readonly stalledSeats = new Map<string, number>();
+  /** Tasks whose current attempt continued from kept work (a send-back's commit). */
+  private readonly resumed = new Set<string>();
 
   constructor(
     private readonly ctx: EngineContext,
@@ -215,8 +234,8 @@ export class Brain {
     }
     await this.workspace.prepare(project.baseBranch);
     const recovered = this.projects.requeueInterrupted(this.projectId);
-    // Half-finished work is thrown away; the task rebuilds from the latest integration tip.
-    for (const t of recovered) await this.workspace.removeTaskTree(t.id);
+    // Half-finished work is thrown away; a commit kept from a send-back stays for the retry.
+    for (const t of recovered) await this.workspace.removeTaskTree(t.id, Boolean(t.kept));
     this.projects.setStatus(this.projectId, 'running');
     this.log(
       'start',
@@ -546,13 +565,17 @@ export class Brain {
       // Skipped by you while it ran: it stays skipped (even if a step moved it on meanwhile);
       // only this lane stopped.
       await this.workspace.removeTaskTree(task.id);
-      const now = this.projects.updateTask(task.id, { status: 'skipped', blockedBy: null });
+      const now = this.projects.updateTask(task.id, {
+        status: 'skipped',
+        blockedBy: null,
+        kept: null,
+      });
       this.log('task', `Stopped work on ${task.title}: you skipped it`, { task: now });
       return { kind: 'retry', task: now, reason: 'You skipped it' };
     }
     if (task) {
-      this.projects.updateTask(task.id, { status: 'queued' });
-      await this.workspace.removeTaskTree(task.id);
+      const now = this.projects.updateTask(task.id, { status: 'queued' });
+      await this.workspace.removeTaskTree(task.id, Boolean(now.kept));
     }
     const reason = this.project().statusReason ?? 'Stopped';
     return { kind: 'stopped', reason };
@@ -599,32 +622,57 @@ export class Brain {
       },
       { decisions: this.decisions(), decideYourself: this.mustDecide(null) },
     );
-    this.log('plan', `Planning with ${seatLabel(pick.seat)}`, { provider: pick.seat.provider });
-    const result = await this.agent(
-      'planner',
-      pick.seat,
-      prompt,
-      this.workspace.integrationPath,
-      true,
-    );
-    if (this.interrupted) return this.halt();
-    if (result.rateLimited)
-      return this.waiting('planner', this.governor.pick(project.routing.planner));
-    if (!result.ok) {
-      this.log('error', `Planner failed: ${failure(result)}`, { provider: pick.seat.provider });
-      return { kind: 'idle', reason: `Planner failed: ${failure(result)}` };
+    // A planner that fails or replies without a plan hands the planning to the next one (F3).
+    let seat = pick.seat;
+    const tried: ProviderId[] = [];
+    const problems: string[] = [];
+    let result: RunResult;
+    let plan: ReturnType<typeof parsePlan>;
+    for (;;) {
+      this.log('plan', `Planning with ${seatLabel(seat)}`, { provider: seat.provider });
+      result = await this.agent('planner', seat, prompt, this.workspace.integrationPath, true);
+      if (this.interrupted) return this.halt();
+      if (result.rateLimited)
+        return this.waiting('planner', this.governor.pick(project.routing.planner));
+      let problem: string | undefined;
+      if (!result.ok) {
+        problem = `Planner failed: ${failure(result)}`;
+        this.log('error', problem, { provider: seat.provider });
+      } else {
+        plan = parsePlan(result.text, this.maxTasks);
+        if (!plan) {
+          const question = parseQuestion(result.text);
+          if (question) return this.ask(project, null, question, seat, 'plan');
+          problem = 'The planner reply had no task list';
+          this.log('error', problem, {
+            provider: seat.provider,
+            data: { reply: result.text.slice(0, 2000) },
+          });
+        }
+      }
+      if (!problem) break;
+      tried.push(seat.provider);
+      problems.push(`${seatLabel(seat)}: ${problem}`);
+      const next = this.governor.pick(
+        this.ranked(
+          'planner',
+          project.routing.planner.filter((s) => !tried.includes(s.provider)),
+        ),
+      ).seat;
+      if (!next) {
+        return {
+          kind: 'idle',
+          reason:
+            problems.length === 1
+              ? problem
+              : `No planner on the team gave a plan. ${problems.join('; ')}`,
+        };
+      }
+      const said = problem.split('\n')[0]!.slice(0, 240);
+      this.log('plan', `${said}; asking ${seatLabel(next)} instead`, { provider: next.provider });
+      seat = next;
     }
-
-    const plan = parsePlan(result.text, this.maxTasks);
-    if (!plan) {
-      const question = parseQuestion(result.text);
-      if (question) return this.ask(project, null, question, pick.seat, 'plan');
-      this.log('error', 'The planner reply had no task list', {
-        provider: pick.seat.provider,
-        data: { reply: result.text.slice(0, 2000) },
-      });
-      return { kind: 'idle', reason: 'The planner reply had no task list' };
-    }
+    if (!plan) return { kind: 'idle', reason: 'The planner reply had no task list' };
     if (plan.done) {
       // "Done" while the project's own test command fails isn't done.
       const blocker = await this.testsBlockDone(project, tasks);
@@ -638,7 +686,7 @@ export class Brain {
     if (plan.testCommand && !project.testCommand && !project.proposedTestCommand) {
       this.projects.update(this.projectId, { proposedTestCommand: plan.testCommand });
       this.log('plan', `Proposed test command: ${plan.testCommand}`, {
-        provider: pick.seat.provider,
+        provider: seat.provider,
       });
     }
     if (plan.tasks.length === 0) {
@@ -657,14 +705,14 @@ export class Brain {
         'The planner only proposed tasks that already failed. Adjust the goal or tests, then resume.';
       this.projects.setStatus(this.projectId, 'paused', reason);
       this.log('stop', reason, {
-        provider: pick.seat.provider,
+        provider: seat.provider,
         data: { tasks: plan.tasks.map((t) => t.title) },
       });
       return { kind: 'idle', reason };
     }
     if (repeats)
       this.log('plan', `Skipped ${repeats} task(s) that already failed`, {
-        provider: pick.seat.provider,
+        provider: seat.provider,
       });
     // The planner proposes; the brain checks the sizes before anything is queued.
     const shaped = shapePlan(fresh, calibration(tasks));
@@ -672,13 +720,13 @@ export class Brain {
       this.log(
         'plan',
         `Asking the planner to split ${shaped.oversized.length} task(s) too big to review well`,
-        { provider: pick.seat.provider, data: { oversized: shaped.oversized } },
+        { provider: seat.provider, data: { oversized: shaped.oversized } },
       );
       return this.plan(project, shaped.oversized);
     }
     if (shaped.folded)
       this.log('plan', `Folded ${shaped.folded} small task(s) into their neighbours`, {
-        provider: pick.seat.provider,
+        provider: seat.provider,
       });
     this.gaps = [];
     const added = this.projects.addTasks(
@@ -690,10 +738,10 @@ export class Brain {
       tasks,
       added,
       shaped.tasks.map((t) => t.replaces),
-      pick.seat.provider,
+      seat.provider,
     );
     this.log('plan', `Planned ${added.length} task(s)`, {
-      provider: pick.seat.provider,
+      provider: seat.provider,
       data: { tasks: added.map((t) => t.title) },
     });
     return { kind: 'planned', tasks: added };
@@ -792,6 +840,11 @@ export class Brain {
 
   private async attempt(project: Project, task: Task): Promise<RoundOutcome> {
     project = this.expirePermissions(project);
+    if (task.kept?.ready) {
+      const parked = await this.reviewParked(project, task);
+      if (parked) return parked;
+      task = this.projects.getTask(task.id)!;
+    }
     const permissions = builderPermissions(project.permissions, {
       ...(task.grants?.network && { grantNetwork: true }),
       ...(project.permissions.level === 3 && { commands: this.checkCommands(project) }),
@@ -828,7 +881,10 @@ export class Brain {
       return { kind: 'idle', reason };
     }
     // Retries keep their escalation order; only a first, unpinned attempt is re-ranked.
-    plan.seats = task.attempts === 0 && !task.pinnedSeat ? this.ranked('builder', seats) : seats;
+    // A builder that went quiet lately sits out, unless nobody else could build.
+    const awake = seats.filter((s) => (this.stalledSeats.get(seatKey(s)) ?? 0) < Date.now());
+    const usable = awake.length ? awake : seats;
+    plan.seats = task.attempts === 0 && !task.pinnedSeat ? this.ranked('builder', usable) : usable;
     // Never more builders on one AI than its lane cap, counting every project.
     const free = plan.seats.filter((s) => this.builderRoom(s.provider));
     if (free.length === 0) {
@@ -858,7 +914,9 @@ export class Brain {
       },
     );
 
-    const cwd = await this.workspace.createTaskTree(task.id);
+    const cwd = await this.taskTree(task);
+    task = this.projects.getTask(task.id)!;
+    const kept = this.resumed.has(task.id) ? task.kept?.commit : undefined;
     const install = task.grants?.install;
     if (install && isRunnableInstall(install)) {
       // You approved this exact command; Conclave runs it, not the agent.
@@ -891,6 +949,7 @@ export class Brain {
         ...(install && { installed: install }),
         ...(project.askPolicy === 'decide' && { decideAndTell: true }),
         ...(this.isWeb(project, task, cwd) && { web: true }),
+        ...(kept && { kept }),
       }),
       cwd,
       false,
@@ -917,7 +976,7 @@ export class Brain {
           builder,
         ),
       });
-      await this.workspace.removeTaskTree(task.id);
+      await this.workspace.removeTaskTree(task.id, Boolean(task.kept));
       // What the CLI said, so a limit that isn't one (or a cap you didn't expect) can be seen.
       const said = built.rateLimited.message.split('\n')[0]!.slice(0, 240);
       this.log(
@@ -931,13 +990,27 @@ export class Brain {
       // Not the task's fault either: the next builder on the team takes it.
       this.refusedSeats.add(`${builder.provider}@${builder.model}`);
       this.projects.updateTask(task.id, { status: 'queued', builtBy: builtBefore });
-      await this.workspace.removeTaskTree(task.id);
+      await this.workspace.removeTaskTree(task.id, Boolean(task.kept));
       this.log(
         'wait',
         `${seatLabel(builder)} refused the model (${failure(built).split('\n')[0]!.slice(0, 240)}); the next builder takes the task`,
         { task, provider: builder.provider },
       );
       return { kind: 'retry', task, reason: 'Builder refused its model' };
+    }
+    if (built.stalled) {
+      // Not this attempt's fault the first time: the next builder on the team takes it.
+      this.stalledSeats.set(seatKey(builder), Date.now() + STALL_PAUSE);
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'stall',
+          `${built.errors[0]}; handing it on`,
+          failure(built),
+          builder,
+        ),
+        feedback: task.feedback ?? '',
+        keep: Boolean(kept),
+      });
     }
     if (!built.ok) {
       return this.sendBack(project, task, {
@@ -970,6 +1043,18 @@ export class Brain {
       });
     }
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
+    if (!commit && kept) {
+      // Nothing new on top of the kept attempt: the builder found nothing to change.
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'no_changes',
+          `${seatLabel(builder)} changed nothing on top of the previous attempt`,
+          built.text.slice(0, 4000),
+          builder,
+        ),
+        feedback: `${task.feedback ?? ''}\n\nThe last attempt changed nothing. Make the changes asked for above.`,
+      });
+    }
     if (!commit) {
       const prose = parseQuestion(built.text, { allowProse: true });
       if (prose) return this.ask(project, task, prose, builder, 'build');
@@ -1015,6 +1100,7 @@ export class Brain {
             builder,
           ),
           feedback: `${run.timedOut ? 'The test command timed out' : `The test command failed (exit ${run.code})`}: ${testCommand}\n\n${tail}`,
+          keep: true,
         });
       }
       tests = `${testCommand} passed in ${(run.durationMs / 1000).toFixed(1)}s.\n${tail.slice(-1500)}`;
@@ -1035,6 +1121,7 @@ export class Brain {
             builder,
           ),
           feedback: `The page has problems this change introduced, found by the visual checks (screenshots at desktop and phone width, light and dark). Fix them:\n${found.map((f) => `- ${f}`).join('\n')}`,
+          keep: true,
         });
       }
     }
@@ -1089,6 +1176,8 @@ export class Brain {
     let team = project.routing.reviewer.some((s) => s.provider !== task.builtBy)
       ? project.routing.reviewer.filter((s) => s.provider !== task.builtBy)
       : project.routing.reviewer;
+    if (project.reviewEffort === 'light')
+      team = await Promise.all(team.map((s) => this.lightSeat(s)));
     // Visual review: screenshots go to a reviewer that can see; others still review the code.
     let shots = project.visualReview ? this.reviewShots(project, task) : undefined;
     if (shots) {
@@ -1110,6 +1199,7 @@ export class Brain {
     let result: RunResult;
     let verdict: ReturnType<typeof parseReview>;
     let lines = 0;
+    let ask!: (seat: Seat, signal: AbortSignal) => Promise<ReviewRun>;
     const goalCheck = this.goalCheck(project, task);
     for (;;) {
       const seats = this.ranked(
@@ -1127,10 +1217,22 @@ export class Brain {
               problem.seat,
             ),
             feedback: task.feedback ?? '',
+            keep: true,
+            // The build itself is fine: the next attempt goes straight back to review.
+            ready: true,
           });
         }
-        this.projects.updateTask(task.id, { status: 'queued' });
-        await this.workspace.removeTaskTree(task.id);
+        // Built and tested: park it for a reviewer instead of building it again later.
+        const commit = await headCommit(this.workspace.taskPath(task.id));
+        const parked = this.projects.updateTask(task.id, {
+          status: 'queued',
+          kept: { commit, streak: task.kept?.streak ?? 0, ready: true },
+        });
+        await this.workspace.removeTaskTree(task.id, true);
+        this.log('wait', 'Built and tested; parked until a reviewer has headroom', {
+          task: parked,
+          data: { commit },
+        });
         return this.waiting('reviewer', tried.length ? this.governor.pick(team, avoid) : pick);
       }
       reviewer = pick.seat;
@@ -1166,6 +1268,7 @@ export class Brain {
         );
         return { seat, result: r, verdict: r.ok ? parseReview(r.text) : undefined };
       };
+      ask = run;
       const backups = team.filter(
         (s) =>
           s.provider !== reviewer.provider &&
@@ -1194,6 +1297,48 @@ export class Brain {
       const asked = parseQuestion(result.text);
       if (asked) return this.ask(project, task, asked, reviewer, 'review');
     }
+    // The same reviewer asking for changes again: another one looks before anything is rebuilt (F6).
+    if (!verdict.approve && !verdict.restart && sentBackBy(task) === reviewer.provider) {
+      const other = this.governor.pick(
+        this.ranked(
+          'reviewer',
+          team.filter((s) => s.provider !== reviewer.provider && s.provider !== task.builtBy),
+        ),
+      ).seat;
+      if (other) {
+        this.log(
+          'review',
+          `${seatLabel(reviewer)} asked for changes again; asking ${seatLabel(other)} for a second opinion`,
+          { task, provider: other.provider },
+        );
+        const second = await ask(other, this.signalFor(task) ?? new AbortController().signal);
+        if (this.cut(task)) return this.halt(task);
+        if (second.verdict?.approve) {
+          this.log(
+            'review',
+            `${seatLabel(other)} approved, which overrules ${seatLabel(reviewer)}'s repeated request`,
+            { task, provider: other.provider },
+          );
+          reviewer = other;
+          result = second.result;
+          verdict = second.verdict;
+          this.projects.updateTask(task.id, { reviewedBy: reviewer.provider });
+        } else if (second.verdict) {
+          const theirs = second.verdict;
+          this.log('review', `${seatLabel(other)} also asked for changes`, {
+            task,
+            provider: other.provider,
+          });
+          verdict = {
+            ...verdict,
+            issues: [...verdict.issues, ...theirs.issues.map((i) => `(${seatLabel(other)}) ${i}`)],
+            ...((verdict.visual || theirs.visual) && {
+              visual: [...(verdict.visual ?? []), ...(theirs.visual ?? [])],
+            }),
+          };
+        }
+      }
+    }
     if (!verdict.approve && verdict.visual?.length) {
       // What the reviewer saw: each problem with its screenshot, so the builder can open it.
       const byLabel = new Map(shots?.files.map((f) => [f.label, f.path]));
@@ -1219,6 +1364,7 @@ export class Brain {
           reviewer,
         ),
         feedback: `Review by ${seatLabel(reviewer)}, who looked at the screenshots, asked for changes:\n${[...visual, ...code].join('\n')}`,
+        keep: !verdict.restart,
       });
     }
     if (!verdict.approve) {
@@ -1238,6 +1384,7 @@ export class Brain {
           reviewer,
         ),
         feedback: `Review by ${seatLabel(reviewer)} asked for changes:\n${issues}`,
+        keep: !verdict.restart,
       });
     }
     this.log('review', `Approved${verdict.summary ? `: ${verdict.summary}` : ''}`, {
@@ -1293,6 +1440,7 @@ export class Brain {
       feedback: null,
       grants: null,
       actualLines: lines,
+      kept: null,
     });
     await this.workspace.removeTaskTree(task.id);
     this.log('merge', `Merged into ${project.integrationBranch} (${merged.commit.slice(0, 8)})`, {
@@ -1320,6 +1468,37 @@ export class Brain {
       });
     }
     return { kind: 'merged', task: done };
+  }
+
+  /**
+   * A reviewer at its lightest thinking level (F7): the lowest effort its model offers, or for a
+   * CLI that puts effort in the model id, that model's lightest id. Unchanged when unknown.
+   */
+  private async lightSeat(seat: Seat): Promise<Seat> {
+    const adapter = this.ctx.adapters.get(seat.provider);
+    let catalog = this.ctx.store.catalogs.get(seat.provider);
+    if (!catalog?.models.length && adapter?.models) {
+      const listed = await adapter.models().catch(() => undefined);
+      if (listed?.models.length) {
+        this.ctx.store.catalogs.save(seat.provider, listed);
+        catalog = this.ctx.store.catalogs.get(seat.provider);
+      }
+    }
+    const models = catalog?.models ?? [];
+    const option =
+      findVariant(models, seat.model)?.option ??
+      (seat.model
+        ? undefined
+        : (models.find((m) => m.id === catalog?.defaultModel) ??
+          (models[0]?.variants ? models[0] : undefined)));
+    const efforts = option?.efforts ?? (option ? undefined : adapter?.capabilities.efforts);
+    const lightest = efforts?.length ? sortEfforts(efforts)[0]! : undefined;
+    if (!lightest) return seat;
+    if (option?.variants) {
+      const { effort: _effort, ...rest } = seat;
+      return { ...rest, model: resolveModel(option, lightest).model };
+    }
+    return { ...seat, effort: lightest };
   }
 
   /** The team order for a role, adjusted by measured reliability, quota and (for reviews) speed. */
@@ -1755,19 +1934,123 @@ export class Brain {
   }
 
   /**
+   * The worktree for this attempt: the kept commit when the last attempt left one (brought up to
+   * date with the integration branch), else a fresh tree from the integration branch.
+   */
+  private async taskTree(task: Task): Promise<string> {
+    this.resumed.delete(task.id);
+    const kept = task.kept;
+    if (kept) {
+      const tree = await this.workspace.resumeTaskTree(task.id, kept.commit);
+      if (tree && tree !== 'conflict') {
+        this.resumed.add(task.id);
+        if (tree.updated) {
+          // The branch moved (merge commit): keep pointing at it, so a limit doesn't lose it.
+          const commit = await headCommit(tree.path);
+          this.projects.updateTask(task.id, { kept: { ...kept, commit } });
+          this.log(
+            'task',
+            `Continuing from ${kept.commit.slice(0, 8)}, with newer work merged in`,
+            {
+              task,
+            },
+          );
+        } else this.log('task', `Continuing from ${kept.commit.slice(0, 8)}`, { task });
+        return tree.path;
+      }
+      this.log(
+        'task',
+        tree === 'conflict'
+          ? 'The kept attempt conflicts with newer work; starting fresh'
+          : 'The kept attempt is gone; starting fresh',
+        { task },
+      );
+      this.projects.updateTask(task.id, { kept: null });
+    }
+    return this.workspace.createTaskTree(task.id);
+  }
+
+  /**
+   * A parked task (built and tested, no reviewer had headroom) goes straight to review: its tests
+   * run again on the kept commit, brought up to date. `undefined`: it couldn't be resumed and is
+   * built again as usual.
+   */
+  private async reviewParked(project: Project, task: Task): Promise<RoundOutcome | undefined> {
+    const kept = task.kept!;
+    const tree = await this.workspace.resumeTaskTree(task.id, kept.commit);
+    if (!tree || tree === 'conflict') {
+      this.log('task', 'The parked build can’t be resumed; building it again', { task });
+      this.projects.updateTask(task.id, { kept: null });
+      return undefined;
+    }
+    const commit = await headCommit(tree.path);
+    task = this.projects.updateTask(task.id, {
+      status: 'verifying',
+      kept: { ...kept, commit, ready: false },
+    });
+    this.log('review', `Resuming the parked build ${commit.slice(0, 8)} for review`, { task });
+    let tests = '(no test command; review only)';
+    const testCommand = testCommandOf(project);
+    if (testCommand) {
+      const run = await this.runTests(project, tree.path);
+      if (this.cut(task)) return this.halt(task);
+      if (!run.ok) {
+        const builder = project.routing.builder.find((s) => s.provider === task.builtBy) ?? null;
+        return this.sendBack(project, task, {
+          failure: this.failureOf(
+            'tests',
+            'The tests fail on the parked build',
+            run.output,
+            builder,
+          ),
+          feedback: `The test command failed: ${testCommand}\n\n${run.output}`,
+          keep: true,
+        });
+      }
+      tests = `${testCommand} passed.`;
+    }
+    return this.review(project, this.projects.updateTask(task.id, { status: 'reviewing' }), tests);
+  }
+
+  /**
    * Record why an attempt didn't make it, then requeue with that feedback or give up
    * after maxAttempts. Some kinds are free: a merge conflict or a first CLI crash.
    */
   private async sendBack(
     project: Project,
     task: Task,
-    { failure, feedback }: { failure: TaskFailure; feedback: string },
+    {
+      failure,
+      feedback,
+      keep = false,
+      ready = false,
+    }: {
+      failure: TaskFailure;
+      feedback: string;
+      /** The attempt committed work the next one can fix instead of rebuilding (v0.9.1 F1). */
+      keep?: boolean;
+      /** Kept work that only needs a review (no reviewer gave a verdict). */
+      ready?: boolean;
+    },
   ): Promise<RoundOutcome> {
-    await this.workspace.removeTaskTree(task.id);
     const counted = countsAsAttempt(failure.kind, task.freeRetries);
     const attempts = task.attempts + (counted ? 1 : 0);
     const freeRetries = task.freeRetries + (counted ? 0 : 1);
-    const data = { kind: failure.kind, counted, feedback: feedback.slice(0, 4000) };
+    // Two kept attempts in a row that still fail: the next one starts fresh.
+    const streak = this.resumed.has(task.id) ? (task.kept?.streak ?? 0) + 1 : 0;
+    this.resumed.delete(task.id);
+    const commit =
+      keep && streak < KEPT_STREAK && attempts < project.maxAttempts
+        ? await headCommit(this.workspace.taskPath(task.id)).catch(() => null)
+        : null;
+    const kept = commit ? { commit, streak, ready } : null;
+    await this.workspace.removeTaskTree(task.id, Boolean(kept));
+    const data = {
+      kind: failure.kind,
+      counted,
+      feedback: feedback.slice(0, 4000),
+      kept: kept?.commit ?? null,
+    };
     const provider = failure.provider ? { provider: failure.provider } : {};
     if (attempts >= project.maxAttempts) {
       const failed = this.projects.updateTask(task.id, {
@@ -1775,6 +2058,7 @@ export class Brain {
         attempts,
         feedback,
         lastFailure: failure,
+        kept: null,
       });
       this.log('fail', `Gave up after ${attempts} attempt(s): ${task.title}. ${failure.summary}`, {
         task: failed,
@@ -1789,12 +2073,14 @@ export class Brain {
       freeRetries,
       feedback,
       lastFailure: failure,
+      kept,
     });
+    const from = kept ? `; the next attempt continues from ${kept.commit.slice(0, 8)}` : '';
     this.log(
       'retry',
       counted
-        ? `Sent back (${attempts}/${project.maxAttempts}): ${failure.summary}`
-        : `Trying again, not counted as an attempt: ${failure.summary}`,
+        ? `Sent back (${attempts}/${project.maxAttempts}): ${failure.summary}${from}`
+        : `Trying again, not counted as an attempt: ${failure.summary}${from}`,
       { task: queued, ...provider, data },
     );
     return { kind: 'retry', task: queued, reason: failure.summary };
@@ -1851,21 +2137,44 @@ export class Brain {
     const seen = new Set<string>();
     // The project's stop, and this run's own (a review that lost the race).
     const own = task && this.taskAborts.get(task.id)?.signal;
-    const signals = [this.signal, own, extra.signal].filter((s): s is AbortSignal => Boolean(s));
+    // The watchdog (F4): a CLI that reports while it works and then goes quiet is stopped.
+    const quietMs = this.opts.quietMs ?? adapter.capabilities.quietMs;
+    const quiet = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      if (quietMs) timer = setTimeout(() => quiet.abort(), quietMs);
+    };
+    const watched = async function* (events: AsyncIterable<AgentEvent>) {
+      arm();
+      try {
+        for await (const event of events) {
+          arm();
+          yield event;
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const signals = [this.signal, own, extra.signal, quietMs ? quiet.signal : undefined].filter(
+      (s): s is AbortSignal => Boolean(s),
+    );
     const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
     const result = await collect(
-      adapter.run({
-        prompt,
-        cwd,
-        role,
-        readOnly,
-        ...(permissions && { permissions }),
-        timeoutMs: this.agentTimeout,
-        ...(signal && { signal }),
-        ...(seat.model && { model: seat.model }),
-        ...(seat.effort && { effort: seat.effort }),
-        ...(extra.images?.length && { images: extra.images }),
-      }),
+      watched(
+        adapter.run({
+          prompt,
+          cwd,
+          role,
+          readOnly,
+          ...(permissions && { permissions }),
+          timeoutMs: this.agentTimeout,
+          ...(signal && { signal }),
+          ...(seat.model && { model: seat.model }),
+          ...(seat.effort && { effort: seat.effort }),
+          ...(extra.images?.length && { images: extra.images }),
+        }),
+      ),
       (event: AgentEvent) => {
         // Log what agents touch, once per file or tool, without flooding the log.
         if (event.type === 'file.edit' && !seen.has(`f:${event.path}`)) {
@@ -1897,6 +2206,10 @@ export class Brain {
       const message = result.errors[0] ?? 'usage limit reached';
       const resetsAt = limitResetsAt(result.errors.join(' '));
       result.rateLimited = { message, ...(resetsAt && { resetsAt }) };
+    }
+    if (!result.ok && quiet.signal.aborted && !this.signal?.aborted && !own?.aborted) {
+      result.stalled = true;
+      result.errors.unshift(`${seatLabel(seat)} went quiet for ${seconds(quietMs!)}`);
     }
     // Stopped because another review answered first, or you skipped the task: not a failure.
     const cancelled =

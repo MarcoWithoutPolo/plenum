@@ -9,6 +9,8 @@ export interface RunResult {
   engine?: string;
   usage: Usage;
   rateLimited?: { message: string; resetsAt?: number };
+  /** Stopped by the brain's watchdog: no event for longer than the CLI's quiet window. */
+  stalled?: boolean;
   quotas: { window: string; utilization?: number; resetsAt?: number }[];
   errors: string[];
   durationMs: number;

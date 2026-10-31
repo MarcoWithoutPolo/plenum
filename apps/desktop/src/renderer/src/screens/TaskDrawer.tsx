@@ -222,7 +222,9 @@ export function TaskDrawer({
             ) : (
               <p className="text-[13px] text-muted">
                 {task.status === 'queued'
-                  ? 'Not built yet.'
+                  ? task.kept
+                    ? 'The last attempt is kept; the next one continues from it.'
+                    : 'Not built yet.'
                   : task.status === 'failed'
                     ? 'The last attempt was discarded.'
                     : 'No changes yet.'}

@@ -593,6 +593,7 @@ export function ProjectSettingsDialog({
   const [askPolicy, setAskPolicy] = useState<AskPolicy>(project.askPolicy);
   const [permissions, setPermissions] = useState<Permissions>(project.permissions);
   const [visual, setVisual] = useState(project.visualReview);
+  const [reviewEffort, setReviewEffort] = useState(project.reviewEffort);
   const [pages, setPages] = useState(project.pages.join(' '));
   const [gaps, setGaps] = useState<PermissionGaps>({});
   const [saving, setSaving] = useState(false);
@@ -611,6 +612,7 @@ export function ProjectSettingsDialog({
     setAskPolicy(project.askPolicy);
     setPermissions(project.permissions);
     setVisual(project.visualReview);
+    setReviewEffort(project.reviewEffort);
     setPages(project.pages.join(' '));
   }, [open]);
   const pageList = pages.split(/[\s,]+/).filter(Boolean);
@@ -632,6 +634,7 @@ export function ProjectSettingsDialog({
       retryStrategy: strategy,
       askPolicy,
       permissions,
+      reviewEffort,
       ...(web && { visualReview: visual, pages: pageList.length ? pageList : ['/'] }),
     });
     setSaving(false);
@@ -737,18 +740,39 @@ export function ProjectSettingsDialog({
             />
           </Field>
         </div>
-        <Field
-          label="Parallel tasks"
-          hint="Independent tasks build at once, each AI within its lane cap. Merges stay one at a time and are re-tested. Applies the next time the project starts."
-        >
-          <Segmented
-            size="sm"
+        <div className="grid grid-cols-2 gap-4">
+          <Field
             label="Parallel tasks"
-            value={parallel}
-            onChange={setParallel}
-            options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
-          />
-        </Field>
+            hint="Independent tasks build at once, each AI within its lane cap. Merges stay one at a time and are re-tested. Applies the next time the project starts."
+          >
+            <Segmented
+              size="sm"
+              label="Parallel tasks"
+              value={parallel}
+              onChange={setParallel}
+              options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
+            />
+          </Field>
+          <Field
+            label="Review effort"
+            hint={
+              reviewEffort === 'light'
+                ? 'Reviewers think at their lightest level, or use their fast model: quicker, and lighter on your plan.'
+                : 'Reviewers run at the model and effort set in the team.'
+            }
+          >
+            <Segmented
+              size="sm"
+              label="Review effort"
+              value={reviewEffort}
+              onChange={setReviewEffort}
+              options={[
+                { value: 'same' as const, label: 'As in the team' },
+                { value: 'light' as const, label: 'Light' },
+              ]}
+            />
+          </Field>
+        </div>
         {web && (
           <div className="grid grid-cols-2 gap-4">
             <Field label="Screenshots">

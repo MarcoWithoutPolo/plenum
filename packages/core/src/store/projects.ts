@@ -10,6 +10,7 @@ import {
   type TaskFailure,
   type TaskEstimate,
   type TaskGrants,
+  type TaskKept,
   type BrainEvent,
   type BrainEventKind,
   type Project,
@@ -39,6 +40,7 @@ export interface NewProject {
   adaptiveTeam?: boolean;
   pages?: string[];
   visualReview?: boolean;
+  reviewEffort?: Project['reviewEffort'];
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -61,6 +63,7 @@ type ProjectPatch = Partial<
     | 'previewCommand'
     | 'pages'
     | 'visualReview'
+    | 'reviewEffort'
     | 'name'
     | 'retryStrategy'
     | 'askPolicy'
@@ -88,6 +91,7 @@ export type TaskPatch = Partial<
     | 'blockedBy'
     | 'grants'
     | 'actualLines'
+    | 'kept'
     | 'after'
     | 'title'
     | 'priority'
@@ -116,6 +120,7 @@ export class ProjectStore {
       previewCommand: null,
       pages: cleanPages(input.pages ?? ['/']),
       visualReview: input.visualReview ?? true,
+      reviewEffort: input.reviewEffort ?? 'same',
       retryStrategy: input.retryStrategy ?? 'escalate',
       askPolicy: input.askPolicy ?? 'ask',
       permissions: input.permissions ?? DEFAULT_PERMISSIONS,
@@ -132,8 +137,8 @@ export class ProjectStore {
         `INSERT INTO projects (id, name, repo_path, goal, done_when, test_command, base_branch,
            integration_branch, routing, max_attempts, retry_strategy, ask_policy, permissions,
            design_direction, github, status, max_parallel, adaptive_team, pages, visual_review,
-           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           review_effort, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         project.id,
@@ -156,6 +161,7 @@ export class ProjectStore {
         project.adaptiveTeam ? 1 : 0,
         JSON.stringify(project.pages),
         project.visualReview ? 1 : 0,
+        project.reviewEffort,
         now,
         now,
       );
@@ -198,8 +204,8 @@ export class ProjectStore {
         `UPDATE projects SET name = ?, goal = ?, done_when = ?, test_command = ?, routing = ?,
            max_attempts = ?, retry_strategy = ?, ask_policy = ?, permissions = ?,
            design_direction = ?, proposed_test_command = ?, github = ?, max_parallel = ?,
-           adaptive_team = ?, preview_command = ?, pages = ?, visual_review = ?, updated_at = ?
-           WHERE id = ?`,
+           adaptive_team = ?, preview_command = ?, pages = ?, visual_review = ?, review_effort = ?,
+           updated_at = ? WHERE id = ?`,
       )
       .run(
         next.name,
@@ -219,6 +225,7 @@ export class ProjectStore {
         next.previewCommand,
         JSON.stringify(cleanPages(next.pages)),
         next.visualReview ? 1 : 0,
+        next.reviewEffort,
         next.updatedAt,
         id,
       );
@@ -260,6 +267,7 @@ export class ProjectStore {
           // Tasks added together run in order unless told otherwise (safe with lanes).
           after: t.after ?? (i > 0 ? [ids[i - 1]!] : []),
           actualLines: null,
+          kept: null,
           createdAt: now,
           updatedAt: now,
         };
@@ -334,7 +342,7 @@ export class ProjectStore {
         `UPDATE tasks SET title = ?, priority = ?, status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
            merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
            replaced_by = ?, blocked_by = ?, grants = ?, actual_lines = ?, after = ?,
-           updated_at = ? WHERE id = ?`,
+           kept = ?, updated_at = ? WHERE id = ?`,
       )
       .run(
         next.title,
@@ -354,6 +362,7 @@ export class ProjectStore {
         next.grants && JSON.stringify(next.grants),
         next.actualLines,
         JSON.stringify(next.after),
+        next.kept && JSON.stringify(next.kept),
         next.updatedAt,
         id,
       );
@@ -538,6 +547,7 @@ function toProject(r: Row): Project {
     previewCommand: (r.preview_command as string | null) ?? null,
     pages: cleanPages((parse(r.pages) as string[] | null) ?? ['/']),
     visualReview: r.visual_review !== 0,
+    reviewEffort: r.review_effort === 'light' ? 'light' : 'same',
     retryStrategy: ((r.retry_strategy as string | null) ?? 'same') as RetryStrategy,
     askPolicy: ((r.ask_policy as string | null) ?? 'ask') as AskPolicy,
     permissions: {
@@ -593,6 +603,7 @@ function toTask(r: Row): Task {
     estimate: parse(r.estimate) as TaskEstimate | null,
     actualLines: (r.actual_lines as number | null) ?? null,
     after: (parse(r.after) as string[] | null) ?? [],
+    kept: parse(r.kept) as TaskKept | null,
     createdAt: r.created_at as number,
     updatedAt: r.updated_at as number,
   };

@@ -92,6 +92,8 @@ export interface ReviewReply {
   /** Only when asked for a goal check. */
   goalMet?: boolean;
   goalGaps?: string[];
+  /** Rejected because the approach is wrong: the next attempt starts fresh, not from this one. */
+  restart?: boolean;
 }
 
 export function parseReview(text: string): ReviewReply | undefined {
@@ -100,10 +102,15 @@ export function parseReview(text: string): ReviewReply | undefined {
   const issues = Array.isArray(json.issues)
     ? json.issues.filter((i): i is string => typeof i === 'string' && i.trim().length > 0)
     : [];
+  const summary = typeof json.summary === 'string' ? json.summary : '';
+  const visual = Array.isArray(json.visual) && json.visual.some(isObj);
+  // A rejection that says nothing at all isn't a verdict: the next reviewer is asked.
+  if (!json.approve && !issues.length && !summary.trim() && !visual && !('question' in json))
+    return undefined;
   return {
     approve: json.approve,
     issues,
-    summary: typeof json.summary === 'string' ? json.summary : '',
+    summary,
     ...(Array.isArray(json.visual) && {
       visual: json.visual
         .filter(isObj)
@@ -127,5 +134,6 @@ export function parseReview(text: string): ReviewReply | undefined {
         (g): g is string => typeof g === 'string' && g.trim().length > 0,
       ),
     }),
+    ...(json.restart === true && { restart: true }),
   };
 }

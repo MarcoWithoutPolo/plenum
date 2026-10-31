@@ -92,6 +92,8 @@ export const Project = z.object({
   pages: z.array(z.string()),
   /** An AI with vision reviews the screenshots too (web projects; screenshots themselves are free). */
   visualReview: z.boolean(),
+  /** "light": reviewers run at their lightest thinking level or fast model (v0.9.1 F7). */
+  reviewEffort: z.enum(['same', 'light']),
   retryStrategy: RetryStrategy,
   askPolicy: AskPolicy,
   permissions: Permissions,
@@ -140,6 +142,8 @@ export const FailureKind = z.enum([
   /** A reviewer that can see found visual problems in the screenshots. */
   'visual',
   'crash',
+  /** The CLI went quiet for longer than it ever does while working; stopped and handed on. */
+  'stall',
   'question',
 ]);
 export type FailureKind = z.infer<typeof FailureKind>;
@@ -173,6 +177,16 @@ export const TaskEstimate = z.object({
 });
 export type TaskEstimate = z.infer<typeof TaskEstimate>;
 
+/** The last attempt's commit, kept on the task branch so the next step continues from it. */
+export const TaskKept = z.object({
+  commit: z.string(),
+  /** Attempts in a row that continued from kept work; at 2 the next one starts fresh. */
+  streak: z.number(),
+  /** Built and tested, waiting only for a reviewer with headroom. */
+  ready: z.boolean(),
+});
+export type TaskKept = z.infer<typeof TaskKept>;
+
 export const Task = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -201,6 +215,7 @@ export const Task = z.object({
   after: z.array(z.string()),
   /** Changed lines in the merged diff, to calibrate the planner's estimates. */
   actualLines: z.number().nullable(),
+  kept: TaskKept.nullable(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

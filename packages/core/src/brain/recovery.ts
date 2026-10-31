@@ -18,6 +18,7 @@ export const FREE_RETRIES: Partial<Record<FailureKind, number>> = {
   // Shares the conflict budget: both mean other work landed first, not that this work is wrong.
   combined_tests: 2,
   crash: 1,
+  stall: 1,
 };
 
 /** Kinds that are never the task's fault: the work moves on and no attempt is used. */
@@ -65,7 +66,8 @@ export interface BuilderPlan {
 
 /**
  * Who builds this attempt. A pinned seat goes first; otherwise the Escalate strategy
- * raises the effort on attempt 2 and hands the task to another builder from attempt 3.
+ * raises the effort on attempt 2 (after failed tests or a crash; a reviewer's change request is fixed
+ * on top of the kept attempt at the same effort) and hands the task to another builder from attempt 3.
  */
 export function builderPlan(
   project: Project,
@@ -84,6 +86,8 @@ export function builderPlan(
   const raise = (s: Seat) => raiseSeat(s, adapters.get(s.provider), 'xhigh');
   const tries = `${task.attempts} failed attempt${task.attempts === 1 ? '' : 's'}`;
   if (task.attempts === 1) {
+    // A reviewer's change request is fixed on top of the kept attempt: more effort doesn't help.
+    if (sentBackBy(task)) return { seats: [last, ...team.filter((s) => s !== last)] };
     const raised = raise(last);
     return {
       seats: [raised, ...team.filter((s) => s !== last)],
@@ -99,6 +103,15 @@ export function builderPlan(
     seats: [...others, raise(last)],
     note: `switching to ${seatLabel(others[0]!)} after ${tries} with ${seatLabel(last)}`,
   };
+}
+
+/** The reviewer who sent the last attempt back (code or screenshots); null for tests or a crash. */
+export function sentBackBy(task: Task): ProviderId | null {
+  const f = task.lastFailure;
+  if (!f) return null;
+  return f.kind === 'review' || (f.kind === 'visual' && f.provider !== task.builtBy)
+    ? f.provider
+    : null;
 }
 
 const sameSeat = (a: Seat, b: Seat) =>

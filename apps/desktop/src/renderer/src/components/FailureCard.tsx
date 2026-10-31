@@ -60,6 +60,11 @@ const KINDS: Record<FailureKind, { icon: LucideIcon; title: string; whose: strin
     title: 'The AI tool stopped',
     whose: 'The CLI errored or timed out. The first one is retried for free.',
   },
+  stall: {
+    icon: Hourglass,
+    title: 'The AI tool went quiet',
+    whose: 'It stopped showing any progress, so it was stopped and the task handed on.',
+  },
   question: {
     icon: MessageCircleQuestion,
     title: 'Waiting for a decision',

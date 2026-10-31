@@ -37,6 +37,8 @@ export interface CreateProjectInput {
   visualReview?: boolean;
   /** Reorder the team from measured speed, reliability and quota. On unless set to false. */
   adaptiveTeam?: boolean;
+  /** Reviewers at their lightest thinking level ("light") or as set in the team ("same"). */
+  reviewEffort?: 'same' | 'light';
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
@@ -77,6 +79,7 @@ export async function createProject(
     ...(input.maxAttempts !== undefined && { maxAttempts: input.maxAttempts }),
     ...(input.maxParallel !== undefined && { maxParallel: input.maxParallel }),
     ...(input.visualReview !== undefined && { visualReview: input.visualReview }),
+    ...(input.reviewEffort && { reviewEffort: input.reviewEffort }),
     ...(input.adaptiveTeam !== undefined && { adaptiveTeam: input.adaptiveTeam }),
     ...(input.retryStrategy && { retryStrategy: input.retryStrategy }),
     ...(input.askPolicy && { askPolicy: input.askPolicy }),

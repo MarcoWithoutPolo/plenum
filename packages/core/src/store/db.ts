@@ -264,6 +264,11 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   },
   // v17: the approval that merges a finished project was named `push`, though it never pushed.
   `UPDATE approvals SET kind = 'merge_base' WHERE kind = 'push';`,
+  // v18 (v0.9.1): a send-back keeps the last attempt's commit for the next one.
+  (db) => {
+    addColumn(db, 'tasks', 'kept', 'TEXT');
+    addColumn(db, 'projects', 'review_effort', "TEXT NOT NULL DEFAULT 'same'");
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */

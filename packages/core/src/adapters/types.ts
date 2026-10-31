@@ -35,7 +35,15 @@ export interface Capabilities {
    * tools (files), or not at all. Missing means none.
    */
   vision?: 'native' | 'files' | 'none';
+  /**
+   * How long a run may go without a single event before it counts as stalled and is stopped
+   * (v0.9.1 F4). Only for CLIs that report while they work; missing means no watchdog.
+   */
+  quietMs?: number;
 }
+
+/** The stall window for CLIs that stream events while they work: long enough for a slow test run. */
+export const QUIET_MS = 15 * 60_000;
 
 /** How to start the provider's own sign-in flow (run in a real terminal so the CLI can open a browser). */
 export interface LoginCommand {

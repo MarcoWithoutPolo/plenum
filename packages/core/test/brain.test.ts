@@ -119,6 +119,8 @@ interface Setup {
   askPolicy?: 'ask' | 'decide' | 'council';
   noTests?: boolean;
   reviewBudgetMs?: (fastestMedianMs: number) => number;
+  /** Codex advertises this stall window (the watchdog). */
+  codexQuietMs?: number;
 }
 
 async function setup(opts: Setup = {}) {
@@ -136,6 +138,7 @@ async function setup(opts: Setup = {}) {
   const codex = new FakeAdapter(opts.codex ?? { reply: 'Created sum.js', act: writeSum('a + b') }, {
     id: 'codex',
     efforts: ['low', 'medium', 'high', 'xhigh'],
+    ...(opts.codexQuietMs && { quietMs: opts.codexQuietMs }),
   });
   const gemini = opts.gemini ? new FakeAdapter(opts.gemini, { id: 'gemini' }) : undefined;
   const adapters = adapterMap([claude, codex, ...(gemini ? [gemini] : [])]);
@@ -225,7 +228,12 @@ describe('Brain', () => {
   it('passes reviewer issues to the next attempt', async () => {
     let plans = 0;
     let reviews = 0;
+    let builds = 0;
     const { store, brain, project, codex } = await setup({
+      codex: {
+        reply: 'Created sum.js',
+        act: (req) => writeSum(builds++ === 0 ? 'a + b' : 'a + b; // the sum of a and b')(req),
+      },
       claude: {
         reply: (req) =>
           req.role === 'planner'
@@ -240,6 +248,175 @@ describe('Brain', () => {
     await brain.run({ maxRounds: 10 });
     expect(store.projects.listTasks(project.id)[0]?.status).toBe('merged');
     expect(codex.requests[1]!.prompt).toContain('Add a comment explaining sum');
+  });
+
+  describe('keeps the work across a send-back (v0.9.1)', () => {
+    const REJECT =
+      '{"approve": false, "issues": ["Add a comment explaining sum"], "summary": "Almost"}';
+    /** Claude plans once and gives these review replies in turn (approving after them). */
+    const reviewing = (...replies: string[]) => {
+      let plans = 0;
+      let reviews = 0;
+      return {
+        reply: (req: RunRequest) =>
+          req.role === 'planner' ? (plans++ === 0 ? PLAN : DONE) : (replies[reviews++] ?? APPROVE),
+      };
+    };
+    /** Codex builds, noting whether its folder already held the last attempt's sum.js. */
+    const builder = () => {
+      const found: boolean[] = [];
+      let n = 0;
+      return {
+        found,
+        fake: {
+          reply: 'Created sum.js',
+          act: (req: RunRequest) => {
+            found.push(existsSync(join(req.cwd, 'sum.js')));
+            writeSum(`a + b; // attempt ${++n}`)(req);
+          },
+        },
+      };
+    };
+    const integrationTree = (repo: string) =>
+      git(repo, 'worktree', 'list', '--porcelain')
+        .split('\n\n')
+        .find((w) => w.includes('branch refs/heads/conclave/integration'))!
+        .split('\n')[0]!
+        .slice('worktree '.length);
+
+    it('continues from the last attempt after a reviewer asks for changes', async () => {
+      const b = builder();
+      const { store, brain, project, codex } = await setup({
+        claude: reviewing(REJECT),
+        codex: b.fake,
+      });
+      expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+      const [task] = store.projects.listTasks(project.id);
+      expect(task).toMatchObject({ status: 'merged', attempts: 1, kept: null });
+      expect(b.found).toEqual([false, true]);
+      expect(codex.requests[1]!.prompt).toContain('It is already in this folder');
+      expect(codex.requests[1]!.prompt).toContain('Add a comment explaining sum');
+      const messages = store.projects.events(project.id).map((e) => e.message);
+      expect(messages.some((m) => m.includes('the next attempt continues from'))).toBe(true);
+      expect(messages.some((m) => m.startsWith('Continuing from'))).toBe(true);
+    });
+
+    it('starts fresh when the reviewer says the approach is wrong', async () => {
+      const b = builder();
+      const { store, brain, project, codex } = await setup({
+        claude: reviewing(
+          '{"approve": false, "issues": ["Wrong approach"], "summary": "Redo it", "restart": true}',
+        ),
+        codex: b.fake,
+      });
+      expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+      expect(store.projects.listTasks(project.id)[0]?.status).toBe('merged');
+      expect(b.found).toEqual([false, false]);
+      expect(codex.requests[1]!.prompt).not.toContain('It is already in this folder');
+    });
+
+    it('starts fresh after two kept attempts in a row still fail', async () => {
+      const b = builder();
+      const { store, brain, project } = await setup({
+        claude: reviewing(REJECT, REJECT, REJECT),
+        codex: b.fake,
+        maxAttempts: 5,
+        retryStrategy: 'same',
+      });
+      expect((await brain.run({ maxRounds: 12 })).kind).toBe('done');
+      expect(store.projects.listTasks(project.id)[0]).toMatchObject({
+        status: 'merged',
+        attempts: 3,
+      });
+      expect(b.found).toEqual([false, true, true, false]);
+    });
+
+    it('merges newer work into the kept attempt, or starts fresh when it conflicts', async () => {
+      for (const conflict of [false, true]) {
+        const b = builder();
+        const { repo, store, brain, project } = await setup({
+          claude: reviewing(REJECT),
+          codex: b.fake,
+        });
+        await brain.round(); // plan
+        expect((await brain.round()).kind).toBe('retry'); // built, sent back
+        const tree = integrationTree(repo);
+        const file = conflict ? 'sum.js' : 'other.js';
+        writeFileSync(join(tree, file), 'module.exports = (a, b) => b + a;\n');
+        git(tree, 'add', '-A');
+        git(tree, 'commit', '-q', '-m', 'newer work');
+        expect((await brain.round()).kind).toBe('merged');
+        const messages = store.projects.events(project.id).map((e) => e.message);
+        if (conflict) {
+          expect(messages).toContain('The kept attempt conflicts with newer work; starting fresh');
+        } else {
+          expect(messages.some((m) => m.includes('with newer work merged in'))).toBe(true);
+          expect(git(repo, 'show', 'conclave/integration:other.js')).toContain('b + a');
+          expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('attempt 2');
+        }
+        // Fresh after a conflict: sum.js came from the newer work, not the kept attempt.
+        expect(b.found).toEqual([false, true]);
+      }
+    });
+
+    it('parks a tested build when no reviewer has headroom, then reviews it without a rebuild', async () => {
+      const { repo, store, brain, project, codex, claude } = await setup();
+      await brain.round(); // plan
+      store.recordQuota({
+        provider: 'claude',
+        window: 'five_hour',
+        utilization: 0.97,
+        resetsAt: Date.now() + 3_600_000,
+        at: Date.now(),
+      });
+      expect((await brain.round()).kind).toBe('waiting');
+      const [parked] = store.projects.listTasks(project.id);
+      expect(parked).toMatchObject({ status: 'queued', kept: { ready: true } });
+      expect(git(repo, 'rev-parse', `conclave/task/${parked!.id}`)).toBe(parked!.kept!.commit);
+      expect(codex.requests).toHaveLength(1);
+
+      store.recordQuota({
+        provider: 'claude',
+        window: 'five_hour',
+        utilization: 0.1,
+        resetsAt: Date.now() + 3_600_000,
+        at: Date.now() + 1,
+      });
+      expect((await brain.round()).kind).toBe('merged');
+      expect(codex.requests).toHaveLength(1); // never built again
+      expect(claude.requests.map((r) => r.role)).toEqual(['planner', 'reviewer']);
+      const messages = store.projects.events(project.id).map((e) => e.message);
+      expect(messages).toContain('Built and tested; parked until a reviewer has headroom');
+      expect(messages.some((m) => m.startsWith('Resuming the parked build'))).toBe(true);
+      expect(store.projects.getTask(parked!.id)?.kept).toBeNull();
+    });
+
+    it('keeps the work through a restart', async () => {
+      const b = builder();
+      const { store, brain, project, home } = await setup({
+        claude: reviewing(REJECT),
+        codex: b.fake,
+      });
+      await brain.round();
+      await brain.round(); // sent back, work kept
+      const [task] = store.projects.listTasks(project.id);
+      store.projects.updateTask(task!.id, { status: 'building' }); // crashed mid-attempt
+      const restarted = new Brain(
+        {
+          store,
+          adapters: adapterMap([
+            new FakeAdapter({ reply: APPROVE }, { id: 'claude' }),
+            new FakeAdapter(b.fake, { id: 'codex' }),
+          ]),
+          cwd: home,
+        },
+        project.id,
+        { home },
+      );
+      await restarted.start();
+      expect((await restarted.round()).kind).toBe('merged');
+      expect(b.found).toEqual([false, true]);
+    });
   });
 
   it('gives up on a task after maxAttempts and keeps going', async () => {
@@ -804,6 +981,35 @@ describe('Failure recovery', () => {
       'codex',
       'claude',
     ]);
+  });
+
+  it("doesn't raise effort after a reviewer's change request, only after tests or a crash", () => {
+    const project = {
+      routing: { builder: [{ provider: 'codex' }, { provider: 'claude' }] },
+      retryStrategy: 'escalate',
+    } as never;
+    const adapters = new Map([
+      [
+        'codex',
+        new FakeAdapter({ reply: '' }, { id: 'codex', efforts: ['low', 'medium', 'high'] }),
+      ],
+    ]) as never;
+    const after = (kind: string, provider: string) =>
+      builderPlan(
+        project,
+        {
+          attempts: 1,
+          builtBy: 'codex',
+          pinnedSeat: null,
+          lastFailure: { kind, provider, summary: '', detail: '', model: null, at: 0 },
+        } as never,
+        adapters,
+      ).seats[0];
+    expect(after('review', 'claude')).toEqual({ provider: 'codex' });
+    expect(after('visual', 'claude')).toEqual({ provider: 'codex' }); // a reviewer saw it
+    expect(after('visual', 'codex')).toEqual({ provider: 'codex', effort: 'high' }); // free checks
+    expect(after('tests', 'codex')).toEqual({ provider: 'codex', effort: 'high' });
+    expect(after('crash', 'codex')).toEqual({ provider: 'codex', effort: 'high' });
   });
 
   it('steps effort up within what the provider supports', () => {
@@ -1447,6 +1653,195 @@ describe('agent replies', () => {
   it('reads review verdicts', () => {
     expect(parseReview(APPROVE)).toEqual({ approve: true, issues: [], summary: 'Looks right' });
     expect(parseReview('{"approve": "yes"}')).toBeUndefined();
+    // A rejection that says nothing isn't a verdict; one with a reason or "restart" is.
+    expect(parseReview('{"approve": false}')).toBeUndefined();
+    expect(parseReview('{"approve": false, "issues": [" "], "summary": ""}')).toBeUndefined();
+    expect(parseReview('{"approve": false, "issues": [], "summary": "Wrong file"}')).toMatchObject({
+      approve: false,
+      summary: 'Wrong file',
+    });
+    expect(
+      parseReview('{"approve": false, "issues": ["Wrong idea"], "summary": "x", "restart": true}'),
+    ).toMatchObject({ restart: true });
+  });
+});
+
+describe('Faster loop (v0.9.1)', () => {
+  it('hands planning to the next planner when one replies without a plan or fails', async () => {
+    let plans = 0;
+    const { store, brain, project, codex } = await setup({
+      claude: { reply: (req) => (req.role === 'planner' ? 'I am not sure.' : APPROVE) },
+      codex: {
+        reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? PLAN : DONE) : 'Created sum.js'),
+        act: (req) => {
+          if (req.role === 'builder') writeSum('a + b')(req);
+        },
+      },
+    });
+    store.projects.update(project.id, {
+      routing: { ...project.routing, planner: [{ provider: 'claude' }, { provider: 'codex' }] },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(codex.requests.filter((r) => r.role === 'planner')).toHaveLength(2);
+    const messages = store.projects.events(project.id).map((e) => e.message);
+    expect(messages).toContain('The planner reply had no task list; asking Codex instead');
+  });
+
+  it('stops with every planner’s reason when none gives a plan', async () => {
+    const { store, brain, project } = await setup({
+      claude: { reply: 'no plan' },
+      codex: { reply: '', fail: 'codex crashed' },
+    });
+    store.projects.update(project.id, {
+      routing: { ...project.routing, planner: [{ provider: 'claude' }, { provider: 'codex' }] },
+    });
+    const outcome = await brain.run({ maxRounds: 3 });
+    expect(outcome.kind).toBe('idle');
+    expect(outcome).toMatchObject({
+      reason: expect.stringMatching(
+        /^No planner on the team gave a plan\. Claude: The planner reply had no task list; Codex: Planner failed/,
+      ),
+    });
+  });
+
+  it('stops a builder that goes quiet and hands the task to the next builder, free', async () => {
+    for (const quiet of [true, false]) {
+      let plans = 0;
+      const { store, brain, project } = await setup({
+        codex: { reply: 'still thinking', act: writeSum('a + b'), delayMs: 400 },
+        ...(quiet && { codexQuietMs: 150 }),
+        gemini: { reply: APPROVE },
+        claude: {
+          reply: (req) =>
+            req.role === 'planner'
+              ? plans++ === 0
+                ? PLAN
+                : DONE
+              : req.role === 'builder'
+                ? 'built'
+                : APPROVE,
+          act: (req) => {
+            if (req.role === 'builder') writeSum('a + b')(req);
+          },
+        },
+      });
+      store.projects.update(project.id, {
+        routing: {
+          ...project.routing,
+          builder: [{ provider: 'codex' }, { provider: 'claude' }],
+          reviewer: [{ provider: 'gemini' }],
+        },
+      });
+      expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+      const [task] = store.projects.listTasks(project.id);
+      const messages = store.projects.events(project.id).map((e) => e.message);
+      if (quiet) {
+        expect(task).toMatchObject({ status: 'merged', builtBy: 'claude', attempts: 0 });
+        expect(
+          messages.some((m) => m.includes('Codex went quiet for 1 second; handing it on')),
+        ).toBe(true);
+      } else {
+        // No stall window: a slow CLI is never stopped.
+        expect(task).toMatchObject({ status: 'merged', builtBy: 'codex' });
+        expect(messages.some((m) => m.includes('went quiet'))).toBe(false);
+      }
+    }
+  });
+
+  it('runs reviewers at their lightest level with Review effort: Light', async () => {
+    const { store, brain, project, claude, gemini } = await setup({ gemini: { reply: APPROVE } });
+    store.catalogs.save('claude', {
+      models: [{ id: 'opus', efforts: ['high', 'low', 'medium'] }],
+      defaultModel: 'opus',
+    });
+    // Effort in the model id (Antigravity, Cursor): the lightest id of the default model.
+    store.catalogs.save('gemini', {
+      models: [
+        {
+          id: 'flash',
+          efforts: ['low', 'high'],
+          variants: [
+            { id: 'flash-high', effort: 'high' },
+            { id: 'flash-low', effort: 'low' },
+          ],
+        },
+      ],
+    });
+    store.projects.update(project.id, {
+      reviewEffort: 'light',
+      routing: {
+        ...project.routing,
+        reviewer: [{ provider: 'claude', model: 'opus', effort: 'high' }, { provider: 'gemini' }],
+      },
+    });
+    await brain.round();
+    await brain.round();
+    const review = claude.requests.find((r) => r.role === 'reviewer')!;
+    expect([review.model, review.effort]).toEqual(['opus', 'low']);
+
+    store.projects.update(project.id, {
+      routing: { ...project.routing, reviewer: [{ provider: 'gemini' }] },
+    });
+    const light = await (
+      brain as unknown as { lightSeat: (s: { provider: string }) => Promise<unknown> }
+    ).lightSeat({ provider: 'gemini' });
+    expect(light).toEqual({ provider: 'gemini', model: 'flash-low' });
+    expect(gemini!.requests).toHaveLength(0);
+  });
+
+  /** Codex builds; Claude rejects twice, then Gemini is asked for a second opinion. */
+  async function secondOpinion(gemini: string) {
+    let plans = 0;
+    let reviews = 0;
+    let builds = 0;
+    const s = await setup({
+      claude: {
+        reply: (req) =>
+          req.role === 'planner'
+            ? plans++ === 0
+              ? PLAN
+              : DONE
+            : reviews++ < 2
+              ? '{"approve": false, "issues": ["Rename sum to add"], "summary": "Naming"}'
+              : APPROVE,
+      },
+      codex: {
+        reply: 'Created sum.js',
+        act: (req) => writeSum(`a + b; // ${++builds}`)(req),
+      },
+      gemini: { reply: gemini },
+      maxAttempts: 4,
+    });
+    s.store.projects.update(s.project.id, {
+      routing: {
+        ...s.project.routing,
+        reviewer: [{ provider: 'claude' }, { provider: 'gemini' }],
+      },
+    });
+    await s.brain.run({ maxRounds: 10 });
+    return s;
+  }
+
+  it('asks a second reviewer when the same one asks for changes twice; its approval overrules', async () => {
+    const { store, project, gemini, codex } = await secondOpinion(APPROVE);
+    const [task] = store.projects.listTasks(project.id);
+    expect(task).toMatchObject({ status: 'merged', attempts: 1, reviewedBy: 'gemini' });
+    expect(codex.requests.filter((r) => r.role === 'builder')).toHaveLength(2);
+    expect(gemini!.requests.map((r) => r.role)).toEqual(['reviewer']);
+    const messages = store.projects.events(project.id).map((e) => e.message);
+    expect(messages).toContain(
+      'Claude asked for changes again; asking Gemini for a second opinion',
+    );
+    expect(messages).toContain("Gemini approved, which overrules Claude's repeated request");
+  });
+
+  it('sends it back with both reviewers’ issues when the second one agrees', async () => {
+    const { store, project, codex } = await secondOpinion(
+      '{"approve": false, "issues": ["Also add a test"], "summary": "Same"}',
+    );
+    expect(codex.requests[2]!.prompt).toContain('Rename sum to add');
+    expect(codex.requests[2]!.prompt).toContain('(Gemini) Also add a test');
+    expect(store.projects.listTasks(project.id)[0]?.status).toBe('merged');
   });
 });
 

@@ -31,6 +31,8 @@ export interface FakeOptions {
   limits?: { window: string; utilization: number; resetsAt?: number }[];
   /** What it can see (default: image files). */
   vision?: 'native' | 'files' | 'none';
+  /** Advertise a stall window (the brain's watchdog). */
+  quietMs?: number;
   /** Override what detect() reports, e.g. to show a signed-out provider. */
   status?: Partial<Omit<ProviderStatus, 'provider'>>;
 }
@@ -67,6 +69,7 @@ export class FakeAdapter implements Adapter {
       streaming: true,
       vision: opts.vision ?? 'files',
       ...(opts.efforts && { efforts: opts.efforts }),
+      ...(opts.quietMs && { quietMs: opts.quietMs }),
     };
   }
 

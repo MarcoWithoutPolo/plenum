@@ -305,6 +305,9 @@ export function registerProjectIpc(
       ...(settings.askPolicy && { askPolicy: AskPolicy.parse(settings.askPolicy) }),
       ...(settings.permissions && { permissions: checkPermissions(settings.permissions) }),
       ...(settings.visualReview !== undefined && { visualReview: Boolean(settings.visualReview) }),
+      ...(settings.reviewEffort && {
+        reviewEffort: settings.reviewEffort === 'light' ? 'light' : 'same',
+      }),
       // The store keeps up to five, each starting with "/".
       ...(Array.isArray(settings.pages) && {
         pages: settings.pages

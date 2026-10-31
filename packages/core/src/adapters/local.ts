@@ -30,6 +30,7 @@ import {
   type LineParser,
 } from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+import { QUIET_MS } from './types.js';
 
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 
@@ -137,6 +138,7 @@ export class LocalAdapter implements Adapter {
     readOnly: true,
     resume: false,
     streaming: true,
+    quietMs: QUIET_MS,
     vision: 'none',
   };
   private readonly host: () => string;

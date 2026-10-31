@@ -27,6 +27,7 @@ import {
   readCodexModels,
 } from './codex-home.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
+import { QUIET_MS } from './types.js';
 
 export interface CodexAdapterOptions extends CliAdapterOptions {
   /** The Codex data folder; defaults to CODEX_HOME or ~/.codex. */
@@ -47,6 +48,7 @@ export class CodexAdapter implements Adapter {
     readOnly: true,
     resume: true,
     streaming: false,
+    quietMs: QUIET_MS,
     // codex exec --image attaches pictures to the prompt.
     vision: 'native',
   };

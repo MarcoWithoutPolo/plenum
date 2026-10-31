@@ -176,11 +176,52 @@ export class Workspace {
     return path;
   }
 
-  removeTaskTree(taskId: string): Promise<void> {
-    return this.gitLock.run(() => this.removeTree(taskId));
+  /**
+   * A worktree on the task's kept branch, so a retry continues from its last attempt. When the
+   * integration branch moved since, it is merged in first. `null` when the branch is gone or no
+   * longer at `commit`; `conflict` when the merge didn't apply (the caller starts fresh).
+   */
+  resumeTaskTree(
+    taskId: string,
+    commit: string,
+  ): Promise<{ path: string; updated: boolean } | 'conflict' | null> {
+    return this.gitLock.run(async () => {
+      await this.removeTree(taskId, true);
+      const branch = this.taskBranch(taskId);
+      const tip = await git(this.repo, ['rev-parse', '--verify', '--quiet', branch], true);
+      if (tip.code !== 0 || tip.stdout.trim() !== commit) return null;
+      const path = this.taskPath(taskId);
+      mkdirSync(dirname(path), { recursive: true });
+      await git(this.repo, ['worktree', 'add', path, branch]);
+      const behind =
+        (await git(path, ['merge-base', '--is-ancestor', this.integrationBranch, 'HEAD'], true))
+          .code !== 0;
+      if (!behind) return { path, updated: false };
+      const merged = await git(
+        path,
+        [
+          ...(await commitIdentity(path)),
+          'merge',
+          '--no-edit',
+          '-q',
+          '-m',
+          `Merge ${this.integrationBranch} into this task`,
+          this.integrationBranch,
+        ],
+        true,
+      );
+      if (merged.code === 0) return { path, updated: true };
+      await git(path, ['merge', '--abort'], true);
+      return 'conflict';
+    });
   }
 
-  private async removeTree(taskId: string): Promise<void> {
+  /** `keepBranch`: drop only the worktree, so a retry can continue from the branch. */
+  removeTaskTree(taskId: string, keepBranch = false): Promise<void> {
+    return this.gitLock.run(() => this.removeTree(taskId, keepBranch));
+  }
+
+  private async removeTree(taskId: string, keepBranch = false): Promise<void> {
     const path = this.taskPath(taskId);
     if (existsSync(path)) {
       await git(this.repo, ['worktree', 'remove', '--force', path], true);
@@ -189,7 +230,7 @@ export class Workspace {
       if (existsSync(path)) await removeDir(path, 20);
     }
     await git(this.repo, ['worktree', 'prune'], true);
-    await git(this.repo, ['branch', '-D', this.taskBranch(taskId)], true);
+    if (!keepBranch) await git(this.repo, ['branch', '-D', this.taskBranch(taskId)], true);
   }
 
   /** Stage and commit everything in the task's worktree. Returns null when nothing changed. */

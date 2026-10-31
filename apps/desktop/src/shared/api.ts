@@ -211,6 +211,8 @@ export interface ProjectSettings {
   permissions?: Permissions;
   /** Web projects: an AI that can see reviews the screenshots too. */
   visualReview?: boolean;
+  /** Reviewers at their lightest level ("light") or as set in the team ("same"). */
+  reviewEffort?: 'same' | 'light';
   /** Web projects: the pages to screenshot, like "/" and "/settings" (up to 5). */
   pages?: string[];
 }
