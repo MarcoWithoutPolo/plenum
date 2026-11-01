@@ -404,3 +404,112 @@ Minutes per run. 1. Stopped at the 40-minute cap with the hidden tests already p
 - **The loop wastes work** (inventory with a local reviewer: 27.8 and 26.1 min, about 30 agent runs, for a project
   that takes 4 min when the review passes): each send-back rebuilds from nothing. That is what v0.9.1 fixes; its
   before/after comparison follows.
+
+## v0.9.1: before and after (2026-10-31 to 11-01)
+
+**Before** is v0.9.0 (`fd23568`); **after** is v0.9.1 (`419c879`). Each suite ran two runs of each project on each
+version, interleaved so usage limits and the time of day hit both alike. 18 runs that a usage limit cut off at the
+40-minute cap (most used under 35k tokens, waiting the whole time) were run again; "(cap)" marks the few reruns that
+the cap cut off again. Medians leave capped runs out.
+
+### Verdict
+
+- **Nothing broke.** Every run that wasn't cut off by a usage limit or the cap passed every hidden test, on both
+  versions, except one before run (T3 inventory, 0/7) and one light-review run (T5 ledger, 11/12).
+- **Faster where the loop does work.** Summing each suite's per-project medians: T2 −12%, T3 −25% (without ledger,
+  which is capped on both), T5 (light reviews) −36% against T2 after. T1 +6% and T4 +5% are runs whose steps were
+  identical in both versions (one build, one review): AI response time, not Conclave.
+- **Kept work pays off.** 22 of 24 send-backs continued from the kept attempt; the fixes took 0.5 to 5 minutes
+  instead of a full rebuild. Parking, planner failover, stalls and second opinions never triggered in the
+  benchmark (no limit hit during a review, no planner failed, nothing hung); scenarios 22–23 and the unit tests
+  cover them.
+- **The ship rule, strictly read, fails on six project cells** (T1 textkit +19%, T1 ledger +11%, T2 inventory +28%,
+  T2 kanban +13%, T3 textkit +40%, T4 inventory). Five of them took the same steps on both versions; with two runs a
+  cell, one slow AI reply moves the median by more than 10%. The sixth was a real flaw, fixed below.
+
+#### T1: Default team, level 3
+
+| Project   | Before: hidden | Before: median min | After: hidden | After: median min | Change |
+| --------- | -------------- | ------------------ | ------------- | ----------------- | ------ |
+| textkit   | 7/7, 7/7       | 2.8                | 7/7, 7/7      | 3.4               | +19%   |
+| calc      | 7/7, 7/7       | 5.8                | 7/7, 7/7      | 6.5               | +10%   |
+| inventory | 7/7, 7/7       | 3.0                | 7/7, 7/7      | 2.7               | -11%   |
+| ledger    | 12/12, 12/12   | 16.6               | 12/12, 12/12  | 18.4              | +11%   |
+| kanban    | 12/12, 12/12   | 11.1               | 12/12, 12/12  | 10.8              | -2%    |
+
+#### T2: Antigravity reviews
+
+| Project   | Before: hidden | Before: median min | After: hidden     | After: median min | Change |
+| --------- | -------------- | ------------------ | ----------------- | ----------------- | ------ |
+| textkit   | 7/7, 7/7       | 7.0                | 7/7, 7/7          | 4.4               | -36%   |
+| calc      | 7/7, 7/7       | 7.2                | 7/7, 7/7          | 4.9               | -31%   |
+| inventory | 7/7, 7/7       | 2.8                | 7/7, 7/7          | 3.6               | +28%   |
+| ledger    | 12/12, 12/12   | 26.3               | 12/12, 4/12 (cap) | 22.9              | -13%   |
+| kanban    | 12/12, 12/12   | 9.9                | 12/12, 12/12      | 11.2              | +13%   |
+
+#### T3: X team (Cursor grok-high-fast first)
+
+| Project   | Before: hidden | Before: median min | After: hidden          | After: median min | Change |
+| --------- | -------------- | ------------------ | ---------------------- | ----------------- | ------ |
+| textkit   | 7/7, 7/7       | 5.5                | 7/7, 7/7               | 7.8               | +40%   |
+| calc      | 7/7, 7/7       | 14.8               | 7/7, 7/7               | 9.4               | -36%   |
+| inventory | 7/7, 0/7       | 38.2               | 7/7, 7/7               | 29.8              | -22%   |
+| ledger    | 12/12, 12/12   | 37.5               | 5/12 (cap), 6/12 (cap) | capped            |        |
+| kanban    | 12/12, 12/12   | 21.3               | 12/12, 12/12           | 12.8              | -40%   |
+
+#### T4: Local reviewer (gpt-oss:20b)
+
+| Project   | Before: hidden | Before: median min | After: hidden                       | After: median min | Change              |
+| --------- | -------------- | ------------------ | ----------------------------------- | ----------------- | ------------------- |
+| textkit   | 7/7, 7/7       | 4.8                | 7/7, 7/7                            | 4.3               | -9%                 |
+| calc      | 7/7, 7/7       | 8.7                | 7/7, 7/7                            | 9.6               | +10%                |
+| inventory | 7/7, 7/7       | 3.8                | 7/7, 7/7 (rerun on f1b1a32: 7/7 ×3) | 14.3 (rerun: 5.6) | +281% (rerun: +47%) |
+| ledger    | 12/12, 12/12   | 29.7               | 12/12, 12/12                        | 26.5              | -11%                |
+| kanban    | 12/12, 12/12   | 12.2               | 12/12, 12/12                        | 7.3               | -40%                |
+
+#### T5: light reviews against T2 after (same team, full reviews)
+
+| Project   | T2 after: median min | T5: hidden   | T5: median min | Change |
+| --------- | -------------------- | ------------ | -------------- | ------ |
+| textkit   | 4.4                  | 7/7, 7/7     | 2.6            | −41%   |
+| calc      | 4.9                  | 7/7, 7/7     | 3.8            | −22%   |
+| inventory | 3.6                  | 7/7, 7/7     | 2.7            | −25%   |
+| ledger    | 22.9                 | 11/12, 12/12 | 14.6           | −36%   |
+| kanban    | 11.2                 | 12/12, 12/12 | 6.2            | −45%   |
+
+#### v0.9.1 loop events (after runs)
+
+| Suite | Builds | Reviews | Send-backs | Continued from kept work | Parked | Planner failovers | Stalls | Second opinions |
+| ----- | ------ | ------- | ---------- | ------------------------ | ------ | ----------------- | ------ | --------------- |
+| T1    | 25     | 17      | 0          | 0                        | 0      | 0                 | 0      | 0               |
+| T2    | 25     | 20      | 3          | 3                        | 0      | 0                 | 0      | 0               |
+| T3    | 27     | 20      | 5          | 6                        | 0      | 0                 | 0      | 0               |
+| T4    | 37     | 31      | 11         | 8                        | 0      | 0                 | 0      | 0               |
+| T5    | 22     | 18      | 5          | 5                        | 0      | 0                 | 0      | 0               |
+
+### What got worse, and what was done
+
+- **A review the builder can't satisfy burned attempts** (T4 inventory, 26 min, 6 send-backs). The local reviewer
+  asked for `inventory.js` to be deleted; at level 2 the builder can't delete files, so it changed nothing, which
+  counted as a failed attempt and hid the review from the second-opinion check. **Fixed in `f1b1a32`:** a build
+  left unchanged goes back to review with the builder's answer, no attempt spent; a repeated rejection gets a second
+  opinion. Rerun three times: 7/7 each, 5.4–5.7 min. The rest of the gap to before (3.8 min) is the local model
+  replying empty and Antigravity stepping in, which happens in about 40% of local reviews on both versions.
+- **A parked build re-ran its tests on every wake-up** while no reviewer was free (scenario 23). **Fixed in
+  `d7ef86e`:** it stays parked until a reviewer has headroom.
+- **Light reviews let one bug through** (T5 ledger, 11/12): Antigravity's flash-low approved each task in about 6
+  seconds. Light stays opt-in; the default stays "As in the team".
+- **T3 ledger is capped on both versions** (before 36.4 and 38.3 min; after cut off three times). After lost its
+  time to Cursor's first builds failing tests (fixed from kept work in 4.6 and 0.6 min) and an 11-minute rebuild
+  after a merge conflict.
+
+### Found along the way (proposals, not in v0.9.1)
+
+- **Resolve merge conflicts on kept work.** A conflict still throws the build away and rebuilds (11 min in T3
+  ledger). The builder could continue from its commit with the newer work merged in and resolve the conflict.
+- **Let builders delete files at level 2.** Cursor spent 20 minutes trying `rm` in v0.9's runs, and the T4 churn
+  above started there. Deleting inside the task's own worktree is undone by git like any edit.
+- **Drop a reviewer that keeps replying empty.** GPT-OSS 20B gave no verdict in about 40% of reviews, costing 1–2
+  minutes each before Antigravity stepped in.
+- **Limits shape these numbers more than the code.** Codex was at its limit for most of both runs; 18 of 90 runs
+  had to be redone.
