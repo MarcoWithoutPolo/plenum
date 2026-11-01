@@ -178,6 +178,8 @@ export interface ReviewExtras extends PromptExtras {
   goalCheck?: { merged: string[]; doneWhen: string | null };
   /** Screenshots to judge, and the free checks' notes; attached (native) or as files to open. */
   shots?: { files: { label: string; path: string }[]; attached: boolean; notes: string[] };
+  /** The last review asked for changes and the builder made none: what it said instead. */
+  dispute?: { asked: string; reply: string };
 }
 
 export function reviewerPrompt(
@@ -205,13 +207,26 @@ DIFF${diff.truncated ? ' (truncated)' : ''}
 \`\`\`diff
 ${diff.diff}
 \`\`\`
-
+${extras.dispute ? disputeSection(extras.dispute) : ''}
 Approve unless there is a real problem: a bug, a missed requirement from the task, broken or missing tests, a security issue, changes unrelated to the task, or a change that contradicts a decision above (cite the decision). Style nits alone are not a reason to reject.
 
 ${extras.shots ? shotsSection(extras.shots, project.designDirection) : ''}${extras.goalCheck ? goalCheckSection(extras.goalCheck) : ''}Reply with ONLY one JSON object and nothing else:
 {"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"${extras.shots ? ', "visual": [{"shot": "the screenshot label", "issue": "what looks wrong and how to fix it", "box": [x1, y1, x2, y2]}]' : ''}${extras.goalCheck ? ', "goal_met": true or false, "goal_gaps": ["what is still missing from the goal"]' : ''}}
 If the change hinges on a product decision only the user can make, add "question": "...", "options": ["...", "..."], "recommended": "..." and set "approve": false.
 The builder's next attempt starts from this change and fixes what you list. Only if the whole approach is wrong, so that fixing parts of it won't do, add "restart": true.`;
+}
+
+function disputeSection(dispute: { asked: string; reply: string }): string {
+  return `
+THE LAST REVIEW AND THE BUILDER'S ANSWER
+A review of this change asked:
+${dispute.asked.slice(0, 2000)}
+
+The builder changed nothing and replied:
+${dispute.reply.slice(0, 2000)}
+
+Judge whether that request still stands. If the builder can't do it (for example its permissions don't allow it) and the change is otherwise sound, approve and say so in the summary.
+`;
 }
 
 function goalCheckSection(check: { merged: string[]; doneWhen: string | null }): string {

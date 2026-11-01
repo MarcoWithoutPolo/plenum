@@ -301,6 +301,36 @@ describe('Brain', () => {
       expect(messages.some((m) => m.startsWith('Continuing from'))).toBe(true);
     });
 
+    it('sends a build the builder left unchanged back to review with its answer, no attempt spent', async () => {
+      let builds = 0;
+      let replies = 0;
+      const { store, brain, project, codex, claude } = await setup({
+        claude: reviewing(REJECT),
+        codex: {
+          reply: () =>
+            replies++ === 1
+              ? 'I can’t delete files here, so I left it as it is.'
+              : 'Created sum.js',
+          act: (req: RunRequest) => {
+            if (builds++ === 0) writeSum('a + b')(req);
+          },
+        },
+      });
+      expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+      const [task] = store.projects.listTasks(project.id);
+      expect(task).toMatchObject({ status: 'merged', attempts: 1, kept: null });
+      expect(codex.requests).toHaveLength(2);
+      const reviews = claude.requests.filter((r) => r.role === 'reviewer');
+      expect(reviews).toHaveLength(2);
+      expect(reviews[1]!.prompt).toContain('The builder changed nothing and replied');
+      expect(reviews[1]!.prompt).toContain('I can’t delete files here');
+      const messages = store.projects.events(project.id).map((e) => e.message);
+      expect(messages).toContain(
+        'Codex changed nothing and answered the review; it goes back to review as built',
+      );
+      expect(messages.some((m) => m.includes('changed nothing on top'))).toBe(false);
+    });
+
     it('starts fresh when the reviewer says the approach is wrong', async () => {
       const b = builder();
       const { store, brain, project, codex } = await setup({
@@ -1844,11 +1874,13 @@ describe('Faster loop (v0.9.1)', () => {
   });
 
   it('sends it back with both reviewers’ issues when the second one agrees', async () => {
-    const { store, project, codex } = await secondOpinion(
+    const { store, project, claude } = await secondOpinion(
       '{"approve": false, "issues": ["Also add a test"], "summary": "Same"}',
     );
-    expect(codex.requests[2]!.prompt).toContain('Rename sum to add');
-    expect(codex.requests[2]!.prompt).toContain('(Gemini) Also add a test');
+    // Attempt 3 escalates to Claude, which gets both reviewers' issues.
+    const third = claude.requests.find((r) => r.role === 'builder')!;
+    expect(third.prompt).toContain('Rename sum to add');
+    expect(third.prompt).toContain('(Gemini) Also add a test');
     expect(store.projects.listTasks(project.id)[0]?.status).toBe('merged');
   });
 });

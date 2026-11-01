@@ -184,6 +184,8 @@ export const TaskKept = z.object({
   streak: z.number(),
   /** Built and tested, waiting only for a reviewer with headroom. */
   ready: z.boolean(),
+  /** The builder changed nothing on the last review's request, and said why. */
+  reply: z.string().optional(),
 });
 export type TaskKept = z.infer<typeof TaskKept>;
 

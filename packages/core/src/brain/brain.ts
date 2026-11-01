@@ -1043,6 +1043,23 @@ export class Brain {
       });
     }
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
+    if (!commit && kept && sentBackBy(task) && !task.kept?.reply) {
+      // The builder made none of the changes a review asked for (it couldn't, or thinks they're
+      // done): the same build goes back to review with its answer, and no attempt is spent.
+      this.resumed.delete(task.id);
+      await this.workspace.removeTaskTree(task.id, true);
+      const reply = built.text.trim().slice(0, 4000) || '(no reply)';
+      const back = this.projects.updateTask(task.id, {
+        status: 'queued',
+        kept: { ...task.kept!, commit: kept, ready: true, reply },
+      });
+      this.log(
+        'retry',
+        `${seatLabel(builder)} changed nothing and answered the review; it goes back to review as built`,
+        { task: back, provider: builder.provider, data: { reply } },
+      );
+      return { kind: 'retry', task: back, reason: 'The builder answered the review' };
+    }
     if (!commit && kept) {
       // Nothing new on top of the kept attempt: the builder found nothing to change.
       return this.sendBack(project, task, {
@@ -1248,6 +1265,9 @@ export class Brain {
           reviewerPrompt(project, task, diff, tests, {
             decisions: this.decisions(),
             ...(goalCheck && { goalCheck }),
+            ...(task.kept?.reply && {
+              dispute: { asked: task.feedback ?? '', reply: task.kept.reply },
+            }),
             ...(seen && {
               shots: {
                 files: seen.files,
