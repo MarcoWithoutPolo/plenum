@@ -123,12 +123,22 @@ export class Governor {
       this.cooldowns.set(provider, {
         until,
         strikes,
-        reason: result.rateLimited.message || 'usage limit reached',
+        reason: shortReason(result.rateLimited.message) || 'usage limit reached',
       });
     } else if (result.ok) {
       this.cooldowns.delete(provider);
     }
   }
+}
+
+/**
+ * A CLI's limit message cut to its first sentence, so every provider's reason fits on one
+ * "no headroom" line (Codex's runs on with upgrade links). The reset time is shown separately.
+ */
+export function shortReason(message: string | undefined): string {
+  const text = (message ?? '').replace(/\s+/g, ' ').trim();
+  const first = /^.*?[.!?](?=\s|$)/.exec(text)?.[0] ?? text;
+  return first.length > 120 ? `${first.slice(0, 119)}…` : first;
 }
 
 function windowName(window: string): string {

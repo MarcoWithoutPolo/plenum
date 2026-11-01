@@ -27,7 +27,7 @@ import { decisionsSection } from '../store/decisions.js';
 import { collect, type RunResult } from '../collect.js';
 import { MODEL_REFUSED, recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
-import { Governor } from '../governor/governor.js';
+import { Governor, shortReason } from '../governor/governor.js';
 import { runShell } from '../process.js';
 import { Workspace, headCommit } from '../workspace/git.js';
 import { detectPreview } from '../preview/preview.js';
@@ -46,7 +46,7 @@ import { calibration, changedLines, shapePlan } from './shape.js';
 import type { PlannedTask } from './json.js';
 import { rankSeats, seatStats, withPriors, type RankRole } from '../governor/rank.js';
 import { QUESTION_KINDS } from './answers.js';
-import { isRunnableInstall, parseAssumptions, parseQuestion } from './questions.js';
+import { isRunnableInstall, parseAssumptions, parseDeletes, parseQuestion } from './questions.js';
 import { builderPlan, countsAsAttempt, sentBackBy } from './recovery.js';
 import { findReplacement } from './similar.js';
 
@@ -137,6 +137,8 @@ export function storeGovernor(store: EngineContext['store']): Governor {
 /** How many tasks one AI may build at once across projects, by default (lanes). */
 /** Kept attempts in a row that may fail before the next one starts fresh (v0.9.1 F1). */
 const KEPT_STREAK = 2;
+/** A reviewer with this many reviews in a row without a verdict moves to the back. */
+const QUIET_REVIEWS = 2;
 /** How long a builder that went quiet sits out, if anyone else can build (F4). */
 const STALL_PAUSE = 60 * 60_000;
 const seatKey = (s: Seat) => `${s.provider}@${s.model ?? ''}@${s.effort ?? ''}`;
@@ -169,6 +171,8 @@ export class Brain {
   private started = false;
   /** The last reorder reason logged per role, so a steady reorder is logged once. */
   private readonly rankNotes = new Map<RankRole, string>();
+  /** Reviews in a row that ended without a verdict, per provider (v0.9.2 L3). */
+  private readonly quietReviews = new Map<ProviderId, number>();
   /** What the last goal check found missing; the next plan closes these gaps. */
   private gaps: string[] = [];
   /** Set while run() is going; aborting it interrupts the agent or test in flight. */
@@ -181,6 +185,8 @@ export class Brain {
   private readonly stalledSeats = new Map<string, number>();
   /** Tasks whose current attempt continued from kept work (a send-back's commit). */
   private readonly resumed = new Set<string>();
+  /** Tasks resumed with a merge of newer work in progress: the files it conflicts in. */
+  private readonly conflicted = new Map<string, string[]>();
 
   constructor(
     private readonly ctx: EngineContext,
@@ -632,22 +638,17 @@ export class Brain {
       this.log('plan', `Planning with ${seatLabel(seat)}`, { provider: seat.provider });
       result = await this.agent('planner', seat, prompt, this.workspace.integrationPath, true);
       if (this.interrupted) return this.halt();
-      if (result.rateLimited)
-        return this.waiting('planner', this.governor.pick(project.routing.planner));
       let problem: string | undefined;
-      if (!result.ok) {
+      if (result.rateLimited) {
+        problem = `${seatLabel(seat)} hit a usage limit`;
+      } else if (!result.ok) {
         problem = `Planner failed: ${failure(result)}`;
-        this.log('error', problem, { provider: seat.provider });
       } else {
         plan = parsePlan(result.text, this.maxTasks);
         if (!plan) {
           const question = parseQuestion(result.text);
           if (question) return this.ask(project, null, question, seat, 'plan');
           problem = 'The planner reply had no task list';
-          this.log('error', problem, {
-            provider: seat.provider,
-            data: { reply: result.text.slice(0, 2000) },
-          });
         }
       }
       if (!problem) break;
@@ -660,6 +661,13 @@ export class Brain {
         ),
       ).seat;
       if (!next) {
+        // A planner that only hit its limit comes back: wait for it, as before.
+        if (problems.some((p) => p.endsWith('hit a usage limit')))
+          return this.waiting('planner', this.governor.pick(project.routing.planner));
+        this.log('error', problem, {
+          provider: seat.provider,
+          ...(result.ok && { data: { reply: result.text.slice(0, 2000) } }),
+        });
         return {
           kind: 'idle',
           reason:
@@ -950,6 +958,7 @@ export class Brain {
         ...(project.askPolicy === 'decide' && { decideAndTell: true }),
         ...(this.isWeb(project, task, cwd) && { web: true }),
         ...(kept && { kept }),
+        ...(this.conflicted.has(task.id) && { conflicts: this.conflicted.get(task.id) }),
       }),
       cwd,
       false,
@@ -978,7 +987,7 @@ export class Brain {
       });
       await this.workspace.removeTaskTree(task.id, Boolean(task.kept));
       // What the CLI said, so a limit that isn't one (or a cap you didn't expect) can be seen.
-      const said = built.rateLimited.message.split('\n')[0]!.slice(0, 240);
+      const said = shortReason(built.rateLimited.message);
       this.log(
         'wait',
         `${seatLabel(builder)} hit a usage limit; the task goes back in the queue (${said})`,
@@ -1041,6 +1050,33 @@ export class Brain {
         task,
         provider: builder.provider,
       });
+    }
+    const unresolved = this.unresolved(task, cwd);
+    if (unresolved.length) {
+      return this.sendBack(project, task, {
+        failure: this.failureOf(
+          'tests',
+          `Conflict markers left in ${unresolved.join(', ')}`,
+          built.text.slice(0, 4000),
+          builder,
+        ),
+        feedback: `${task.feedback ?? ''}\n\nThe last attempt left conflict markers (<<<<<<< / >>>>>>>) in ${unresolved.join(', ')}. Resolve every conflict.`,
+        keep: true,
+      });
+    }
+    const deletes = parseDeletes(built.text);
+    if (deletes.length) {
+      const { deleted, skipped } = await this.workspace.deleteFiles(task.id, deletes);
+      if (deleted.length)
+        this.log('task', `Deleted ${deleted.join(', ')} as ${seatLabel(builder)} asked`, {
+          task,
+          provider: builder.provider,
+        });
+      if (skipped.length)
+        this.log('task', `Didn't delete ${skipped.join(', ')}: not a file in this task's folder`, {
+          task,
+          provider: builder.provider,
+        });
     }
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
     if (!commit && kept && sentBackBy(task) && !task.kept?.reply) {
@@ -1294,7 +1330,11 @@ export class Brain {
       const outcome = await this.reviewWithBudget(task, reviewer, backups, run);
       if (this.cut(task)) return this.halt(task);
       ({ seat: reviewer, result, verdict } = outcome);
-      if (verdict) break;
+      if (verdict) {
+        this.quietReviews.delete(reviewer.provider);
+        break;
+      }
+      if (!result.rateLimited) this.noteQuiet(reviewer);
       tried.push(reviewer.provider, ...outcome.alsoTried);
       const detail = result.rateLimited
         ? `${seatLabel(reviewer)} hit a usage limit`
@@ -1419,7 +1459,7 @@ export class Brain {
     );
     if (this.cut(task)) return this.halt(task);
     if (!merged.ok && merged.kind === 'conflict') {
-      this.log('merge', 'Merge conflict with newer work; rebuilding on the latest code', {
+      this.log('merge', 'Merge conflict with newer work; the builder resolves it on this build', {
         task,
         data: { conflict: merged.detail },
       });
@@ -1430,7 +1470,8 @@ export class Brain {
           merged.detail,
           null,
         ),
-        feedback: `Merging conflicted with work merged meanwhile. Rebuild the change on the latest code.\n${merged.detail}`,
+        feedback: `${task.feedback ? `${task.feedback}\n\n` : ''}This change was approved, but merging it conflicted with work merged meanwhile. Resolve the conflicts and keep the approved change.`,
+        keep: true,
       });
     }
     if (!merged.ok) {
@@ -1519,6 +1560,25 @@ export class Brain {
 
   /** The team order for a role, adjusted by measured reliability, quota and (for reviews) speed. */
   private ranked(role: RankRole, seats: Seat[]): Seat[] {
+    const order = this.rankedByStats(role, seats);
+    if (role !== 'reviewer') return order;
+    // A reviewer that keeps giving no verdict reviews last, after the ones that answer.
+    const quiet = (s: Seat) => (this.quietReviews.get(s.provider) ?? 0) >= QUIET_REVIEWS;
+    return [...order.filter((s) => !quiet(s)), ...order.filter(quiet)];
+  }
+
+  private noteQuiet(seat: Seat): void {
+    const n = (this.quietReviews.get(seat.provider) ?? 0) + 1;
+    this.quietReviews.set(seat.provider, n);
+    if (n === QUIET_REVIEWS)
+      this.log(
+        'plan',
+        `${seatLabel(seat)} gave no verdict ${n} times in a row; it reviews last from now on`,
+        { provider: seat.provider },
+      );
+  }
+
+  private rankedByStats(role: RankRole, seats: Seat[]): Seat[] {
     if (!this.project().adaptiveTeam) return seats;
     const ranked = rankSeats(
       seats,
@@ -1955,12 +2015,20 @@ export class Brain {
    */
   private async taskTree(task: Task): Promise<string> {
     this.resumed.delete(task.id);
+    this.conflicted.delete(task.id);
     const kept = task.kept;
     if (kept) {
-      const tree = await this.workspace.resumeTaskTree(task.id, kept.commit);
+      const tree = await this.workspace.resumeTaskTree(task.id, kept.commit, true);
       if (tree && tree !== 'conflict') {
         this.resumed.add(task.id);
-        if (tree.updated) {
+        if (tree.conflicts) {
+          this.conflicted.set(task.id, tree.conflicts);
+          this.log(
+            'task',
+            `Continuing from ${kept.commit.slice(0, 8)}; newer work conflicts in ${tree.conflicts.join(', ')}, which the builder resolves`,
+            { task },
+          );
+        } else if (tree.updated) {
           // The branch moved (merge commit): keep pointing at it, so a limit doesn't lose it.
           const commit = await headCommit(tree.path);
           this.projects.updateTask(task.id, { kept: { ...kept, commit } });
@@ -1991,6 +2059,17 @@ export class Brain {
    * run again on the kept commit, brought up to date. `undefined`: it couldn't be resumed and is
    * built again as usual.
    */
+  /** Files of an in-progress merge that still hold conflict markers after the builder's run. */
+  private unresolved(task: Task, cwd: string): string[] {
+    return (this.conflicted.get(task.id) ?? []).filter((f) => {
+      try {
+        return /^(<{7}|>{7})( |$)/m.test(readFileSync(join(cwd, f), 'utf8'));
+      } catch {
+        return false;
+      }
+    });
+  }
+
   private async reviewParked(project: Project, task: Task): Promise<RoundOutcome | undefined> {
     const kept = task.kept!;
     // Still no reviewer free: keep waiting, without re-running the tests on every wake-up.
@@ -2000,7 +2079,12 @@ export class Brain {
     );
     if (!pick.seat) return this.waiting('reviewer', pick);
     const tree = await this.workspace.resumeTaskTree(task.id, kept.commit);
-    if (!tree || tree === 'conflict') {
+    if (tree === 'conflict') {
+      // Newer work conflicts with it: the builder resolves that on the kept build.
+      this.projects.updateTask(task.id, { kept: { ...kept, ready: false } });
+      return undefined;
+    }
+    if (!tree) {
       this.log('task', 'The parked build can’t be resumed; building it again', { task });
       this.projects.updateTask(task.id, { kept: null });
       return undefined;

@@ -361,10 +361,10 @@ describe('Brain', () => {
       expect(b.found).toEqual([false, true, true, false]);
     });
 
-    it('merges newer work into the kept attempt, or starts fresh when it conflicts', async () => {
+    it('merges newer work into the kept attempt; a conflict is left for the builder to resolve', async () => {
       for (const conflict of [false, true]) {
         const b = builder();
-        const { repo, store, brain, project } = await setup({
+        const { repo, store, brain, project, codex } = await setup({
           claude: reviewing(REJECT),
           codex: b.fake,
         });
@@ -375,16 +375,21 @@ describe('Brain', () => {
         writeFileSync(join(tree, file), 'module.exports = (a, b) => b + a;\n');
         git(tree, 'add', '-A');
         git(tree, 'commit', '-q', '-m', 'newer work');
+        const newer = git(tree, 'rev-parse', 'HEAD');
         expect((await brain.round()).kind).toBe('merged');
         const messages = store.projects.events(project.id).map((e) => e.message);
         if (conflict) {
-          expect(messages).toContain('The kept attempt conflicts with newer work; starting fresh');
+          expect(
+            messages.some((m) => m.endsWith('conflicts in sum.js, which the builder resolves')),
+          ).toBe(true);
+          expect(codex.requests[1]!.prompt).toContain('NEWER WORK CONFLICTS WITH THIS TASK');
         } else {
           expect(messages.some((m) => m.includes('with newer work merged in'))).toBe(true);
           expect(git(repo, 'show', 'conclave/integration:other.js')).toContain('b + a');
-          expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('attempt 2');
         }
-        // Fresh after a conflict: sum.js came from the newer work, not the kept attempt.
+        // Either way the retry kept its work and the newer work is part of what merged.
+        expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('attempt 2');
+        git(repo, 'merge-base', '--is-ancestor', newer, 'conclave/integration');
         expect(b.found).toEqual([false, true]);
       }
     });
@@ -2626,5 +2631,121 @@ describe('Escalation past a limit', () => {
     const [task] = store.projects.listTasks(project.id);
     expect([task?.status, task?.builtBy]).toEqual(['merged', 'claude']);
     expect(claude.requests.map((r) => r.role)).toContain('builder');
+  });
+});
+
+describe('Loose ends (v0.9.2)', () => {
+  const integrationTree = (repo: string) =>
+    git(repo, 'worktree', 'list', '--porcelain')
+      .split('\n\n')
+      .find((w) => w.includes('branch refs/heads/conclave/integration'))!
+      .split('\n')[0]!
+      .slice('worktree '.length);
+  /** Newer work lands on the integration branch while the first review runs. */
+  const conflictDuringReview = (repo: () => string) => {
+    let plans = 0;
+    let reviews = 0;
+    return {
+      reply: (req: RunRequest) => {
+        if (req.role === 'planner') return plans++ === 0 ? PLAN : DONE;
+        if (reviews++ === 0) {
+          const tree = integrationTree(repo());
+          writeFileSync(join(tree, 'sum.js'), 'module.exports = (a, b) => b + a;\n');
+          git(tree, 'add', '-A');
+          git(tree, 'commit', '-q', '-m', 'newer work');
+        }
+        return APPROVE;
+      },
+    };
+  };
+
+  it('keeps an approved build that conflicts at merge; the builder resolves it', async () => {
+    let repo = '';
+    let n = 0;
+    const s = await setup({
+      claude: conflictDuringReview(() => repo),
+      codex: { reply: 'Created sum.js', act: (req) => writeSum(`a + b; // build ${++n}`)(req) },
+    });
+    repo = s.repo;
+    expect((await s.brain.run({ maxRounds: 10 })).kind).toBe('done');
+    const messages = s.store.projects.events(s.project.id).map((e) => e.message);
+    expect(messages).toContain(
+      'Merge conflict with newer work; the builder resolves it on this build',
+    );
+    expect(
+      messages.some((m) => m.endsWith('conflicts in sum.js, which the builder resolves')),
+    ).toBe(true);
+    expect(s.codex.requests[1]!.prompt).toContain('NEWER WORK CONFLICTS WITH THIS TASK');
+    expect(s.codex.requests[1]!.prompt).toContain('keep the approved change');
+    expect(s.store.projects.listTasks(s.project.id)[0]).toMatchObject({
+      status: 'merged',
+      attempts: 0,
+    });
+    expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('build 2');
+  });
+
+  it('moves a reviewer that gives no verdict twice to the back', async () => {
+    const three = JSON.stringify({
+      done: false,
+      tasks: ['one', 'two', 'three'].map((n) => ({ title: `Sum ${n}`, spec: 'Update sum.js.' })),
+    });
+    let plans = 0;
+    let n = 0;
+    const s = await setup({
+      claude: { reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? three : DONE) : '') },
+      codex: { reply: 'Updated sum.js', act: (req) => writeSum(`a + b; // ${++n}`)(req) },
+      gemini: { reply: APPROVE },
+    });
+    s.store.projects.update(s.project.id, {
+      routing: { ...s.project.routing, reviewer: [{ provider: 'claude' }, { provider: 'gemini' }] },
+    });
+    expect((await s.brain.run({ maxRounds: 12 })).kind).toBe('done');
+    expect(s.claude.requests.filter((r) => r.role === 'reviewer')).toHaveLength(2);
+    expect(s.gemini!.requests.filter((r) => r.role === 'reviewer')).toHaveLength(3);
+    const messages = s.store.projects.events(s.project.id).map((e) => e.message);
+    expect(messages).toContain(
+      'Claude gave no verdict 2 times in a row; it reviews last from now on',
+    );
+  });
+
+  it('sends back an attempt that leaves conflict markers', async () => {
+    let repo = '';
+    let n = 0;
+    const s = await setup({
+      claude: conflictDuringReview(() => repo),
+      // The second build touches another file and leaves sum.js's markers in place.
+      codex: {
+        reply: 'Done',
+        act: (req) =>
+          n++ === 0
+            ? writeSum('a + b')(req)
+            : writeFileSync(join(req.cwd, 'notes.md'), `try ${n}\n`),
+      },
+      maxAttempts: 2,
+    });
+    repo = s.repo;
+    await s.brain.run({ maxRounds: 10 });
+    const messages = s.store.projects.events(s.project.id).map((e) => e.message);
+    expect(messages.some((m) => m.includes('Conflict markers left in sum.js'))).toBe(true);
+    expect(git(repo, 'show', 'conclave/integration:sum.js')).not.toContain('<<<<<<<');
+  });
+
+  it('deletes the files a builder lists, only inside its own folder', async () => {
+    const { repo, store, brain, project, codex } = await setup({
+      codex: {
+        reply: 'Created sum.js\nDELETE: README.md\nDELETE: ../outside.txt\nDELETE: .git/config',
+        act: writeSum('a + b'),
+      },
+    });
+    expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
+    expect(codex.requests[0]!.prompt).toContain('DELETE: path/relative/to/this/folder');
+    const files = git(repo, 'ls-tree', '--name-only', 'conclave/integration').split('\n');
+    expect(files).toContain('sum.js');
+    expect(files).not.toContain('README.md');
+    const messages = store.projects.events(project.id).map((e) => e.message);
+    expect(messages).toContain('Deleted README.md as Codex asked');
+    expect(messages).toContain(
+      "Didn't delete ../outside.txt, .git/config: not a file in this task's folder",
+    );
   });
 });

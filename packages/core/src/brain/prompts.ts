@@ -33,13 +33,16 @@ export interface PlanContext {
 }
 
 /** What builders are told about running commands, by permission level (C6c). */
+const DELETE_RULE =
+  '- To delete a file, end your reply with one line per file: DELETE: path/relative/to/this/folder. The system deletes it for you.';
+
 function commandRule(project: Project, allowed: string[], network: boolean): string {
   switch (project.permissions.level) {
     case 1:
     case 2:
-      return '- Do not run commands; the system runs the tests for you. Do not install dependencies or reach the network yourself: ask instead (see below).';
+      return `- Do not run commands; the system runs the tests for you. Do not install dependencies or reach the network yourself: ask instead (see below).\n${DELETE_RULE}`;
     case 3:
-      return `- You may run only these commands: ${allowed.join(', ') || project.testCommand || '(none)'}. Do not install dependencies or reach the network yourself: ask instead (see below).`;
+      return `- You may run only these commands: ${allowed.join(', ') || project.testCommand || '(none)'}. Do not install dependencies or reach the network yourself: ask instead (see below).\n${DELETE_RULE}`;
     case 4:
       return `- You may run any command inside this folder.${network ? '' : ' There is no network; do not install dependencies yourself: ask instead (see below).'}`;
     case 5:
@@ -135,6 +138,8 @@ export interface BuilderExtras extends PromptExtras {
   web?: boolean;
   /** The previous attempt's commit is already in the worktree; fix it instead of starting over. */
   kept?: string;
+  /** Files where newer work conflicts with the kept attempt; the merge is in progress. */
+  conflicts?: string[];
 }
 
 /** For web projects: how to show the screenshots the page in use, not just as it loads. */
@@ -159,7 +164,7 @@ ${
       }Fix this:\n${task.feedback.slice(0, 6000)}\n`
     : ''
 }
-${extras.installed ? `\nTHE SYSTEM ALREADY RAN: ${extras.installed}\n` : ''}
+${extras.installed ? `\nTHE SYSTEM ALREADY RAN: ${extras.installed}\n` : ''}${extras.conflicts ? conflictSection(extras.conflicts) : ''}
 AFTER YOU FINISH the system runs: ${project.testCommand ?? project.proposedTestCommand ?? '(no test command; a reviewer checks the diff)'}
 
 Rules:
@@ -214,6 +219,15 @@ ${extras.shots ? shotsSection(extras.shots, project.designDirection) : ''}${extr
 {"approve": true or false, "issues": ["specific problem and how to fix it"], "summary": "one sentence"${extras.shots ? ', "visual": [{"shot": "the screenshot label", "issue": "what looks wrong and how to fix it", "box": [x1, y1, x2, y2]}]' : ''}${extras.goalCheck ? ', "goal_met": true or false, "goal_gaps": ["what is still missing from the goal"]' : ''}}
 If the change hinges on a product decision only the user can make, add "question": "...", "options": ["...", "..."], "recommended": "..." and set "approve": false.
 The builder's next attempt starts from this change and fixes what you list. Only if the whole approach is wrong, so that fixing parts of it won't do, add "restart": true.`;
+}
+
+function conflictSection(files: string[]): string {
+  return `
+NEWER WORK CONFLICTS WITH THIS TASK
+Work merged since this task's last attempt changed the same lines. A merge of it into this folder is in progress, and these files have conflict markers (<<<<<<< and >>>>>>>):
+${files.map((f) => `- ${f}`).join('\n')}
+Resolve each conflict so both sides' intent survives, remove every marker, then finish the task. Don't undo the newer work.
+`;
 }
 
 function disputeSection(dispute: { asked: string; reply: string }): string {

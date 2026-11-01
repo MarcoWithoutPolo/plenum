@@ -113,6 +113,13 @@ export function parseAssumptions(text: string): { question: string; answer: stri
   return out.slice(0, 10);
 }
 
+/** Files a builder asked to delete with DELETE: lines (it can't run `rm` below level 4). */
+export function parseDeletes(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/^\s*[-*]?\s*DELETE:\s*`?([^`\n]+?)`?\s*$/gm)) out.add(m[1]!);
+  return [...out].slice(0, 50);
+}
+
 /** The rule builder and planner prompts carry. */
 export const QUESTION_RULE = `If you cannot continue without a decision only the user can make, do not guess and do not stop silently. Reply with only
 {"question": "...", "why": "...", "options": ["...", "..."], "recommended": "one of the options"}

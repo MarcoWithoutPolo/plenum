@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { removeDir, runCommand, type CommandResult } from '../process.js';
 
 export class GitError extends Error {
@@ -179,12 +179,14 @@ export class Workspace {
   /**
    * A worktree on the task's kept branch, so a retry continues from its last attempt. When the
    * integration branch moved since, it is merged in first. `null` when the branch is gone or no
-   * longer at `commit`; `conflict` when the merge didn't apply (the caller starts fresh).
+   * longer at `commit`; `conflict` when the merge didn't apply. With `keepConflicts`, a merge that
+   * conflicts is left in progress and its files are listed, for the builder to resolve.
    */
   resumeTaskTree(
     taskId: string,
     commit: string,
-  ): Promise<{ path: string; updated: boolean } | 'conflict' | null> {
+    keepConflicts = false,
+  ): Promise<{ path: string; updated: boolean; conflicts?: string[] } | 'conflict' | null> {
     return this.gitLock.run(async () => {
       await this.removeTree(taskId, true);
       const branch = this.taskBranch(taskId);
@@ -211,6 +213,12 @@ export class Workspace {
         true,
       );
       if (merged.code === 0) return { path, updated: true };
+      if (keepConflicts) {
+        // Left in progress: the builder resolves the markers and the commit finishes the merge.
+        const files = await out(path, ['diff', '--name-only', '--diff-filter=U']);
+        const conflicts = files.split('\n').filter(Boolean);
+        if (conflicts.length) return { path, updated: true, conflicts };
+      }
       await git(path, ['merge', '--abort'], true);
       return 'conflict';
     });
@@ -233,6 +241,31 @@ export class Workspace {
     if (!keepBranch) await git(this.repo, ['branch', '-D', this.taskBranch(taskId)], true);
   }
 
+  /**
+   * Delete files a builder asked for (it can't run `rm` below level 4). Only paths inside the
+   * task's worktree and outside `.git` count; the rest are returned as skipped.
+   */
+  async deleteFiles(
+    taskId: string,
+    paths: string[],
+  ): Promise<{ deleted: string[]; skipped: string[] }> {
+    const root = resolve(this.taskPath(taskId));
+    const deleted: string[] = [];
+    const skipped: string[] = [];
+    for (const p of paths) {
+      const full = resolve(root, p);
+      const rel = relative(root, full);
+      const inside = rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+      if (!inside || rel.split(/[\\/]/)[0] === '.git' || !existsSync(full)) {
+        skipped.push(p);
+        continue;
+      }
+      rmSync(full, { recursive: true, force: true });
+      deleted.push(rel.replace(/\\/g, '/'));
+    }
+    return { deleted, skipped };
+  }
+
   /** Stage and commit everything in the task's worktree. Returns null when nothing changed. */
   commitTask(taskId: string, message: string): Promise<string | null> {
     return this.gitLock.run(() => this.commit(taskId, message));
@@ -242,7 +275,11 @@ export class Workspace {
     const path = this.taskPath(taskId);
     await git(path, ['add', '-A']);
     const status = await out(path, ['status', '--porcelain']);
-    if (!status) return null;
+    // A merge in progress is committed even when its result matches this branch (the builder
+    // kept its own side): the commit records the newer work as merged.
+    const merging =
+      (await git(path, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], true)).code === 0;
+    if (!status && !merging) return null;
     await git(path, [
       ...(await commitIdentity(path)),
       'commit',
