@@ -64,8 +64,10 @@ const { values } = parseArgs({
     /** A reviewer that can see also looks at the screenshots (web projects; needs --shots on). */
     visual: { type: 'string', default: 'on' },
     'review-effort': { type: 'string', default: 'same' },
-    runs: { type: 'string', default: '1' },
-    'timeout-min': { type: 'string', default: '40' },
+    /** Three by default: with two, one slow AI reply moves a median by more than 10%. */
+    runs: { type: 'string', default: '3' },
+    /** Default: 40 minutes, 60 for ledger (it finishes at 35–40 minutes with slow builders). */
+    'timeout-min': { type: 'string' },
     nudges: { type: 'string', default: '2' },
     parallel: { type: 'string', default: '2' },
   },
@@ -75,7 +77,8 @@ const seatName = (s: { provider: string; model?: string }) =>
   s.model ? `${s.provider}@${s.model}` : s.provider;
 const contenders = values.contenders!.split(',');
 const runs = Number(values.runs);
-const timeoutMs = Number(values['timeout-min']) * 60_000;
+const timeoutFor = (project: string) =>
+  (values['timeout-min'] ? Number(values['timeout-min']) : project === 'ledger' ? 60 : 40) * 60_000;
 const maxNudges = Number(values.nudges);
 const parallel = Number(values.parallel);
 const team = values.team
@@ -291,7 +294,7 @@ async function runSingle(
   let interventions = 0;
   let ok = false;
   let limited = false;
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + timeoutFor(project);
   for (let turn = 0; turn <= maxNudges; turn++) {
     const result = await collect(
       adapter.run({
@@ -350,7 +353,7 @@ async function runConclave(
     },
   });
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), timeoutFor(project));
   const notes = [
     `team: plans ${projectRow.routing.planner.map(seatName).join('>')}, builds ${projectRow.routing.builder.map(seatName).join('>')}, reviews ${projectRow.routing.reviewer.map(seatName).join('>')}`,
     `level ${values.level}, decide-and-tell (no human), installs never, ${projectRow.maxParallel} lane(s)${projectRow.reviewEffort === 'light' ? ', light reviews' : ''}`,
@@ -418,6 +421,33 @@ async function runConclave(
       `${said(/went quiet/)} stalls, ${said(/for a second opinion/)} second opinions`,
   );
   const t0 = events[0]?.at ?? Date.now();
+  // Where the time went (v0.9.2): inside AI runs (overlaps counted once), waiting for a usage
+  // limit, and the rest (tests, git, Conclave's own steps), so a slow AI reply isn't read as a
+  // slow loop.
+  const spans = (
+    db
+      .prepare(
+        `SELECT at - duration_ms AS start, at AS end FROM agent_runs WHERE source = 'project'`,
+      )
+      .all() as { start: number; end: number }[]
+  ).sort((a, b) => a.start - b.start);
+  let aiMs = 0;
+  let reach = 0;
+  for (const s of spans) {
+    const from = Math.max(s.start, reach);
+    if (s.end > from) aiMs += s.end - from;
+    reach = Math.max(reach, s.end);
+  }
+  const end = events.at(-1)?.at ?? t0;
+  let waitMs = 0;
+  events.forEach((e, i) => {
+    if (/^No \w+ has headroom/.test(e.message)) waitMs += (events[i + 1]?.at ?? end) - e.at;
+  });
+  const wall = end - t0;
+  const min = (ms: number) => (ms / 60_000).toFixed(1);
+  notes.push(
+    `time: AI ${min(aiMs)} min · waiting for limits ${min(waitMs)} min · Conclave ${min(Math.max(0, wall - aiMs - waitMs))} min`,
+  );
   const timeline = events.map(
     (e) =>
       `${((e.at - t0) / 60_000).toFixed(1).padStart(5)}  ${e.provider ?? '-'}  ${e.message.slice(0, 160)}`,
