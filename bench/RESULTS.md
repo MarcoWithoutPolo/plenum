@@ -513,3 +513,28 @@ the cap cut off again. Medians leave capped runs out.
   minutes each before Antigravity stepped in.
 - **Limits shape these numbers more than the code.** Codex was at its limit for most of both runs; 18 of 90 runs
   had to be redone.
+
+## v0.9.2: live check (2026-11-01, three runs each)
+
+v0.9.2 (`05062e2`) with the default team (T1) and the local reviewer (T4), on inventory and ledger. This check only
+had to show nothing breaks with real AIs; the before/after comparison is v0.9.1's above. Each run now splits its
+time into AI, waiting for limits, and Conclave's own steps (tests, git, the loop).
+
+| Suite | Project   | Hidden                      | Minutes          | Median | v0.9.1 median | AI / waiting / Conclave (median run) |
+| ----- | --------- | --------------------------- | ---------------- | ------ | ------------- | ------------------------------------ |
+| T1    | inventory | 7/7, 7/7, 7/7               | 4.0, 2.6, 2.1    | 2.6    | 2.7           | 2.5 / 0 / 0.0                        |
+| T1    | ledger    | 12/12, 12/12, 5/12 (limits) | 18.8, 24.0, 60.1 | 21.4   | 18.4          | 18.6–23.9 / 0 / 0.1                  |
+| T4    | inventory | 7/7, 7/7, 7/7               | 4.0, 2.2, 2.9    | 2.9    | 5.6 (rerun)   | 2.7 / 0 / 0.0                        |
+| T4    | ledger    | 12/12, 12/12, 4/12 (limits) | 23.7, 20.5, 60.1 | 22.1   | 26.5          | 20.3–23.5 / 0 / 0.1–0.2              |
+
+- **Nothing broke.** Every run that a limit didn't cut off passed every hidden test.
+- **Conclave's own time is 0.0–0.2 minutes a run.** Everything else is the AIs working or waiting, so differences
+  between runs and versions here are AI response time. T1 ledger's 18.8 vs 24.0 minutes took the same steps.
+- **Deleting files works.** All six inventory runs deleted `inventory.js` with a `DELETE:` line (the T4 churn in
+  v0.9.1 started there); T4 inventory is back under v0.9.0's 3.8 minutes.
+- **Quiet reviewers move back.** In all three T4 ledger runs GPT-OSS 20B gave no verdict twice and reviewed
+  last from then on.
+- **Real limits, not a fault.** Both third ledger runs ran out of builders: T1 used 12.9 minutes of AI and waited 47,
+  T4 used 16.5 and waited 43. Codex was out of usage and Claude was at 90–91% of its weekly allowance, past the 10%
+  Conclave leaves for you. With no other builder in the team they waited, as designed, until the 60-minute cap. Conflicts on kept work, stalls and second opinions didn't come up live; the trouble
+  suite forces each of them in CI.
