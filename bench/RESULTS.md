@@ -349,3 +349,58 @@ limit", "You've reached your free Grok Build usage limit"). Copilot doesn't repo
 | 20  | "Merge here, then push"; a second run behind the remote is refused         | passed, against a bare local repository standing in for GitHub                                                                                                                                                                                                    |
 | 21  | A new AI at its usage limit hands off and says when it's back              | 6/6 live (2026-10-31), with Cursor and Grok out of free usage: both were turned away, Claude built, Antigravity reviewed, no attempt used; the start-up check then said when each is tried again (Conclave's own back-off: neither CLI says when its limit lifts) |
 | 11  | (again) A short review budget asks a backup reviewer and stops the loser   | 4/4, forced with a 20-second budget                                                                                                                                                                                                                               |
+
+## v0.9 final (2026-10-31 to 11-01, the second run of each)
+
+The runs v0.9 skipped, on paid plans for the X AIs: Cursor and Grok Build on The X Subscription (Premium), Grok
+signed in again after its first runs still used the free account. Each new AI alone twice, Copilot and the local
+model once more, and the teams v0.9 couldn't measure. This is the baseline v0.9.1 is compared against.
+
+### Each new AI alone, two runs
+
+| Project   | Cursor (Grok 4.7 High) | Grok Build             | Copilot Free (run 2) | Local GPT-OSS 20B (run 2) |
+| --------- | ---------------------- | ---------------------- | -------------------- | ------------------------- |
+| textkit   | **7/7** · 40.0¹, 11.6  | **7/7** · 14.5, 8.2    | **7/7** · 1.2        | 5/7 · 2.6                 |
+| calc      | **7/7** · 27.5, 27.1   | **7/7** · 23.7, 18.3   | **7/7** · 1.4        | 3/7 · 1.8                 |
+| inventory | **7/7** · 20.3, 33.0   | **7/7** · 9.0, 16.8    | **7/7** · 0.7        | 0/7 · 0.3                 |
+| ledger    | **12/12** · 40.0¹ ×2   | **12/12** · 40.0¹ ×2   | **12/12** · 6.1      | 0/12 · 0.1                |
+| kanban    | **12/12** · 20.8, 19.3 | **12/12** · 20.8, 14.3 | 11/12 · 1.5          | 0/12 · 0.2                |
+
+Minutes per run. 1. Stopped at the 40-minute cap with the hidden tests already passing (its own tests still failing).
+
+- **On a paid plan, Cursor and Grok get every hidden test**, but slowly: 10 to 40 minutes a project, where Copilot
+  Free takes 1 to 6. Grok uses far more tokens (0.4 to 2.4M a run, Cursor 0.1 to 0.3M).
+- **Copilot Free repeats its v0.9 result**, now with ledger 12/12 too; kanban misses the same touch-size test.
+- **Grok's limit came from the account, not the plan.** After the upgrade its CLI still said "free Grok Build usage
+  limit" until `grok logout` and `grok login` again; X Premium covers it once signed in with the subscribed account.
+
+### Teams, two runs
+
+| Project   | Cursor and Grok first¹     | Same, Grok 4.7 High Fast² | Local model builds³ (run 2) | Local reviews, Ollama⁴ | Local reviews, OpenCode⁴ |
+| --------- | -------------------------- | ------------------------- | --------------------------- | ---------------------- | ------------------------ |
+| textkit   | **7/7** · 6.8, 9.2         | **7/7** · 5.7             | **7/7** · 3.6               | **7/7** · 4.0, 5.4     | **7/7** · 2.6, 1.8       |
+| calc      | **7/7** · 38.2, 21.2       | **7/7** · 10.5            | **7/7** · 7.9               | **7/7** · 7.9, 6.0     | **7/7** · 7.7, 6.3       |
+| inventory | 0/7 · 40⁵, **7/7** 18.7    | 0/7 · 40⁵                 | **7/7** · 4.5               | **7/7** · 5.1, 27.8    | **7/7** · 3.8, 26.1      |
+| ledger    | 0/12 · 40⁵ ×2              | 0/12 · 40⁵                | **12/12** · 19.2            | **12/12** · 20.6, 15.6 | **12/12** · 19.9, 18.1   |
+| kanban    | 0/12 · 40⁵, **12/12** 31.9 | **12/12** · 10.3          | **12/12** · 5.5             | **12/12** · 6.2, 4.3   | **12/12** · 5.4, 6.3     |
+
+1. Claude plans; Cursor (Grok 4.7 High), Codex, then Claude build; Grok, Claude, then Antigravity review. Level 2.
+   Grok was still on the free account for these: its reviews were turned away and Claude reviewed.
+2. The same team with Cursor on `grok-4.7-high-fast`, one run, Grok signed in properly.
+3. Claude plans; local GPT-OSS 20B, Codex, then Claude build; Claude, then Antigravity review. Level 2.
+4. Claude plans; Codex, then Claude build; local GPT-OSS 20B, then Antigravity review. Level 2. Codex was at its
+   own usage limit for most of these, so Claude built.
+5. Stopped at the 40-minute cap with work unmerged.
+
+- **Every team that doesn't put Cursor first gets every hidden test**, local models included, and the local-first
+  team's second run was faster than its first (3.6 to 19.2 min against 5.6 to 29.6).
+- **Cursor first is too slow for the cap on bigger projects.** Not the loop: it takes 5 to 20 minutes per task on
+  Grok 4.7 High, about half that on High Fast (calc 10.5 min against 38.2). One inventory run also shows a gap
+  at level 2: the task needed a file deleted, Cursor can't run commands there, and it spent about 20 minutes
+  trying `rm` and `git rm` before the cap.
+- **Local reviews through Ollama and through OpenCode score the same.** OpenCode reviewers read the files around
+  the diff: about 3× the local tokens (1.2M against 0.36M over ten runs, all free on the GPU), in about the same
+  time. Ollama stays the default.
+- **The loop wastes work** (inventory with a local reviewer: 27.8 and 26.1 min, about 30 agent runs, for a project
+  that takes 4 min when the review passes): each send-back rebuilds from nothing. That is what v0.9.1 fixes; its
+  before/after comparison follows.

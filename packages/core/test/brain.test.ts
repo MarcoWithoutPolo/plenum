@@ -374,6 +374,14 @@ describe('Brain', () => {
       expect(parked).toMatchObject({ status: 'queued', kept: { ready: true } });
       expect(git(repo, 'rev-parse', `conclave/task/${parked!.id}`)).toBe(parked!.kept!.commit);
       expect(codex.requests).toHaveLength(1);
+      // A wake-up while the reviewer is still out leaves it parked, without resuming it.
+      expect((await brain.round()).kind).toBe('waiting');
+      const resumed = () =>
+        store.projects
+          .events(project.id)
+          .filter((e) => e.message.startsWith('Resuming the parked build')).length;
+      expect(resumed()).toBe(0);
+      expect(store.projects.getTask(parked!.id)).toMatchObject({ kept: { ready: true } });
 
       store.recordQuota({
         provider: 'claude',

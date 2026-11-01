@@ -1171,11 +1171,7 @@ export class Brain {
 
   private async review(project: Project, task: Task, tests: string): Promise<RoundOutcome> {
     const avoid = task.builtBy ? [task.builtBy] : [];
-    // Never the builder's own AI, unless the team has no other reviewer at all: when no other
-    // AI is free, the task waits for one instead of being waved through by its author.
-    let team = project.routing.reviewer.some((s) => s.provider !== task.builtBy)
-      ? project.routing.reviewer.filter((s) => s.provider !== task.builtBy)
-      : project.routing.reviewer;
+    let team = reviewTeam(project, task);
     if (project.reviewEffort === 'light')
       team = await Promise.all(team.map((s) => this.lightSeat(s)));
     // Visual review: screenshots go to a reviewer that can see; others still review the code.
@@ -1977,6 +1973,12 @@ export class Brain {
    */
   private async reviewParked(project: Project, task: Task): Promise<RoundOutcome | undefined> {
     const kept = task.kept!;
+    // Still no reviewer free: keep waiting, without re-running the tests on every wake-up.
+    const pick = this.governor.pick(
+      this.ranked('reviewer', reviewTeam(project, task)),
+      task.builtBy ? [task.builtBy] : [],
+    );
+    if (!pick.seat) return this.waiting('reviewer', pick);
     const tree = await this.workspace.resumeTaskTree(task.id, kept.commit);
     if (!tree || tree === 'conflict') {
       this.log('task', 'The parked build can’t be resumed; building it again', { task });
@@ -2350,4 +2352,14 @@ export function displayCommand(command: string): string {
     inner = inner.slice(1, -1);
   }
   return inner.replace(/\\"/g, '"');
+}
+
+/**
+ * Never the builder's own AI, unless the team has no other reviewer at all: when no other
+ * AI is free, the task waits for one instead of being waved through by its author.
+ */
+function reviewTeam(project: Project, task: Task): Seat[] {
+  return project.routing.reviewer.some((s) => s.provider !== task.builtBy)
+    ? project.routing.reviewer.filter((s) => s.provider !== task.builtBy)
+    : project.routing.reviewer;
 }
