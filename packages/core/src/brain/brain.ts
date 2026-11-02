@@ -12,6 +12,7 @@ import type {
   Seat,
   Task,
   TaskFailure,
+  TaskStatus,
 } from '@conclave/shared';
 import {
   IN_FLIGHT,
@@ -30,6 +31,8 @@ import { seatLabel } from '../chat/transcript.js';
 import { Governor, shortReason } from '../governor/governor.js';
 import { runShell } from '../process.js';
 import { Workspace, headCommit } from '../workspace/git.js';
+import { TaskMovedError } from '../store/projects.js';
+import { crashPoint } from '../crash.js';
 import { detectPreview } from '../preview/preview.js';
 import {
   imageTokens,
@@ -141,6 +144,8 @@ const KEPT_STREAK = 2;
 const QUIET_REVIEWS = 2;
 /** How long a builder that went quiet sits out, if anyone else can build (F4). */
 const STALL_PAUSE = 60 * 60_000;
+/** Statuses a lane may move its task from. Anything else (skipped elsewhere) stops the lane. */
+const LIVE: readonly TaskStatus[] = ['queued', ...IN_FLIGHT];
 const seatKey = (s: Seat) => `${s.provider}@${s.model ?? ''}@${s.effort ?? ''}`;
 
 export const LANE_CAPS: Partial<Record<ProviderId, number>> = Object.fromEntries(
@@ -177,6 +182,8 @@ export class Brain {
   private gaps: string[] = [];
   /** Set while run() is going; aborting it interrupts the agent or test in flight. */
   private signal: AbortSignal | undefined;
+  /** Stops every lane when run() has to give up the project (an error outside any task). */
+  private runAbort: AbortController | undefined;
   /** Each running task's own abort, so one lane can stop (a task skipped mid-run). */
   private readonly taskAborts = new Map<string, AbortController>();
   /** Builder seats whose CLI refused the model this run ("not found", "unavailable on your plan"). */
@@ -239,6 +246,24 @@ export class Brain {
       throw new Error('Finish setting up this project (answer its questions and start it) first.');
     }
     await this.workspace.prepare(project.baseBranch);
+    // A task caught mid-merge may have landed before the crash: then it's merged, not queued.
+    for (const t of this.projects.listTasks(this.projectId)) {
+      if (t.status !== 'merging') continue;
+      const commit = await this.workspace.mergedCommit(t.id);
+      if (!commit) continue;
+      const done = this.projects.updateTask(t.id, {
+        status: 'merged',
+        mergeCommit: commit,
+        feedback: null,
+        grants: null,
+        kept: null,
+      });
+      await this.workspace.removeTaskTree(t.id);
+      this.log('merge', `${t.title} had merged before the restart (${commit.slice(0, 8)})`, {
+        task: done,
+        data: { commit },
+      });
+    }
     const recovered = this.projects.requeueInterrupted(this.projectId);
     // Half-finished work is thrown away; a commit kept from a send-back stays for the retry.
     for (const t of recovered) await this.workspace.removeTaskTree(t.id, Boolean(t.kept));
@@ -307,7 +332,10 @@ export class Brain {
   /** Keep doing rounds until the goal is met, the project is stopped, or `maxRounds` runs out. */
   async run(options: RunOptions = {}): Promise<RoundOutcome> {
     const lock = acquireLock(join(this.workspace.root, 'run.lock'));
-    this.signal = options.signal;
+    this.runAbort = new AbortController();
+    this.signal = options.signal
+      ? AbortSignal.any([options.signal, this.runAbort.signal])
+      : this.runAbort.signal;
     try {
       // "Wait until…" from the start-up check: wait like any waiting project (Stop works).
       if (options.startAt && options.startAt.at > Date.now() && this.project().status !== 'draft') {
@@ -391,100 +419,108 @@ export class Brain {
     // Tasks that just couldn't start (a limit, no free builder): left alone until something changes.
     const parked = new Set<string>();
     const drain = async () => {
-      for (const r of await Promise.all(running.values()))
-        if (r.outcome.kind === 'stopped') last = r.outcome;
+      for (const r of await Promise.allSettled(running.values()))
+        if (r.status === 'fulfilled' && r.value.outcome.kind === 'stopped') last = r.value.outcome;
       running.clear();
     };
-    await this.start();
-    for (let i = 0; i < (options.maxRounds ?? Infinity); i++) {
-      if (options.signal?.aborted) {
-        await drain();
-        if (this.project().status !== 'stopped') this.stop('Stopped by you');
-        return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
-      }
-      const project = this.project();
-      if (
-        project.status === 'stopped' ||
-        project.status === 'paused' ||
-        project.status === 'done'
-      ) {
-        await drain();
-        const now = this.project();
-        if (now.status === 'done')
-          return last.kind === 'done'
-            ? last
-            : { kind: 'done', reason: now.statusReason ?? 'Goal met' };
-        return now.status === 'stopped'
-          ? { kind: 'stopped', reason: now.statusReason ?? 'Stopped' }
-          : { kind: 'idle', reason: now.statusReason ?? 'Paused' };
-      }
-      // Fill the free lanes.
-      for (
-        let task = this.nextLaneTask(project, parked);
-        task && running.size < max;
-        task = this.nextLaneTask(project, parked)
-      ) {
-        const id = task.id;
-        running.set(
-          id,
-          this.work(project, task).then((outcome) => ({ id, outcome })),
-        );
-        if (this.projects.getTask(id)?.status === 'queued') break; // it didn't start (no builder)
-      }
-      if (running.size === 0) {
-        if (waitUntil !== undefined) {
-          const ms = waitUntil
-            ? Math.min(maxSleep, Math.max(30_000, waitUntil - Date.now()))
-            : 5 * 60_000;
-          this.projects.setStatus(this.projectId, 'waiting', waitReason);
-          if ((options.wakes?.() ?? 0) === seen) await sleep(ms, options.signal);
-          seen = options.wakes?.() ?? 0;
-          if (this.project().status === 'waiting')
-            this.projects.setStatus(this.projectId, 'running');
-          waitUntil = undefined;
-          parked.clear();
+    try {
+      await this.start();
+      for (let i = 0; i < (options.maxRounds ?? Infinity); i++) {
+        if (options.signal?.aborted) {
+          await drain();
+          if (this.project().status !== 'stopped') this.stop('Stopped by you');
+          return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped by you' };
+        }
+        const project = this.project();
+        if (
+          project.status === 'stopped' ||
+          project.status === 'paused' ||
+          project.status === 'done'
+        ) {
+          await drain();
+          const now = this.project();
+          if (now.status === 'done')
+            return last.kind === 'done'
+              ? last
+              : { kind: 'done', reason: now.statusReason ?? 'Goal met' };
+          return now.status === 'stopped'
+            ? { kind: 'stopped', reason: now.statusReason ?? 'Stopped' }
+            : { kind: 'idle', reason: now.statusReason ?? 'Paused' };
+        }
+        // Fill the free lanes.
+        for (
+          let task = this.nextLaneTask(project, parked);
+          task && running.size < max;
+          task = this.nextLaneTask(project, parked)
+        ) {
+          const id = task.id;
+          running.set(
+            id,
+            this.work(project, task).then((outcome) => ({ id, outcome })),
+          );
+          if (this.projects.getTask(id)?.status === 'queued') break; // it didn't start (no builder)
+        }
+        if (running.size === 0) {
+          if (waitUntil !== undefined) {
+            const ms = waitUntil
+              ? Math.min(maxSleep, Math.max(30_000, waitUntil - Date.now()))
+              : 5 * 60_000;
+            this.projects.setStatus(this.projectId, 'waiting', waitReason);
+            if ((options.wakes?.() ?? 0) === seen) await sleep(ms, options.signal);
+            seen = options.wakes?.() ?? 0;
+            if (this.project().status === 'waiting')
+              this.projects.setStatus(this.projectId, 'running');
+            waitUntil = undefined;
+            parked.clear();
+            continue;
+          }
+          // Nothing can start in parallel: plan, ask, wait or finish exactly as one lane does.
+          last = await this.round();
+          if (['done', 'stopped', 'idle', 'needs_you'].includes(last.kind)) return last;
+          if (last.kind === 'waiting') {
+            waitUntil = last.until ?? null;
+            waitReason = last.reason;
+          }
+          if (last.kind === 'failed' && this.pausedAfterStreak())
+            return { kind: 'idle', reason: this.project().statusReason ?? 'Paused' };
           continue;
         }
-        // Nothing can start in parallel: plan, ask, wait or finish exactly as one lane does.
-        last = await this.round();
-        if (['done', 'stopped', 'idle', 'needs_you'].includes(last.kind)) return last;
-        if (last.kind === 'waiting') {
-          waitUntil = last.until ?? null;
-          waitReason = last.reason;
+        const { id, outcome } = await Promise.race(running.values());
+        running.delete(id);
+        last = outcome;
+        // A task that couldn't start waits for something to change. One turned away by a
+        // usage limit goes again at once: the governor already steers it to another AI.
+        const limited = outcome.kind === 'retry' && /usage limit/i.test(outcome.reason);
+        if (
+          (outcome.kind === 'waiting' || outcome.kind === 'retry') &&
+          !limited &&
+          this.projects.getTask(id)?.status === 'queued'
+        ) {
+          parked.add(id);
+        } else {
+          parked.clear();
         }
-        if (last.kind === 'failed' && this.pausedAfterStreak())
+        if (outcome.kind === 'waiting') {
+          waitUntil =
+            waitUntil == null
+              ? (outcome.until ?? null)
+              : Math.min(waitUntil, outcome.until ?? waitUntil);
+          waitReason = outcome.reason;
+        }
+        if (outcome.kind === 'failed' && this.pausedAfterStreak()) {
+          await drain();
           return { kind: 'idle', reason: this.project().statusReason ?? 'Paused' };
-        continue;
+        }
       }
-      const { id, outcome } = await Promise.race(running.values());
-      running.delete(id);
-      last = outcome;
-      // A task that couldn't start waits for something to change. One turned away by a
-      // usage limit goes again at once: the governor already steers it to another AI.
-      const limited = outcome.kind === 'retry' && /usage limit/i.test(outcome.reason);
-      if (
-        (outcome.kind === 'waiting' || outcome.kind === 'retry') &&
-        !limited &&
-        this.projects.getTask(id)?.status === 'queued'
-      ) {
-        parked.add(id);
-      } else {
-        parked.clear();
-      }
-      if (outcome.kind === 'waiting') {
-        waitUntil =
-          waitUntil == null
-            ? (outcome.until ?? null)
-            : Math.min(waitUntil, outcome.until ?? waitUntil);
-        waitReason = outcome.reason;
-      }
-      if (outcome.kind === 'failed' && this.pausedAfterStreak()) {
-        await drain();
-        return { kind: 'idle', reason: this.project().statusReason ?? 'Paused' };
-      }
+      await drain();
+      return last;
+    } catch (err) {
+      // Something outside a task threw (planning, the database). No lane may keep going unowned
+      // once run() lets go of the project: stop them all and wait for each to finish its step.
+      this.runAbort?.abort();
+      await drain();
+      throw err;
     }
-    await drain();
-    return last;
   }
 
   /** Pause after several failures in a row with nothing merged (same rule as one lane). */
@@ -752,6 +788,7 @@ export class Brain {
       provider: seat.provider,
       data: { tasks: added.map((t) => t.title) },
     });
+    crashPoint('after-plan');
     return { kind: 'planned', tasks: added };
   }
 
@@ -841,9 +878,48 @@ export class Brain {
     this.taskAborts.set(task.id, new AbortController());
     try {
       return await this.attempt(project, task);
+    } catch (err) {
+      return await this.lost(project, task, err);
     } finally {
       this.taskAborts.delete(task.id);
     }
+  }
+
+  /**
+   * Something threw in the middle of a task (a git step failed, the task changed under it). Only
+   * this task is affected: it never stays half-way, and the other lanes carry on.
+   */
+  private async lost(project: Project, task: Task, err: unknown): Promise<RoundOutcome> {
+    const now = this.projects.getTask(task.id) ?? task;
+    if (err instanceof TaskMovedError) {
+      // Skipped (or finished) from another window while this lane worked on it.
+      await this.workspace.removeTaskTree(task.id, Boolean(now.kept)).catch(() => undefined);
+      this.log('task', `Stopped work on ${task.title}: it is ${err.status} now`, { task: now });
+      return { kind: 'retry', task: now, reason: `It is ${err.status} now` };
+    }
+    if (this.cut(task)) return this.halt(task).catch(() => this.requeue(now));
+    const message = err instanceof Error ? err.message : String(err);
+    this.log('error', `Something went wrong with ${task.title}: ${message}`, {
+      task: now,
+      data: { error: message },
+    });
+    if (!IN_FLIGHT.includes(now.status)) {
+      return { kind: 'retry', task: now, reason: message };
+    }
+    try {
+      return await this.sendBack(project, now, {
+        failure: this.failureOf('crash', 'A step failed in Conclave', message, null),
+        feedback: `A step failed in Conclave, not in your work (${message}). Do the task again.`,
+      });
+    } catch {
+      return this.requeue(now);
+    }
+  }
+
+  /** Last resort when even sending a task back fails: put it back in the queue as it was. */
+  private requeue(task: Task): RoundOutcome {
+    const now = this.projects.updateTask(task.id, { status: 'queued' });
+    return { kind: 'retry', task: now, reason: 'Put back in the queue after an error' };
   }
 
   private async attempt(project: Project, task: Task): Promise<RoundOutcome> {
@@ -911,7 +987,11 @@ export class Brain {
     // Who built the last real attempt: escalation switches away from them, not from a builder
     // that was turned away before starting.
     const builtBefore = task.builtBy;
-    task = this.projects.updateTask(task.id, { status: 'building', builtBy: builder.provider });
+    task = this.projects.updateTask(
+      task.id,
+      { status: 'building', builtBy: builder.provider },
+      LIVE,
+    );
     this.log(
       'task',
       `${task.attempts ? `Attempt ${task.attempts + 1}` : 'Building'}: ${task.title} with ${seatLabel(builder)}${note}${levelNote(permissions)}`,
@@ -1079,6 +1159,7 @@ export class Brain {
         });
     }
     const commit = await this.workspace.commitTask(task.id, commitMessage(task, builder));
+    crashPoint('after-commit');
     if (!commit && kept && sentBackBy(task) && !task.kept?.reply) {
       // The builder made none of the changes a review asked for (it couldn't, or thinks they're
       // done): the same build goes back to review with its answer, and no attempt is spent.
@@ -1132,7 +1213,8 @@ export class Brain {
     let tests = '(no test command; review only)';
     const testCommand = testCommandOf(project);
     if (testCommand) {
-      this.projects.updateTask(task.id, { status: 'verifying' });
+      this.projects.updateTask(task.id, { status: 'verifying' }, LIVE);
+      crashPoint('mid-tests');
       const run = await runShell(testCommand, {
         cwd,
         timeoutMs: this.testTimeout,
@@ -1179,7 +1261,11 @@ export class Brain {
       }
     }
 
-    return this.review(project, this.projects.updateTask(task.id, { status: 'reviewing' }), tests);
+    return this.review(
+      project,
+      this.projects.updateTask(task.id, { status: 'reviewing' }, LIVE),
+      tests,
+    );
   }
 
   /** Before and after screenshots of a task's pages, with the free visual checks (v0.8 C2, C4). */
@@ -1451,13 +1537,18 @@ export class Brain {
     // Skipped just now? Then it never merges.
     if (this.cut(task)) return this.halt(task);
     // In the merge queue: merges go one at a time, so a lane can wait here for its turn.
-    this.projects.updateTask(task.id, { status: 'merging' });
+    // Compare and swap: a skip from another window wins before the merge starts.
+    this.projects.updateTask(task.id, { status: 'merging' }, IN_FLIGHT);
+    crashPoint('after-approve');
     const merged = await this.workspace.mergeTask(
       task.id,
       `conclave: merge "${task.title}"`,
       testCommandOf(project) ? (cwd) => this.runTests(project, cwd) : undefined,
     );
-    if (this.cut(task)) return this.halt(task);
+    // Once the merge landed, the task is merged even if you pressed Stop meanwhile: putting it
+    // back in the queue would build it again on top of itself.
+    if (merged.ok) crashPoint('after-merge');
+    if (!merged.ok && this.cut(task)) return this.halt(task);
     if (!merged.ok && merged.kind === 'conflict') {
       this.log('merge', 'Merge conflict with newer work; the builder resolves it on this build', {
         task,
@@ -1504,6 +1595,8 @@ export class Brain {
       task: done,
       data: { commit: merged.commit },
     });
+    if (this.interrupted)
+      return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped' };
     await this.adoptProposedTests();
     if (goalCheck && verdict.goalMet === true) {
       // The reviewer read the whole result against the goal: no separate planner check needed.
@@ -2090,10 +2183,11 @@ export class Brain {
       return undefined;
     }
     const commit = await headCommit(tree.path);
-    task = this.projects.updateTask(task.id, {
-      status: 'verifying',
-      kept: { ...kept, commit, ready: false },
-    });
+    task = this.projects.updateTask(
+      task.id,
+      { status: 'verifying', kept: { ...kept, commit, ready: false } },
+      LIVE,
+    );
     this.log('review', `Resuming the parked build ${commit.slice(0, 8)} for review`, { task });
     let tests = '(no test command; review only)';
     const testCommand = testCommandOf(project);
@@ -2115,7 +2209,11 @@ export class Brain {
       }
       tests = `${testCommand} passed.`;
     }
-    return this.review(project, this.projects.updateTask(task.id, { status: 'reviewing' }), tests);
+    return this.review(
+      project,
+      this.projects.updateTask(task.id, { status: 'reviewing' }, LIVE),
+      tests,
+    );
   }
 
   /**

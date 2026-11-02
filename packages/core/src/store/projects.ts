@@ -26,6 +26,20 @@ import { newId } from './ids.js';
 
 type Row = Record<string, unknown>;
 
+/**
+ * A task changed under a lane: another window skipped it, or another step moved it on. The lane
+ * that hit this stops working on it instead of overwriting the change.
+ */
+export class TaskMovedError extends Error {
+  constructor(
+    readonly taskId: string,
+    readonly status: TaskStatus,
+  ) {
+    super(`Task ${taskId} is ${status} now`);
+    this.name = 'TaskMovedError';
+  }
+}
+
 export interface NewProject {
   name: string;
   repoPath: string;
@@ -333,16 +347,22 @@ export class ProjectStore {
     return row && toTask(row);
   }
 
-  updateTask(id: string, patch: TaskPatch): Task {
+  /**
+   * Change a task. With `from`, only while its status is one of those (compare and swap, across
+   * processes): otherwise nothing is written and a TaskMovedError says what it is now.
+   */
+  updateTask(id: string, patch: TaskPatch, from?: readonly TaskStatus[]): Task {
     const current = this.getTask(id);
     if (!current) throw new Error(`No such task: ${id}`);
+    if (from && !from.includes(current.status)) throw new TaskMovedError(id, current.status);
     const next = { ...current, ...patch, updatedAt: Date.now() };
-    this.db
+    const guard = from ? ` AND status IN (${from.map(() => '?').join(', ')})` : '';
+    const changed = this.db
       .prepare(
         `UPDATE tasks SET title = ?, priority = ?, status = ?, attempts = ?, feedback = ?, built_by = ?, reviewed_by = ?,
            merge_commit = ?, spec = ?, last_failure = ?, free_retries = ?, pinned_seat = ?,
            replaced_by = ?, blocked_by = ?, grants = ?, actual_lines = ?, after = ?,
-           kept = ?, updated_at = ? WHERE id = ?`,
+           kept = ?, updated_at = ? WHERE id = ?${guard}`,
       )
       .run(
         next.title,
@@ -365,7 +385,11 @@ export class ProjectStore {
         next.kept && JSON.stringify(next.kept),
         next.updatedAt,
         id,
+        ...(from ?? []),
       );
+    if (from && Number(changed.changes) === 0) {
+      throw new TaskMovedError(id, this.getTask(id)?.status ?? current.status);
+    }
     return next;
   }
 

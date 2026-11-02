@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { removeDir, runCommand, type CommandResult } from '../process.js';
+import { crashPoint } from '../crash.js';
 
 export class GitError extends Error {
   constructor(
@@ -152,6 +153,51 @@ export class Workspace {
       mkdirSync(dirname(this.integrationPath), { recursive: true });
       await git(this.repo, ['worktree', 'add', this.integrationPath, this.integrationBranch]);
     }
+    await this.repairIntegration();
+  }
+
+  /**
+   * A crash can leave the integration folder mid-merge (a conflicting merge not yet aborted) or
+   * behind its branch (the branch moved, the files not yet). Nothing is ever meant to sit
+   * uncommitted there, so put the folder back at the branch tip. Untracked files stay.
+   */
+  private async repairIntegration(): Promise<void> {
+    const path = this.integrationPath;
+    const merging =
+      (await git(path, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], true)).code === 0;
+    if (merging) await git(path, ['merge', '--abort'], true);
+    const dirty = (await git(path, ['diff', '--quiet', 'HEAD'], true)).code !== 0;
+    if (merging || dirty) await git(path, ['reset', '-q', '--hard', 'HEAD']);
+  }
+
+  /**
+   * The merge commit on the integration branch that brought in this task's branch, if it was
+   * merged (merges are always --no-ff, so the task's tip is that commit's second parent).
+   */
+  async mergedCommit(taskId: string): Promise<string | null> {
+    const tip = await git(
+      this.repo,
+      ['rev-parse', '-q', '--verify', this.taskBranch(taskId)],
+      true,
+    );
+    if (tip.code !== 0) return null;
+    const head = tip.stdout.trim();
+    const inside = await git(
+      this.repo,
+      ['merge-base', '--is-ancestor', head, this.integrationBranch],
+      true,
+    );
+    if (inside.code !== 0) return null;
+    const merges = await git(
+      this.repo,
+      ['log', '--merges', '--format=%H %P', `${head}..${this.integrationBranch}`],
+      true,
+    );
+    for (const line of merges.stdout.split('\n')) {
+      const [commit, , second] = line.trim().split(' ');
+      if (commit && second === head) return commit;
+    }
+    return null;
   }
 
   /** A fresh worktree on a new task branch, starting from the integration branch's tip. */
@@ -376,6 +422,7 @@ export class Workspace {
       const candidate = await headCommit(path);
       // Compare-and-swap: only move the branch if nobody else moved it meanwhile.
       await git(this.repo, ['update-ref', `refs/heads/${this.integrationBranch}`, candidate, tip]);
+      crashPoint('mid-merge-ref');
       await git(this.integrationPath, ['reset', '-q', '--hard', candidate]);
       return { ok: true, commit: candidate, retested: true } as const;
     });
@@ -400,6 +447,7 @@ export class Workspace {
       true,
     );
     if (merge.code !== 0) {
+      crashPoint('mid-merge-conflict');
       await git(path, ['merge', '--abort'], true);
       return {
         ok: false,
