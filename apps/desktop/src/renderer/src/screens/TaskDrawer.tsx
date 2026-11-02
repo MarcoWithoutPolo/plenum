@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, CircleDot, Eye, Pin, RefreshCw, RotateCcw, X, XCircle } from 'lucide-react';
 import type { Approval, BrainEvent, Project, Seat, Task } from '@conclave/shared';
 import { DiffView } from '@/components/DiffView';
@@ -9,6 +9,7 @@ import { TaskScreenshots } from '@/components/Shots';
 import { Button, ProviderDot, Thinking } from '@/components/bits';
 import { ACTIVE, TaskStatusIcon, taskVerb } from '@/components/project-bits';
 import { api } from '@/lib/api';
+import { useLayer } from '@/lib/layers';
 import { providerName } from '@/lib/store';
 import { EventRow } from './ProjectView';
 
@@ -39,12 +40,19 @@ export function TaskDrawer({
   const [loading, setLoading] = useState(false);
   const mine = events.filter((e) => e.taskId === task.id);
 
+  // A slower answer for an older task never replaces the current one (U21).
+  const latest = useRef(task.id);
+  latest.current = task.id;
   const loadDiff = async () => {
+    const id = task.id;
     setLoading(true);
     try {
-      setDiff(await api().projects.taskChanges(task.id));
+      const changes = await api().projects.taskChanges(id);
+      if (latest.current === id) setDiff(changes);
+    } catch {
+      if (latest.current === id) setDiff(null);
     } finally {
-      setLoading(false);
+      if (latest.current === id) setLoading(false);
     }
   };
 
@@ -53,26 +61,31 @@ export function TaskDrawer({
     void loadDiff();
   }, [task.id, task.status, task.mergeCommit]);
 
+  // A modal layer: Tab stays inside, Escape closes it unless something above it is open.
+  const panel = useRef<HTMLElement>(null);
+  useLayer(true, onClose, [panel], true);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    const opener = document.activeElement as HTMLElement | null;
+    panel.current?.focus({ preventScroll: true });
+    return () => opener?.focus?.({ preventScroll: true });
+  }, []);
 
   return (
     <div className="absolute inset-x-0 top-10 bottom-0 z-40 flex justify-end">
       <button
         type="button"
         aria-label="Close task"
+        tabIndex={-1}
         onClick={onClose}
         className="fade-in flex-1 cursor-default bg-black/10 dark:bg-black/30"
       />
       <aside
+        ref={panel}
         role="dialog"
+        aria-modal="true"
         aria-label={task.title}
-        className="slide-in flex h-full w-[min(560px,90%)] flex-col border-l border-line bg-panel shadow-[-24px_0_60px_-24px_rgb(0_0_0/0.25)]"
+        tabIndex={-1}
+        className="slide-in outline-none flex h-full w-[min(560px,90%)] flex-col border-l border-line bg-panel shadow-[-24px_0_60px_-24px_rgb(0_0_0/0.25)]"
       >
         <header className="flex items-start gap-3 border-b border-line px-5 pt-4 pb-3.5">
           <span className="mt-1">

@@ -231,7 +231,9 @@ function PickerPanel({
   };
 
   return (
-    <div className={`flex min-h-0 flex-col ${single ? 'h-[440px]' : 'h-[500px]'}`}>
+    <div
+      className={`flex flex-col ${single ? 'h-[440px] min-h-[380px]' : 'h-[500px] min-h-[410px]'}`}
+    >
       <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
         <Search className="size-4 text-faint" aria-hidden />
         <input
@@ -552,7 +554,8 @@ function CustomModel({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
-            e.stopPropagation();
+            // Keep the key: Escape here closes this field, not the picker around it.
+            e.preventDefault();
             setText(null);
           }
         }}
