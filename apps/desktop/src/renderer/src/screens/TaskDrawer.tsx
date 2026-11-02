@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useLayer } from '@/lib/layers';
 import { providerName } from '@/lib/store';
 import { EventRow } from './ProjectView';
+import { settle } from '@/lib/settle';
 
 export function TaskDrawer({
   task,
@@ -58,7 +59,7 @@ export function TaskDrawer({
 
   // Refetch when the task moves on (a commit, a merge) so the diff is never stale.
   useEffect(() => {
-    void loadDiff();
+    settle(loadDiff());
   }, [task.id, task.status, task.mergeCommit]);
 
   // A modal layer: Tab stays inside, Escape closes it unless something above it is open.
@@ -220,7 +221,7 @@ export function TaskDrawer({
             action={
               <button
                 type="button"
-                onClick={() => void loadDiff()}
+                onClick={() => settle(loadDiff())}
                 aria-label="Refresh changes"
                 className="grid size-6 place-items-center rounded-md text-faint hover:bg-sunken hover:text-ink"
               >

@@ -139,28 +139,96 @@ export function isNotFound(result: CommandResult): boolean {
 }
 
 /**
- * Kill a process and everything it started, and wait until they're gone: taskkill /T on Windows
- * (waiting for taskkill itself), the whole process group elsewhere (start the child `detached`).
+ * Kill a process and everything it started, and wait until they're gone: the whole process group
+ * on macOS and Linux (start the child `detached`); on Windows taskkill /T, then a sweep for
+ * anything the tree started that outlived its parent (E6).
  */
 export async function killTree(child: ChildProcess, timeoutMs = 8000): Promise<void> {
-  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((r) => child.once('exit', () => r()));
+  if (child.pid === undefined) return;
+  const exited =
+    child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((r) => child.once('exit', () => r()));
   if (process.platform === 'win32') {
-    const killer = nodeSpawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
-      windowsHide: true,
-    });
-    await new Promise<void>((r) => {
-      killer.once('exit', () => r());
-      killer.once('error', () => r());
-    });
+    await killWindowsTree(child.pid, timeoutMs);
   } else {
     try {
       process.kill(-child.pid, 'SIGKILL');
     } catch {
-      child.kill('SIGKILL');
+      if (child.exitCode === null) child.kill('SIGKILL');
     }
   }
-  await Promise.race([exited, new Promise((r) => setTimeout(r, timeoutMs))]);
+  await Promise.race([exited, new Promise((r) => setTimeout(r, timeoutMs).unref())]);
+}
+
+/** Run a short Windows command, never waiting past `ms`; resolves with its output. */
+function quick(command: string, args: string[], ms: number): Promise<string> {
+  return new Promise((done) => {
+    const p = nodeSpawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    p.stdout?.on('data', (d: Buffer) => (out += d.toString('utf8')));
+    const timer = setTimeout(() => {
+      p.kill();
+      done(out);
+    }, ms).unref();
+    p.once('exit', () => {
+      clearTimeout(timer);
+      done(out);
+    });
+    p.once('error', () => {
+      clearTimeout(timer);
+      done(out);
+    });
+  });
+}
+
+/**
+ * Kill a process tree on Windows. taskkill /T can stall on a tree that is still starting (npm
+ * launching under a shell) and only finds children whose parent is alive, so the rest lived on
+ * as orphans, holding the app's output pipes open (E6). Instead: read the process table, end the
+ * root and every process descended from it (TerminateProcess, which never waits), and repeat a
+ * few times for children that were still being started.
+ */
+async function killWindowsTree(root: number, timeoutMs: number): Promise<void> {
+  const known = new Set([root]);
+  const end = (pid: number) => {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // Already gone.
+    }
+  };
+  end(root);
+  for (let round = 0; round < 4; round++) {
+    const table = await quick(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId)" }',
+      ],
+      timeoutMs,
+    );
+    const rows = table
+      .split(/\r?\n/)
+      .map((l) => l.trim().split(' ').map(Number))
+      .filter((r) => r.length === 2 && r.every(Number.isFinite)) as [number, number][];
+    const found: number[] = [];
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const [pid, parent] of rows) {
+        if (known.has(parent) && !known.has(pid) && pid !== process.pid) {
+          known.add(pid);
+          found.push(pid);
+          grew = true;
+        }
+      }
+    }
+    if (found.length === 0 && round > 0) return;
+    found.forEach(end);
+    await new Promise((r) => setTimeout(r, 200).unref());
+  }
 }
 
 /** Remove a folder a just-stopped process may still be letting go of; never throws. */

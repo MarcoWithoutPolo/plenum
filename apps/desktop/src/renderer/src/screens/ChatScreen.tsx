@@ -15,6 +15,7 @@ import {
   useApp,
   type LiveChat,
 } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 export function ChatScreen({ threadId }: { threadId?: string }) {
   const providers = useApp((s) => s.providers);
@@ -49,7 +50,7 @@ export function ChatScreen({ threadId }: { threadId?: string }) {
   }, [messages.length, live?.text, live?.status]);
 
   const send = (text: string) => {
-    if (seat) void sendChat(threadId, text, seat);
+    if (seat) settle(sendChat(threadId, text, seat));
   };
 
   const composer = (

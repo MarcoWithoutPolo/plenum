@@ -5,6 +5,7 @@ import { ApprovalCard } from '@/components/ApprovalCard';
 import { relative } from '@/components/PlanUsage';
 import { QuestionCard } from '@/components/QuestionCard';
 import { QUESTION_KINDS, useProjects } from '@/lib/projects';
+import { settle } from '@/lib/settle';
 
 /** Everything waiting for you: agents' questions first, then work to merge or publish. */
 export function InboxScreen() {
@@ -15,7 +16,7 @@ export function InboxScreen() {
   const refresh = useProjects((s) => s.refreshApprovals);
   useEffect(() => {
     init();
-    void refresh();
+    settle(refresh());
   }, [init, refresh]);
 
   const pending = approvals.filter((a) => a.approval.status === 'pending');

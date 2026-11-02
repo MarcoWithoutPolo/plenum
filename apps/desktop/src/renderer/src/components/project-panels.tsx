@@ -44,6 +44,7 @@ import { relative } from './PlanUsage';
 import { api } from '@/lib/api';
 import { useProjects } from '@/lib/projects';
 import { errorText, providerName, readyProviders, useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 /* ── Needs you ───────────────────────────────────────────────────────── */
 
@@ -191,13 +192,15 @@ export function LimitBanner({ project, limits }: { project: Project; limits: Lim
                 <Button
                   size="sm"
                   onClick={() =>
-                    void update(project.id, {
-                      routing: {
-                        planner: others('planner'),
-                        builder: others('builder'),
-                        reviewer: others('reviewer'),
-                      },
-                    })
+                    settle(
+                      update(project.id, {
+                        routing: {
+                          planner: others('planner'),
+                          builder: others('builder'),
+                          reviewer: others('reviewer'),
+                        },
+                      }),
+                    )
                   }
                 >
                   Remove {providerName(l.provider)} from the team
@@ -313,7 +316,7 @@ export function PullRequestCard({ project }: { project: Project }) {
             {link.repo} · {link.prBranch}
           </p>
         </div>
-        <Button size="sm" onClick={() => void api().openExternal(link.prUrl!)}>
+        <Button size="sm" onClick={() => settle(api().openExternal(link.prUrl!))}>
           <ExternalLink className="size-3.5" /> Open on GitHub
         </Button>
       </div>
@@ -445,7 +448,7 @@ export function DecisionsPanel({
                             disabled={!draft.trim() || draft.trim() === d.answer}
                             onClick={() => {
                               setEditing(null);
-                              void change(project.id, d.id, draft.trim(), addTask);
+                              settle(change(project.id, d.id, draft.trim(), addTask));
                             }}
                           >
                             Change
@@ -461,7 +464,7 @@ export function DecisionsPanel({
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => void keep(project.id, d.id)}
+                            onClick={() => settle(keep(project.id, d.id))}
                           >
                             Keep
                           </Button>
@@ -516,7 +519,7 @@ export function DecisionsPanel({
               variant="primary"
               disabled={!q.trim() || !a.trim()}
               onClick={() => {
-                void add(project.id, q.trim(), a.trim());
+                settle(add(project.id, q.trim(), a.trim()));
                 setAdding(false);
                 setQ('');
                 setA('');
@@ -654,7 +657,7 @@ export function ProjectSettingsDialog({
           <Button
             variant="primary"
             disabled={saving || Boolean(missing) || !goal.trim() || Boolean(badPage)}
-            onClick={() => void save()}
+            onClick={() => settle(save())}
           >
             {saving ? 'Saving…' : 'Save'}
           </Button>

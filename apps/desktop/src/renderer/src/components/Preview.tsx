@@ -5,6 +5,7 @@ import { Button } from './bits';
 import { Segmented } from './form';
 import { api } from '@/lib/api';
 import { errorText } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 const DEVICES = {
   desktop: { width: 1280, height: 800, label: 'Desktop', icon: Monitor },
@@ -38,21 +39,39 @@ export function PreviewPane({
     pane.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [taskId]);
 
+  // Only the newest request may set what's shown: switching tasks quickly never shows an older
+  // preview (U13).
+  const latest = useRef(0);
   const open = async () => {
+    const mine = ++latest.current;
     setState({ kind: 'loading' });
     try {
-      setState(await api().projects.preview(projectId, taskId));
+      const result = await api().projects.preview(projectId, taskId);
+      if (mine === latest.current) setState(result);
     } catch (err) {
-      setState({ kind: 'failed', error: errorText(err), logs: '' });
+      if (mine === latest.current) setState({ kind: 'failed', error: errorText(err), logs: '' });
     }
   };
   useEffect(() => {
-    void open();
+    settle(open());
+    // Closing the pane, switching task or leaving the project stops its dev server (U13).
+    return () => {
+      latest.current++;
+      api()
+        .projects.stopPreview(projectId, taskId)
+        .catch(() => undefined);
+    };
   }, [projectId, taskId]);
-  // A dev server's output, for when something looks off.
+  // A dev server's output, for when something looks off. A failed poll just keeps the last
+  // output; the next one tries again.
   useEffect(() => {
     if (state.kind !== 'ready' || state.static) return;
-    const tick = () => void api().projects.previewLogs(projectId, taskId).then(setLogs);
+    const tick = () => {
+      api()
+        .projects.previewLogs(projectId, taskId)
+        .then(setLogs)
+        .catch(() => undefined);
+    };
     tick();
     const t = window.setInterval(tick, 5000);
     return () => window.clearInterval(t);
@@ -101,7 +120,7 @@ export function PreviewPane({
               size="sm"
               variant="ghost"
               aria-label="Open in browser"
-              onClick={() => void api().openExternal(state.url)}
+              onClick={() => settle(api().openExternal(state.url))}
             >
               <ExternalLink className="size-3.5" aria-hidden />
             </Button>
@@ -139,7 +158,7 @@ export function PreviewPane({
               {state.logs}
             </pre>
           )}
-          <Button size="sm" className="mt-3" onClick={() => void open()}>
+          <Button size="sm" className="mt-3" onClick={() => settle(open())}>
             Try again
           </Button>
         </div>

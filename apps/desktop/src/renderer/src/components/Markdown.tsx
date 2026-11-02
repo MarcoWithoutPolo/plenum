@@ -2,6 +2,7 @@ import { Children, memo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/lib/api';
+import { settle } from '@/lib/settle';
 
 /** Council citations like [Claude] or [Claude, Codex] become small chips. */
 const CITATION =
@@ -49,7 +50,7 @@ const components: Components = {
       href={href}
       onClick={(e) => {
         e.preventDefault();
-        if (href) void api().openExternal(href);
+        if (href) settle(api().openExternal(href));
       }}
     >
       {children}

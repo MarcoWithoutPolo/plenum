@@ -43,9 +43,35 @@ export const Message = z.object({
 export type Message = z.infer<typeof Message>;
 
 /** Who answers: a provider plus optional model and reasoning effort (the CLI's defaults when omitted). */
+/** A model or effort id goes to a CLI as an argument: it may never look like an option (U26). */
+const CliValue = z
+  .string()
+  .max(200)
+  .regex(/^[^-\s][^\s]*$/, 'A model or effort id can’t start with "-" or contain spaces');
+
 export const Seat = z.object({
   provider: ProviderId,
-  model: z.string().optional(),
-  effort: z.string().optional(),
+  model: CliValue.optional(),
+  effort: CliValue.optional(),
 });
 export type Seat = z.infer<typeof Seat>;
+
+/** An id the window passes back (a thread, a request): letters, digits, `_` and `-` only. */
+export const WireId = z.string().regex(/^[\w-]{1,100}$/, 'Invalid id');
+
+/** What the window sends to start a chat reply (checked in the main process, U26). */
+export const ChatSendInput = z.object({
+  requestId: WireId,
+  threadId: WireId,
+  text: z.string().min(1).max(200_000),
+  seat: Seat,
+});
+
+/** What the window sends to ask a council (checked in the main process, U26). */
+export const CouncilAskInput = z.object({
+  requestId: WireId,
+  question: z.string().min(1).max(200_000),
+  members: z.array(Seat).min(1).max(12),
+  synthesizer: Seat,
+  threadId: WireId.optional(),
+});

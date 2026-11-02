@@ -598,7 +598,16 @@ export class BrainManager {
     const key = previewKey(projectId, taskId);
     const server = this.previews.get(key);
     this.previews.delete(key);
-    await server?.stop();
+    if (server) await this.stopping(server);
+  }
+
+  /** Stops still under way: quitting waits for them, so no server outlives the app. */
+  private readonly stops = new Set<Promise<void>>();
+  private stopping(server: PreviewServer): Promise<void> {
+    const stop = bounded(server.stop());
+    this.stops.add(stop);
+    void stop.finally(() => this.stops.delete(stop));
+    return stop;
   }
 
   async stopPreviews(): Promise<void> {
@@ -606,7 +615,7 @@ export class BrainManager {
     this.previews.clear();
     if (this.sweep) clearInterval(this.sweep);
     this.sweep = undefined;
-    await Promise.all(all.map((s) => s.stop()));
+    await Promise.all([...all.map((s) => this.stopping(s)), ...this.stops]);
   }
 
   /** At most two task previews at once; the least recently used one stops first. */
@@ -652,3 +661,11 @@ export type PreviewResult =
   | { kind: 'needs_approval'; command: string; runs: string }
   | { kind: 'none'; reason: string }
   | { kind: 'failed'; error: string; logs: string };
+
+/** Stopping a preview never holds anything up (closing the pane, quitting) for long. */
+function bounded(stop: Promise<void>, ms = 10_000): Promise<void> {
+  return Promise.race([
+    stop.catch(() => undefined),
+    new Promise<void>((r) => setTimeout(r, ms).unref()),
+  ]);
+}

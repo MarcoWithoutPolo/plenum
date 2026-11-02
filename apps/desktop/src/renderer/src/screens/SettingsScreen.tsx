@@ -12,7 +12,9 @@ import { PROVIDERS } from '@conclave/shared';
 import { Button, ProviderDot } from '@/components/bits';
 import { Segmented, inputClass } from '@/components/form';
 import { api } from '@/lib/api';
+import type { SettingsPatch } from '../../../shared/api';
 import { providerName, useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 const NOTICES: { key: keyof NotificationSettings; label: string; hint: string }[] = [
   {
@@ -164,23 +166,33 @@ export function SettingsScreen() {
   const refreshProviders = useApp((s) => s.refreshProviders);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   useEffect(() => {
-    void api().settings.get().then(setSettings);
+    settle(api().settings.get().then(setSettings));
   }, []);
 
-  const setNotice = async (key: keyof NotificationSettings, on: boolean) => {
-    setSettings((s) => s && { ...s, notifications: { ...s.notifications, [key]: on } });
-    setSettings(await api().settings.update({ notifications: { [key]: on } }));
+  // A change shows at once; if the engine refuses it, the screen goes back to what's saved and
+  // the reason is shown (U8).
+  const save = async (show: (s: AppSettings) => AppSettings, update: SettingsPatch) => {
+    const before = settings;
+    setSettings((s) => s && show(s));
+    try {
+      setSettings(await api().settings.update(update));
+    } catch (err) {
+      setSettings(before);
+      throw err;
+    }
   };
-  const setLimits = async (patch: Partial<LimitSettings>) => {
-    setSettings((s) => s && { ...s, limits: { ...s.limits, ...patch } });
-    setSettings(await api().settings.update({ limits: patch }));
-  };
+  const setNotice = (key: keyof NotificationSettings, on: boolean) =>
+    save((s) => ({ ...s, notifications: { ...s.notifications, [key]: on } }), {
+      notifications: { [key]: on },
+    });
+  const setLimits = (patch: Partial<LimitSettings>) =>
+    save((s) => ({ ...s, limits: { ...s.limits, ...patch } }), { limits: patch });
   const limits = settings?.limits;
   const limitOf = (p: ProviderId): ProviderLimit =>
     limits?.providers[p] ?? { leaveForMe: 0.1, dailyCap: null };
   const setProvider = (p: ProviderId, patch: Partial<ProviderLimit>) =>
-    void setLimits({ providers: { ...limits?.providers, [p]: { ...limitOf(p), ...patch } } });
-  const setQuiet = (quietHours: QuietHours[]) => void setLimits({ quietHours });
+    settle(setLimits({ providers: { ...limits?.providers, [p]: { ...limitOf(p), ...patch } } }));
+  const setQuiet = (quietHours: QuietHours[]) => settle(setLimits({ quietHours }));
 
   const ready = providers.filter((p) => p.auth === 'signed_in').map((p) => p.provider);
 
@@ -210,7 +222,7 @@ export function SettingsScreen() {
               label="Pause everything"
               disabled={!settings}
               checked={limits?.pauseAll ?? false}
-              onChange={(on) => void setLimits({ pauseAll: on })}
+              onChange={(on) => settle(setLimits({ pauseAll: on }))}
             />
           </label>
 
@@ -438,7 +450,7 @@ export function SettingsScreen() {
                   label={n.label}
                   disabled={!settings}
                   checked={settings?.notifications[n.key] ?? true}
-                  onChange={(on) => void setNotice(n.key, on)}
+                  onChange={(on) => settle(setNotice(n.key, on))}
                 />
               </label>
             ))}

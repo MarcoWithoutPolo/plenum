@@ -1,5 +1,12 @@
 import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
-import { PROVIDERS as REGISTRY, type ProviderId, type Seat } from '@conclave/shared';
+import {
+  ChatSendInput,
+  CouncilAskInput,
+  PROVIDERS as REGISTRY,
+  Seat,
+  WireId,
+  type ProviderId,
+} from '@conclave/shared';
 import {
   INSTALL_PACKAGES,
   LocalAdapter,
@@ -31,6 +38,8 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
       if (demo) demoFailure(channel);
       return fn(...(args as A));
     });
+
+  const threadId = (value: unknown): string => WireId.parse(value);
 
   const adapter = (provider: unknown) => {
     if (typeof provider !== 'string' || !PROVIDERS.has(provider as ProviderId)) {
@@ -169,90 +178,83 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
   });
 
   handle(IPC.threadsList, () => engine.store.listThreads(200));
-  handle(IPC.threadsGet, (id: string) => {
+  handle(IPC.threadsGet, (raw: unknown) => {
+    const id = threadId(raw);
     const thread = engine.store.getThread(id);
     return thread ? { thread, messages: engine.store.listMessages(id) } : null;
   });
   handle(
     IPC.threadsRename,
-    (id: string, title: string) =>
-      engine.store.updateThread(id, { title: String(title).trim().slice(0, 200) || 'Untitled' }) ??
-      null,
+    (id: unknown, title: unknown) =>
+      engine.store.updateThread(threadId(id), {
+        title: String(title).trim().slice(0, 200) || 'Untitled',
+      }) ?? null,
   );
-  handle(IPC.threadsRemove, (id: string) => engine.store.deleteThread(id));
+  handle(IPC.threadsRemove, (id: unknown) => engine.store.deleteThread(threadId(id)));
 
-  handle(IPC.chatCreate, (seat: Seat) => {
+  handle(IPC.chatCreate, (raw: unknown) => {
+    const seat = Seat.parse(raw);
     adapter(seat.provider);
     return engine.chat.createThread(seat);
   });
 
-  handle(
-    IPC.chatSend,
-    async (input: { requestId: string; threadId: string; text: string; seat: Seat }) => {
-      adapter(input.seat.provider);
-      const run = track(input.requestId);
-      try {
-        const { thread, user, reply } = await engine.chat.send(input.threadId, input.text, {
-          provider: input.seat.provider,
-          model: input.seat.model ?? null,
-          effort: input.seat.effort ?? null,
-          signal: run.signal,
-          onEvent: (event) => update({ requestId: input.requestId, kind: 'chat', event }),
-        });
-        return { thread, user, reply };
-      } finally {
-        run.done();
-      }
-    },
-  );
+  handle(IPC.chatSend, async (raw: unknown) => {
+    const input = ChatSendInput.parse(raw);
+    adapter(input.seat.provider);
+    const run = track(input.requestId);
+    try {
+      const { thread, user, reply } = await engine.chat.send(input.threadId, input.text, {
+        provider: input.seat.provider,
+        model: input.seat.model ?? null,
+        effort: input.seat.effort ?? null,
+        signal: run.signal,
+        onEvent: (event) => update({ requestId: input.requestId, kind: 'chat', event }),
+      });
+      return { thread, user, reply };
+    } finally {
+      run.done();
+    }
+  });
 
-  handle(
-    IPC.councilAsk,
-    async (input: {
-      requestId: string;
-      question: string;
-      members: Seat[];
-      synthesizer: Seat;
-      threadId?: string;
-    }): Promise<CouncilRoundResult> => {
-      for (const seat of [...input.members, input.synthesizer]) adapter(seat.provider);
-      const run = track(input.requestId);
-      try {
-        const result = await engine.council.ask(input.question, {
-          members: input.members,
-          synthesizer: input.synthesizer,
-          signal: run.signal,
-          ...(input.threadId && { threadId: input.threadId }),
-          onEvent: (u) =>
-            update(
-              u.phase === 'member'
-                ? {
-                    requestId: input.requestId,
-                    kind: 'member',
-                    index: u.index,
-                    label: u.label,
-                    seat: u.seat,
-                    event: u.event,
-                  }
-                : { requestId: input.requestId, kind: 'synthesis', seat: u.seat, event: u.event },
-            ),
-        });
-        return {
-          thread: result.thread,
-          groupId: result.groupId,
-          answers: result.answers.map((a) => ({
-            seat: a.seat,
-            label: a.label,
-            message: a.message,
-          })),
-          merged: result.merged,
-          mergedBy: result.mergedBy,
-        };
-      } finally {
-        run.done();
-      }
-    },
-  );
+  handle(IPC.councilAsk, async (raw: unknown): Promise<CouncilRoundResult> => {
+    const input = CouncilAskInput.parse(raw);
+    for (const seat of [...input.members, input.synthesizer]) adapter(seat.provider);
+    const run = track(input.requestId);
+    try {
+      const result = await engine.council.ask(input.question, {
+        members: input.members,
+        synthesizer: input.synthesizer,
+        signal: run.signal,
+        ...(input.threadId && { threadId: input.threadId }),
+        onEvent: (u) =>
+          update(
+            u.phase === 'member'
+              ? {
+                  requestId: input.requestId,
+                  kind: 'member',
+                  index: u.index,
+                  label: u.label,
+                  seat: u.seat,
+                  event: u.event,
+                }
+              : { requestId: input.requestId, kind: 'synthesis', seat: u.seat, event: u.event },
+          ),
+      });
+      return {
+        thread: result.thread,
+        groupId: result.groupId,
+        answers: result.answers.map((a) => ({
+          seat: a.seat,
+          label: a.label,
+          message: a.message,
+        })),
+        merged: result.merged,
+        mergedBy: result.mergedBy,
+      };
+    } finally {
+      run.done();
+    }
+  });
 
   handle(IPC.runsCancel, (requestId: string) => {
     running.get(requestId)?.abort();

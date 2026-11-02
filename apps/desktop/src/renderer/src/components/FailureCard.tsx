@@ -26,6 +26,7 @@ import { Field, textareaClass } from './form';
 import { VisualIssues, parseVisualIssues } from './Shots';
 import { useProjects } from '@/lib/projects';
 import { providerName, readyProviders, useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 const KINDS: Record<FailureKind, { icon: LucideIcon; title: string; whose: string }> = {
   limit: {
@@ -244,7 +245,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             size="sm"
             variant="primary"
             disabled={busy}
-            onClick={() => void run(() => retryWith())}
+            onClick={() => settle(run(() => retryWith()))}
           >
             <RotateCcw className="size-3.5" /> Retry
           </Button>
@@ -252,7 +253,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             <Button
               size="sm"
               disabled={busy}
-              onClick={() => void run(() => retryWith({ seat: { provider: other.provider } }))}
+              onClick={() => settle(run(() => retryWith({ seat: { provider: other.provider } })))}
             >
               <ProviderDot provider={other.provider} size={7} /> Retry with{' '}
               {providerName(other.provider)}
@@ -261,7 +262,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
           <SeatPicker
             value={base}
             label="Retry with"
-            onChange={(seat) => void run(() => retryWith({ seat }))}
+            onChange={(seat) => settle(run(() => retryWith({ seat })))}
             trigger={({ ref, toggle, open, ...aria }) => (
               <button
                 ref={ref}
@@ -279,7 +280,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             size="sm"
             disabled={busy}
             title="Same AI, one reasoning level up"
-            onClick={() => void run(() => retryWith({ effortUp: true }))}
+            onClick={() => settle(run(() => retryWith({ effortUp: true })))}
           >
             <TrendingUp className="size-3.5" /> More effort
           </Button>
@@ -288,7 +289,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
               size="sm"
               disabled={busy}
               title={`${providerName(base.provider)}'s stronger model, for this task only`}
-              onClick={() => void run(() => retryWith({ seat: { ...base, model: stronger } }))}
+              onClick={() => settle(run(() => retryWith({ seat: { ...base, model: stronger } })))}
             >
               <Sparkles className="size-3.5" /> Retry with {modelLabel(baseInfo, stronger)}
             </Button>
@@ -301,7 +302,7 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
             variant="ghost"
             disabled={busy}
             className="ml-auto"
-            onClick={() => void run(() => skip(project.id, task.id))}
+            onClick={() => settle(run(() => skip(project.id, task.id)))}
           >
             <SkipForward className="size-3.5" /> Skip
           </Button>
@@ -314,10 +315,12 @@ export function FailureCard({ task, project }: { task: Task; project: Project })
         task={task}
         onClose={() => setEditing(false)}
         onSave={(spec, feedback) =>
-          void run(async () => {
-            setEditing(false);
-            await retry(project.id, task.id, { spec, feedback: feedback.trim() || null });
-          })
+          settle(
+            run(async () => {
+              setEditing(false);
+              await retry(project.id, task.id, { spec, feedback: feedback.trim() || null });
+            }),
+          )
         }
       />
     </div>

@@ -22,6 +22,7 @@ import { inputClass, textareaClass } from './form';
 import { api } from '@/lib/api';
 import { useProjects } from '@/lib/projects';
 import { errorText, providerName, useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 const WAITING: Task['status'][] = ['queued', 'blocked'];
 const menuItem =
@@ -89,7 +90,7 @@ export function TaskMenu({
               disabled={!canMove || at === 0}
               onClick={() => {
                 close();
-                void run(() => api().projects.moveTask(task.id, 'up'));
+                settle(run(() => api().projects.moveTask(task.id, 'up')));
               }}
               className={menuItem}
             >
@@ -100,7 +101,7 @@ export function TaskMenu({
               disabled={!canMove || at === waiting.length - 1}
               onClick={() => {
                 close();
-                void run(() => api().projects.moveTask(task.id, 'down'));
+                settle(run(() => api().projects.moveTask(task.id, 'down')));
               }}
               className={menuItem}
             >
@@ -129,7 +130,7 @@ export function TaskMenu({
               }
               onClick={() => {
                 close();
-                void run(() => api().projects.skip(task.id));
+                settle(run(() => api().projects.skip(task.id)));
               }}
               className={menuItem}
             >
@@ -149,7 +150,13 @@ export function TaskMenu({
         }
         initial={{ title: task.title, spec: task.spec }}
         submit="Save"
-        onSubmit={(v) => run(() => api().projects.editTask(task.id, v))}
+        onSubmit={async (v) => {
+          try {
+            await api().projects.editTask(task.id, v);
+          } finally {
+            await load(projectId);
+          }
+        }}
       />
     </>
   );
@@ -159,8 +166,6 @@ export function TaskMenu({
 export function AddTask({ projectId, tasks }: { projectId: string; tasks: Task[] }) {
   const load = useProjects((s) => s.load);
   const refresh = useProjects((s) => s.refresh);
-  const showToast = useApp((s) => s.showToast);
-  const toast = (text: string) => showToast('error', text);
   const [open, setOpen] = useState(false);
   const waiting = tasks.filter((t) => [...WAITING, ...IN_FLIGHT].includes(t.status));
   return (
@@ -183,8 +188,6 @@ export function AddTask({ projectId, tasks }: { projectId: string; tasks: Task[]
         onSubmit={async (v) => {
           try {
             await api().projects.addTask(projectId, v);
-          } catch (err) {
-            toast(errorText(err));
           } finally {
             await Promise.all([load(projectId), refresh()]);
           }
@@ -217,22 +220,31 @@ function TaskDialog({
   const [spec, setSpec] = useState(initial.spec);
   const [after, setAfter] = useState('');
   const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
     setName(initial.title);
     setSpec(initial.spec);
     setAfter('');
+    setProblem(null);
   }, [open]);
+  // It closes only once the task is saved; a failure stays here with the edit (U12).
   const save = async () => {
     if (!name.trim()) return;
     setBusy(true);
-    await onSubmit({
-      title: name.trim(),
-      spec: spec.trim() || name.trim(),
-      ...(waitFor && { after: after ? [after] : [] }),
-    });
-    setBusy(false);
-    onClose();
+    setProblem(null);
+    try {
+      await onSubmit({
+        title: name.trim(),
+        spec: spec.trim() || name.trim(),
+        ...(waitFor && { after: after ? [after] : [] }),
+      });
+      onClose();
+    } catch (err) {
+      setProblem(errorText(err));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <Dialog
@@ -244,13 +256,18 @@ function TaskDialog({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={busy || !name.trim()} onClick={() => void save()}>
+          <Button variant="primary" disabled={busy || !name.trim()} onClick={() => settle(save())}>
             {busy ? 'Saving…' : submit}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        {problem && (
+          <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-[13px] text-danger">
+            Not saved: {problem}
+          </p>
+        )}
         <label className="flex flex-col gap-1.5 text-[13px] font-medium">
           Title
           <input
@@ -376,14 +393,14 @@ function ProposalCard({
         ))}
       </ul>
       <div className="flex justify-end gap-2 border-t border-line px-2.5 py-2">
-        <Button size="sm" disabled={busy} onClick={() => void act(null)}>
+        <Button size="sm" disabled={busy} onClick={() => settle(act(null))}>
           Dismiss
         </Button>
         <Button
           size="sm"
           variant="primary"
           disabled={busy || picked.length === 0}
-          onClick={() => void act(picked)}
+          onClick={() => settle(act(picked))}
         >
           {picked.length === 1 ? 'Apply 1 change' : `Apply ${picked.length} changes`}
         </Button>
@@ -405,7 +422,7 @@ export function SteeringPanel({ project, tasks }: { project: Project; tasks: Tas
   const planner = project.routing.planner[0]?.provider;
 
   useEffect(() => {
-    void api().projects.steering(project.id).then(setMessages);
+    settle(api().projects.steering(project.id).then(setMessages));
   }, [project.id]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
@@ -428,7 +445,7 @@ export function SteeringPanel({ project, tasks }: { project: Project; tasks: Tas
   };
   const settled = (m: SteeringMessage) => {
     setMessages((all) => all.map((x) => (x.id === m.id ? m : x)));
-    void Promise.all([load(project.id), refresh()]);
+    settle(Promise.all([load(project.id), refresh()]));
   };
 
   return (
@@ -476,7 +493,7 @@ export function SteeringPanel({ project, tasks }: { project: Project; tasks: Tas
         className="flex items-end gap-2 border-t border-line p-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void send();
+          settle(send());
         }}
       >
         <textarea
@@ -485,7 +502,7 @@ export function SteeringPanel({ project, tasks }: { project: Project; tasks: Tas
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
-              void send();
+              settle(send());
             }
           }}
           rows={2}

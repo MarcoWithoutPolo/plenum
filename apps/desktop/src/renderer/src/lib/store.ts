@@ -3,6 +3,7 @@ import type { AgentEvent, Message, ProviderId, Seat, Thread } from '@conclave/sh
 import { firstPreferred, preferred, shortName } from '@conclave/shared';
 import type { ProviderInfo, QuotaInfo, RunUpdate, ThreadDetail } from '../../../shared/api';
 import { api, newRequestId } from './api';
+import { settle } from './settle';
 
 export type Screen =
   | { name: 'chat'; threadId?: string }
@@ -40,6 +41,8 @@ export interface LiveCouncil {
   threadId?: string;
 }
 
+/** Runs you stopped, so one that hasn't reached the engine yet never starts. */
+const stopped = new Set<string>();
 let initStarted = false;
 
 /** Key for runs on a thread that doesn't exist yet. */
@@ -47,6 +50,8 @@ export const NEW = '__new__';
 
 interface State {
   ready: boolean;
+  /** Why the app couldn't load (it offers Retry), or null. */
+  loadError: string | null;
   providers: ProviderInfo[];
   quotas: QuotaInfo[];
   threads: Thread[];
@@ -86,6 +91,7 @@ export const errorText = (err: unknown) =>
 
 export const useApp = create<State>((set, get) => ({
   ready: false,
+  loadError: null,
   providers: [],
   quotas: [],
   threads: [],
@@ -97,12 +103,20 @@ export const useApp = create<State>((set, get) => ({
 
   async init() {
     // StrictMode runs effects twice in development; subscribe only once.
-    if (initStarted) return;
-    initStarted = true;
-    api().runs.onUpdate((u) => applyUpdate(u, set));
-    window.addEventListener('focus', () => void get().refreshProviders());
-    await Promise.all([get().refreshProviders(), get().refreshThreads()]);
-    set({ ready: true });
+    if (!initStarted) {
+      initStarted = true;
+      api().runs.onUpdate((u) => applyUpdate(u, set));
+      window.addEventListener('focus', () => settle(get().refreshProviders()));
+    }
+    // A failure shows with Retry instead of "Loading…" for good (U9).
+    try {
+      set({ loadError: null });
+      await Promise.all([get().refreshProviders(), get().refreshThreads()]);
+      set({ ready: true });
+    } catch (err) {
+      set({ loadError: errorText(err) });
+      throw err;
+    }
   },
 
   async refreshProviders() {
@@ -129,11 +143,12 @@ export const useApp = create<State>((set, get) => ({
 
   open(screen) {
     set({ screen });
-    if ('threadId' in screen && screen.threadId) void get().loadThread(screen.threadId);
+    if ('threadId' in screen && screen.threadId) settle(get().loadThread(screen.threadId));
   },
 
   async sendChat(threadId, text, seat) {
     const requestId = newRequestId();
+    stopped.delete(requestId);
     let key = threadId ?? NEW;
     set((s) => ({
       lastSeat: seat,
@@ -147,18 +162,22 @@ export const useApp = create<State>((set, get) => ({
       if (!id) {
         const thread = await api().chat.create(seat);
         id = thread.id;
-        // Move the live run onto the real thread and show it.
+        // Move the live run onto the real thread, and show it if you're still on the new chat
+        // (U5: finishing never pulls you away from another screen).
         set((s) => {
           const { [NEW]: live, ...rest } = s.liveChats;
+          const here = s.screen.name === 'chat' && !s.screen.threadId;
           return {
             liveChats: live ? { ...rest, [thread.id]: live } : rest,
-            screen: { name: 'chat', threadId: thread.id },
+            ...(here && { screen: { name: 'chat', threadId: thread.id } as Screen }),
             details: { ...s.details, [thread.id]: { thread, messages: [] } },
           };
         });
         key = thread.id;
-        void get().refreshThreads();
+        settle(get().refreshThreads());
       }
+      // Stop pressed while the chat was being created (U10): nothing is sent.
+      if (stopped.has(requestId)) return;
       await api().chat.send({ requestId, threadId: id, text, seat });
       await get().loadThread(id);
     } catch (err) {
@@ -168,8 +187,8 @@ export const useApp = create<State>((set, get) => ({
         const { [key]: _done, ...rest } = s.liveChats;
         return { liveChats: rest };
       });
-      void get().refreshThreads();
-      void refreshQuotas(set);
+      settle(get().refreshThreads());
+      settle(refreshQuotas(set));
     }
   },
 
@@ -209,7 +228,12 @@ export const useApp = create<State>((set, get) => ({
         },
       }));
       await get().loadThread(result.thread.id);
-      set({ screen: { name: 'council', threadId: result.thread.id } });
+      // Show the round only if you're still where you asked it (U5).
+      set((s) =>
+        s.screen.name === 'council' && (s.screen.threadId ?? undefined) === threadId
+          ? { screen: { name: 'council', threadId: result.thread.id } }
+          : {},
+      );
     } catch (err) {
       get().showToast('error', errorText(err));
     } finally {
@@ -217,13 +241,14 @@ export const useApp = create<State>((set, get) => ({
         const { [key]: _done, ...rest } = s.liveCouncils;
         return { liveCouncils: rest };
       });
-      void get().refreshThreads();
-      void refreshQuotas(set);
+      settle(get().refreshThreads());
+      settle(refreshQuotas(set));
     }
   },
 
   cancel(requestId) {
-    void api().runs.cancel(requestId);
+    stopped.add(requestId);
+    settle(api().runs.cancel(requestId));
   },
 
   async removeThread(id) {

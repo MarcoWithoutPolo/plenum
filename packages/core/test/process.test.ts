@@ -1,8 +1,15 @@
+import { spawn as nodeSpawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isNotFound, runCommand, streamProcess, type ProcessChunk } from '../src/index.js';
+import {
+  isNotFound,
+  killTree,
+  runCommand,
+  streamProcess,
+  type ProcessChunk,
+} from '../src/index.js';
 
 const node = process.execPath;
 
@@ -91,4 +98,40 @@ describe('runCommand', () => {
     expect(result.code).not.toBe(0);
     expect(isNotFound(result)).toBe(true);
   });
+});
+
+describe('killTree (E6)', () => {
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it('kills what a process started even after that process has exited', async () => {
+    // The parent starts a long-running child, prints its pid, and exits: the child is an orphan,
+    // as npm's children were when a dev server's shell died first.
+    const parent = nodeSpawn(
+      process.execPath,
+      [
+        '-e',
+        // On Windows a Node child dies with its parent unless detached; a shell's (cmd → npm)
+        // doesn't, so detach it there to get the orphan the shell would leave.
+        `const c = require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', detached: ${process.platform === 'win32'} }); console.log(c.pid); setTimeout(() => process.exit(0), 300);`,
+      ],
+      { stdio: ['ignore', 'pipe', 'ignore'], detached: process.platform !== 'win32' },
+    );
+    let out = '';
+    parent.stdout!.on('data', (d: Buffer) => (out += d.toString()));
+    await new Promise((r) => parent.once('exit', r));
+    const orphan = Number(out.trim());
+    expect(alive(orphan)).toBe(true);
+    await killTree(parent);
+    await new Promise((r) => setTimeout(r, 300));
+    const still = alive(orphan);
+    if (still) process.kill(orphan);
+    expect(still).toBe(false);
+  }, 30_000);
 });

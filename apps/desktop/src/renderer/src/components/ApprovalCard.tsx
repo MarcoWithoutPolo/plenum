@@ -15,6 +15,7 @@ import { Segmented } from './form';
 import { relative } from './PlanUsage';
 import { useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 /**
  * A finished project's work (merge here, or open/update a pull request) or a request to
@@ -196,12 +197,12 @@ export function ApprovalCard({
           <span className="text-[12px] text-warn">Stop the project first</span>
         )}
         <span className="ml-auto flex gap-2">
-          <Button onClick={() => void act('rejected')} disabled={busy !== null}>
+          <Button onClick={() => settle(act('rejected'))} disabled={busy !== null}>
             {busy === 'rejected' ? 'Declining…' : banner ? 'Not now' : 'Decline'}
           </Button>
           <Button
             variant="primary"
-            onClick={() => void act('approved')}
+            onClick={() => settle(act('approved'))}
             disabled={busy !== null || (running && !publish) || blocked}
           >
             <Icon className="size-3.5" /> {busy === 'approved' ? working : primary}

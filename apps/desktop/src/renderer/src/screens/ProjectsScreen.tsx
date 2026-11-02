@@ -113,7 +113,15 @@ function EmptyState({ onCreate, disabled }: { onCreate: () => void; disabled: bo
 }
 
 function ProjectCard({ summary, onOpen }: { summary: ProjectSummary; onOpen: () => void }) {
-  const { project, counts, running, pendingApprovals, lastEvent } = summary;
+  const { project, counts, running, waiting, lastEvent } = summary;
+  // What's waiting on you, most urgent first (U6).
+  const needs = waiting.questions
+    ? `${waiting.questions} question${waiting.questions === 1 ? '' : 's'} for you`
+    : waiting.requests
+      ? 'Asks your permission'
+      : waiting.merges
+        ? 'Ready to merge'
+        : null;
   const pct = counts.total ? Math.round((counts.merged / counts.total) * 100) : 0;
   return (
     <button
@@ -159,9 +167,9 @@ function ProjectCard({ summary, onOpen }: { summary: ProjectSummary; onOpen: () 
         <span className="truncate" title={project.repoPath}>
           {folderName(project.repoPath)}
         </span>
-        {pendingApprovals > 0 ? (
-          <span className="ml-auto shrink-0 rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
-            Ready to merge
+        {needs ? (
+          <span className="ml-auto shrink-0 rounded-full bg-warn-soft px-2 py-0.5 font-medium whitespace-nowrap text-warn">
+            {needs}
           </span>
         ) : lastEvent ? (
           <span className="ml-auto flex min-w-0 shrink items-center gap-1.5">

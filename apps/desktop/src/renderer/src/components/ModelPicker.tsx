@@ -546,7 +546,8 @@ function CustomModel({
       onSubmit={(e) => {
         e.preventDefault();
         const id = text.trim();
-        if (/^[\w.:/[\]-]+$/.test(id)) {
+        // Never starting with "-": the id is passed to the CLI, where that would be an option.
+        if (/^[\w.:/[\]][\w.:/[\]-]*$/.test(id)) {
           onPick(id);
           setText(null);
         }

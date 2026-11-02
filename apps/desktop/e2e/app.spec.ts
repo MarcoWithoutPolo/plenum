@@ -168,8 +168,8 @@ test('history survives a reload', async () => {
   await page.reload();
   const recent = page.getByRole('navigation', { name: 'Recent chats' });
   await expect(
-    recent.getByRole('button', { name: /Best way to store small settings/ }),
+    recent.getByRole('button', { name: /^Best way to store small settings/ }),
   ).toBeVisible();
-  await recent.getByRole('button', { name: /How should I store app settings/ }).click();
+  await recent.getByRole('button', { name: /^How should I store app settings/ }).click();
   await expect(page.getByText('Codex (demo) here.')).toBeVisible();
 });

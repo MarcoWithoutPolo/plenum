@@ -45,6 +45,7 @@ import {
 import { api } from '@/lib/api';
 import { useProjects } from '@/lib/projects';
 import { errorText, readyProviders, useApp } from '@/lib/store';
+import { mustOpen, settle } from '@/lib/settle';
 
 type Step = 'where' | 'what' | 'clarify';
 type Source = 'folder' | 'new' | 'clone';
@@ -163,7 +164,7 @@ export function NewProjectWizard({
 
   useEffect(() => {
     if (!open) return;
-    if (!parent) void api().projects.defaultFolder().then(setParent);
+    if (!parent) settle(api().projects.defaultFolder().then(setParent));
     // A fresh wizard gets the current team; one closed by accident keeps its choices.
     if (routing.planner.length + routing.builder.length + routing.reviewer.length === 0) {
       setRouting(defaultRouting(ready));
@@ -176,7 +177,7 @@ export function NewProjectWizard({
       .github.status()
       .then((s) => {
         setGh(s);
-        if (s.signedIn) void api().github.repos().then(setRepos);
+        if (s.signedIn) settle(api().github.repos().then(setRepos));
       })
       .catch(() => setGh({ installed: false, signedIn: false, detail: 'gh did not start' }));
   }, [source, gh]);
@@ -325,7 +326,7 @@ export function NewProjectWizard({
         });
       }
       setStep('clarify');
-      void runClarify(id);
+      settle(runClarify(id));
     } catch (err) {
       toast('error', errorText(err));
     } finally {
@@ -409,7 +410,7 @@ export function NewProjectWizard({
         testCommand: useTest ? (clarify?.testCommand ?? null) : null,
       });
       await Promise.all([refresh(), load(projectId)]);
-      if (andStart) void startProject(projectId);
+      if (andStart) settle(startProject(projectId));
       const id = projectId;
       reset();
       onClose(id);
@@ -427,7 +428,7 @@ export function NewProjectWizard({
         <span className="mr-auto text-[12px] text-faint">
           Your branch and files are never touched until you approve.
         </span>
-        <Button variant="primary" onClick={() => void nextFromWhere()} disabled={busy !== null}>
+        <Button variant="primary" onClick={() => settle(nextFromWhere())} disabled={busy !== null}>
           {busy === 'create'
             ? 'Creating…'
             : busy === 'clone'
@@ -445,7 +446,7 @@ export function NewProjectWizard({
           Back
         </Button>
         <span className="mr-auto" />
-        <Button variant="primary" onClick={() => void nextFromWhat()} disabled={busy !== null}>
+        <Button variant="primary" onClick={() => settle(nextFromWhat())} disabled={busy !== null}>
           {busy === 'save' ? 'Saving…' : 'Next'}
         </Button>
       </>
@@ -455,10 +456,10 @@ export function NewProjectWizard({
           Back
         </Button>
         <span className="mr-auto" />
-        <Button onClick={() => void finish(false)} disabled={busy !== null}>
+        <Button onClick={() => settle(finish(false))} disabled={busy !== null}>
           {busy === 'saveonly' ? 'Saving…' : 'Save without starting'}
         </Button>
-        <Button variant="primary" onClick={() => void finish(true)} disabled={busy !== null}>
+        <Button variant="primary" onClick={() => settle(finish(true))} disabled={busy !== null}>
           {busy === 'start' ? 'Starting…' : 'Start'}
         </Button>
       </>
@@ -562,14 +563,14 @@ export function NewProjectWizard({
                   busy={busy}
                   confirmLarge={confirmLarge}
                   onConfirmLarge={setConfirmLarge}
-                  onChange={() => void choose()}
-                  onSetUp={() => void setUpGit()}
-                  onUseRoot={(root) => void inspect(root)}
+                  onChange={() => settle(choose())}
+                  onSetUp={() => settle(setUpGit())}
+                  onUseRoot={(root) => settle(inspect(root))}
                 />
               ) : (
                 <button
                   type="button"
-                  onClick={() => void choose()}
+                  onClick={() => settle(choose())}
                   disabled={busy !== null}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong px-4 py-5 text-[13px] font-medium text-muted transition hover:border-accent/50 hover:bg-accent-soft/40 hover:text-accent-ink"
                 >
@@ -886,7 +887,7 @@ export function NewProjectWizard({
                   <span className="min-w-0 flex-1 text-muted">
                     Your answers changed since this plan was drafted.
                   </span>
-                  <Button size="sm" onClick={() => void replan()} disabled={busy !== null}>
+                  <Button size="sm" onClick={() => settle(replan())} disabled={busy !== null}>
                     {busy === 'replan' ? 'Re-planning…' : 'Re-plan with my answers'}
                   </Button>
                 </div>
@@ -1077,7 +1078,11 @@ function CloneList({
           </div>
         </div>
         {gh.installed && (
-          <Button size="sm" variant="primary" onClick={() => void api().github.signIn()}>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => settle(mustOpen(api().github.signIn()))}
+          >
             Sign in
           </Button>
         )}

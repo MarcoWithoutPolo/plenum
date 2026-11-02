@@ -4,9 +4,10 @@ import type { GitHubStatus } from '@conclave/core';
 import { LOCAL_LIBRARY, providerEntry } from '@conclave/shared';
 import type { ProviderInfo, QuotaInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
-import { useApp } from '@/lib/store';
+import { errorText, useApp } from '@/lib/store';
 import { Badge, Button, GitHubMark, ProviderDot } from '@/components/bits';
 import { PlanUsage, relative } from '@/components/PlanUsage';
+import { settle } from '@/lib/settle';
 
 export function AccountsScreen() {
   const providers = useApp((s) => s.providers);
@@ -21,9 +22,9 @@ export function AccountsScreen() {
       .then(setGithub)
       .catch(() => setGithub({ installed: false, signedIn: false, detail: 'gh did not start' }));
   useEffect(() => {
-    void checkGithub();
+    settle(checkGithub());
     // Fresh status every visit: sign-ins and usage limits change while the app is open.
-    void refresh();
+    settle(refresh());
   }, []);
 
   // Installed AIs first (connected before signed out), then the ones you could add.
@@ -114,9 +115,9 @@ function ProviderCard({
   quotas: QuotaInfo[];
   onChanged: () => Promise<void>;
 }) {
-  const showToast = useApp((s) => s.showToast);
   const [busy, setBusy] = useState<'signin' | 'install' | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
   const [log, setLog] = useState('');
 
   useEffect(
@@ -138,28 +139,41 @@ function ProviderCard({
         ? { tone: 'warn' as const, text: 'Signed out' }
         : { tone: 'warn' as const, text: 'Not connected' };
 
+  // Every outcome is shown on the card, and the buttons always work again (U7).
   const signIn = async () => {
     setBusy('signin');
-    const result = await api().accounts.signIn(info.provider);
-    setBusy(null);
-    if (result.opened) {
-      setNote('A terminal window opened with the sign-in. Finish there, then press Check again.');
-    } else {
-      showToast('error', `Couldn't open a terminal: ${result.error ?? 'unknown error'}`);
+    setProblem(null);
+    try {
+      const result = await api().accounts.signIn(info.provider);
+      if (result.opened) {
+        setNote('A terminal window opened with the sign-in. Finish there, then press Check again.');
+      } else {
+        setProblem(`Couldn't open a terminal: ${result.error ?? 'unknown error'}`);
+      }
+    } catch (err) {
+      setProblem(`Couldn't start the sign-in: ${errorText(err)}`);
+    } finally {
+      setBusy(null);
     }
   };
 
   const install = async () => {
     setBusy('install');
+    setProblem(null);
     setLog('');
-    const result = await api().accounts.install(info.provider);
-    setBusy(null);
-    if (result.cancelled) return;
-    if (result.ok) {
-      setNote('Installed. Now sign in.');
-      await onChanged();
-    } else {
-      showToast('error', `Install failed: ${result.error ?? 'unknown error'}`);
+    try {
+      const result = await api().accounts.install(info.provider);
+      if (result.cancelled) return;
+      if (result.ok) {
+        setNote('Installed. Now sign in.');
+        await onChanged();
+      } else {
+        setProblem(`Install failed: ${result.error ?? 'unknown error'}`);
+      }
+    } catch (err) {
+      setProblem(`Install failed: ${errorText(err)}`);
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -187,6 +201,11 @@ function ProviderCard({
             <p className="mt-1 text-[12px] text-faint">{COST[entry.cost]}</p>
           )}
           {note && <p className="mt-2 text-[12.5px] text-accent-ink">{note}</p>}
+          {problem && (
+            <p role="alert" className="mt-2 text-[12.5px] text-danger">
+              {problem}
+            </p>
+          )}
           {signedIn && info.limit && (
             <p className="mt-2 flex items-start gap-1.5 text-[12.5px] text-warn">
               <Hourglass className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -230,7 +249,7 @@ function ProviderCard({
           {setup.docs && (
             <button
               type="button"
-              onClick={() => void api().openExternal(setup.docs!)}
+              onClick={() => settle(api().openExternal(setup.docs!))}
               className="ml-1 inline-flex items-center gap-1 text-accent-ink hover:underline"
             >
               Install guide <ExternalLink className="size-3" />
@@ -277,7 +296,7 @@ function ModelLibrary({ have, onPulled }: { have: string[]; onPulled: () => Prom
               {got ? (
                 <Badge tone="ok">Downloaded</Badge>
               ) : (
-                <Button size="sm" onClick={() => void pull(m.id)} disabled={pulling !== null}>
+                <Button size="sm" onClick={() => settle(pull(m.id))} disabled={pulling !== null}>
                   <Download className="size-3.5" />
                   {pulling === m.id ? 'Downloading…' : 'Download'}
                 </Button>
@@ -346,7 +365,7 @@ function GitHubCard({ status }: { status: GitHubStatus | null }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {status && !status.installed && (
-            <Button onClick={() => void api().openExternal('https://cli.github.com/')}>
+            <Button onClick={() => settle(api().openExternal('https://cli.github.com/'))}>
               <ExternalLink className="size-3.5" /> Get gh
             </Button>
           )}

@@ -9,6 +9,7 @@ import {
   type PickerProvider,
   type PickerValue,
 } from '@/components/ModelPicker';
+import { settle } from '@/lib/settle';
 
 /*
  * v0.9 design preview of the model picker inside the real app (demo mode, #picker-preview).
@@ -380,7 +381,7 @@ export function PickerPreview() {
     model: 'opus',
     effort: 'high',
   });
-  useEffect(() => void init(), [init]);
+  useEffect(() => settle(init()), [init]);
   return (
     <div className="flex h-full">
       <Sidebar />

@@ -6,8 +6,13 @@ import {
   type ModelOption,
   type Seat,
 } from '@conclave/shared';
+import { api } from './api';
 import type { ProviderInfo } from '../../../shared/api';
 import type { PickerModel, PickerProvider, PickerValue } from '@/components/ModelPicker';
+
+/** This computer's system: from the app, or from Node when the tests run outside a window. */
+const platform = (): string =>
+  typeof window === 'undefined' ? (globalThis.process?.platform ?? 'win32') : api().platform;
 
 /** Generic notes for effort levels a CLI doesn't describe itself. */
 const EFFORT_NOTES: Record<string, string> = {
@@ -81,7 +86,10 @@ export function pickerProviders(providers: ProviderInfo[]): PickerProvider[] {
       install: {
         command: install?.npm
           ? `npm install -g ${install.npm}`
-          : (install?.script?.windows ?? install?.docs ?? 'See Accounts'),
+          : // The script for this computer's system, never Windows' on a Mac (U14).
+            ((platform() === 'win32' ? install?.script?.windows : install?.script?.unix) ??
+            install?.docs ??
+            'See Accounts'),
         signIn: info.loginHint,
         cost: entry ? BILLING[entry.cost] : 'Your plan',
       },

@@ -5,6 +5,7 @@ import { pickerProviders, recentSeats, rememberSeat, seatToValue, valueToSeat } 
 import { useApp } from '@/lib/store';
 import { ModelPicker } from './ModelPicker';
 import type { PopoverTriggerProps } from './Popover';
+import { mustOpen, settle } from '@/lib/settle';
 
 export { effortNote, modelLabel } from '@/lib/picker';
 
@@ -56,7 +57,7 @@ export function SeatPicker({
       label={label}
       {...(trigger && { trigger: (props) => trigger({ ...props, seat: value }) })}
       onOpenAccounts={() => openScreen({ name: 'accounts' })}
-      onSignIn={(provider) => void api().accounts.signIn(provider as ProviderId)}
+      onSignIn={(provider) => settle(mustOpen(api().accounts.signIn(provider as ProviderId)))}
     />
   );
 }

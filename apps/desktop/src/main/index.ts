@@ -3,7 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
 import type { AppSettings } from '@conclave/shared';
 import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
-import { demoAdapters, demoData, demoGitHub, demoReadings, seedStress } from './demo.js';
+import {
+  demoAdapters,
+  demoData,
+  demoFailure,
+  demoGitHub,
+  demoReadings,
+  seedStress,
+} from './demo.js';
 import { registerIpc } from './ipc.js';
 import { registerProjectIpc } from './projects-ipc.js';
 import { Notifier } from './notify.js';
@@ -69,6 +76,7 @@ function registerSettings(engine: Engine, brains: BrainManager): void {
   // The store merges each section and validates the whole result, so a patch only
   // changes the keys it names (and a bad value throws instead of being saved).
   ipcMain.handle(IPC.settingsUpdate, (_e, patch: SettingsPatch): AppSettings => {
+    if (demo) demoFailure(IPC.settingsUpdate);
     const section = (v: unknown) =>
       v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
     const notifications = section(patch?.notifications);
@@ -102,11 +110,17 @@ function watchForNotices(engine: Engine, brains: BrainManager): void {
       if (!Notification.isSupported()) return;
       const n = new Notification({ title: notice.title, body: notice.body, silent: false });
       n.on('click', () => {
-        if (!window || window.isDestroyed()) window = createWindow();
-        if (window.isMinimized()) window.restore();
-        window.show();
-        window.focus();
-        window.webContents.send(IPC.openProject, notice.projectId);
+        const fresh = !window || window.isDestroyed();
+        if (fresh) window = createWindow();
+        const w = window!;
+        if (w.isMinimized()) w.restore();
+        w.show();
+        w.focus();
+        // A window opened just now (macOS, after closing it) gets the project once it has
+        // loaded; sent earlier, nothing would be listening yet (U25).
+        const send = () => w.webContents.send(IPC.openProject, notice.projectId);
+        if (fresh || w.webContents.isLoading()) w.webContents.once('did-finish-load', send);
+        else send();
       });
       n.show();
     },
@@ -125,10 +139,13 @@ if (!singleInstance) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (window) {
-      if (window.isMinimized()) window.restore();
-      window.focus();
+    // The window may have been closed (macOS keeps the app running): open a new one (U25).
+    if (!window || window.isDestroyed()) {
+      if (app.isReady()) window = createWindow();
+      return;
     }
+    if (window.isMinimized()) window.restore();
+    window.focus();
   });
 
   void app.whenReady().then(async () => {

@@ -13,6 +13,8 @@ import {
 import type { Thread } from '@conclave/shared';
 import { pendingApprovalCount, useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
+import { api } from '@/lib/api';
+import { settle } from '@/lib/settle';
 import { ProviderDot, timeAgo } from './bits';
 
 export function Sidebar() {
@@ -44,7 +46,7 @@ export function Sidebar() {
           label="New chat"
           active={screen.name === 'chat' && !activeId}
           onClick={() => open({ name: 'chat' })}
-          shortcut="Ctrl+N"
+          shortcut={api().platform === 'darwin' ? '⌘N' : 'Ctrl+N'}
         />
         <NavButton
           icon={<Users className="size-4" />}
@@ -213,7 +215,7 @@ function ThreadRow({
         <span className={`min-w-0 flex-1 truncate text-[13px] ${active ? 'font-medium' : ''}`}>
           {thread.title}
         </span>
-        <span className="shrink-0 text-[11px] text-faint group-hover:invisible">
+        <span className="shrink-0 text-[11px] text-faint group-focus-within:invisible group-hover:invisible">
           {timeAgo(thread.updatedAt)}
         </span>
       </button>
@@ -221,8 +223,9 @@ function ThreadRow({
         type="button"
         aria-label={confirm ? 'Confirm delete' : `Delete ${thread.title}`}
         title={confirm ? 'Click again to delete' : 'Delete'}
-        onClick={() => (confirm ? void remove(thread.id) : setConfirm(true))}
-        className={`absolute right-1 hidden rounded-md p-1 group-hover:block ${
+        onClick={() => (confirm ? settle(remove(thread.id)) : setConfirm(true))}
+        // Shown on hover and on keyboard focus, so Tab reaches it too (U22).
+        className={`absolute right-1 rounded-md p-1 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 ${
           confirm ? 'bg-danger-soft text-danger' : 'text-faint hover:bg-sunken hover:text-ink'
         }`}
       >

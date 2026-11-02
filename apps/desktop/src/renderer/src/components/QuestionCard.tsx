@@ -6,6 +6,7 @@ import { inputClass } from './form';
 import { relative } from './PlanUsage';
 import { useProjects } from '@/lib/projects';
 import { providerName } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 /** Install commands Conclave runs itself once approved (mirrors the engine's allow-list). */
 const RUNNABLE =
@@ -163,7 +164,7 @@ export function QuestionCard({
                   value={own}
                   onChange={(e) => setOwn(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && own.trim()) void send('approved', own.trim());
+                    if (e.key === 'Enter' && own.trim()) settle(send('approved', own.trim()));
                   }}
                   aria-label="Your answer"
                   placeholder="Your answer"
@@ -176,7 +177,7 @@ export function QuestionCard({
                     size="sm"
                     variant="ghost"
                     disabled={busy}
-                    onClick={() => void send('approved', q.recommended)}
+                    onClick={() => settle(send('approved', q.recommended))}
                     title="Use the agent's recommendation"
                   >
                     Decide for me
@@ -236,7 +237,7 @@ export function QuestionCard({
                   size="sm"
                   disabled={busy}
                   className="self-start"
-                  onClick={() => void send('rejected', q.permission?.alternative)}
+                  onClick={() => settle(send('rejected', q.permission?.alternative))}
                 >
                   Decline
                 </Button>
@@ -245,7 +246,7 @@ export function QuestionCard({
                   variant="primary"
                   disabled={busy}
                   className="self-start"
-                  onClick={() => void send('approved')}
+                  onClick={() => settle(send('approved'))}
                 >
                   {approval.kind === 'install' ? 'Allow install' : 'Allow once'}
                 </Button>

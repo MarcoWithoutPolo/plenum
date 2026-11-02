@@ -55,11 +55,12 @@ import {
 import { relative } from '@/components/PlanUsage';
 import { api } from '@/lib/api';
 import { QUESTION_KINDS, useProjects } from '@/lib/projects';
-import { providerName, useApp } from '@/lib/store';
+import { errorText, providerName, useApp } from '@/lib/store';
 import { PreviewPane } from '@/components/Preview';
 import { StartCheckNote } from '@/components/StartCheck';
 import type { StartCheck } from '@conclave/core';
 import { TaskDrawer } from './TaskDrawer';
+import { settle } from '@/lib/settle';
 
 export function useNow(active: boolean, every = 1000): number {
   const [now, setNow] = useState(Date.now());
@@ -80,14 +81,32 @@ export function ProjectView({ projectId }: { projectId: string }) {
   // The preview pane: what's merged so far (true), or one task's change (its id).
   const [preview, setPreview] = useState<boolean | string>(false);
 
+  // A project that can't load says why and offers Retry, never "Loading…" for good (U9).
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    void load(projectId).then((d) => {
-      if (!d) open({ name: 'projects' });
-    });
-  }, [projectId, load, open]);
+    setLoadError(null);
+    load(projectId)
+      .then((d) => {
+        if (!d) open({ name: 'projects' });
+      })
+      .catch((err: unknown) => setLoadError(errorText(err)));
+  }, [projectId, load, open, attempt]);
 
   if (!detail) {
-    return <div className="grid flex-1 place-items-center text-muted">Loading…</div>;
+    return loadError ? (
+      <div role="alert" className="grid flex-1 place-items-center px-8 text-center">
+        <div className="max-w-md">
+          <p className="text-[15px] font-semibold">This project couldn’t load</p>
+          <p className="mt-1 text-[13px] text-muted">{loadError}</p>
+          <Button className="mt-4" onClick={() => setAttempt((n) => n + 1)}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    ) : (
+      <div className="grid flex-1 place-items-center text-muted">Loading…</div>
+    );
   }
   const { project, tasks, events, approvals, running, decisions, problems, limits } = detail;
   const pending = approvals.find((a) => a.status === 'pending' && !QUESTION_KINDS.has(a.kind));
@@ -210,15 +229,24 @@ function Header({
   const [publishing, setPublishing] = useState(false);
   // The start-up check: shown instead of starting when an AI on the team can't work right now.
   const [check, setCheck] = useState<StartCheck | null>(null);
+  // Busy from the first click: the start-up check takes a moment, and a second click mustn't
+  // start the project twice (U11).
+  const [checking, setChecking] = useState(false);
   const begin = async () => {
-    let found: StartCheck | null = null;
+    if (checking) return;
+    setChecking(true);
     try {
-      found = await api().projects.startCheck(project.id);
-    } catch {
-      // The check is advice; if it can't run, start as before.
+      let found: StartCheck | null = null;
+      try {
+        found = await api().projects.startCheck(project.id);
+      } catch {
+        // The check is advice; if it can't run, start as before.
+      }
+      if (found?.notes.length) setCheck(found);
+      else await start(project.id);
+    } finally {
+      setChecking(false);
     }
-    if (found?.notes.length) setCheck(found);
-    else await start(project.id);
   };
 
   // An idle project that stopped for a reason says "Ready to resume", so its button says so too.
@@ -247,22 +275,22 @@ function Header({
             </Button>
           )}
           {running ? (
-            <Button onClick={() => void stop(project.id)} disabled={busy}>
+            <Button onClick={() => settle(stop(project.id))} disabled={busy}>
               <Square className="size-3 fill-current" /> {busy ? 'Stopping…' : 'Stop'}
             </Button>
           ) : (
             <Button
               // Answering resumes a project that stopped for you; this is only a fallback.
               variant={project.status === 'needs_you' ? 'secondary' : 'primary'}
-              onClick={() => void begin()}
-              disabled={busy || project.status === 'draft'}
+              onClick={() => settle(begin())}
+              disabled={busy || checking || project.status === 'draft'}
             >
               {project.status === 'done' ? (
                 <RotateCcw className="size-3.5" />
               ) : (
                 <Play className="size-3.5 fill-current" />
               )}
-              {busy ? 'Starting…' : startLabel}
+              {busy || checking ? 'Starting…' : startLabel}
             </Button>
           )}
           <Popover
@@ -299,7 +327,7 @@ function Header({
                     type="button"
                     onClick={() => {
                       close();
-                      void api().openExternal(project.github!.prUrl!);
+                      settle(api().openExternal(project.github!.prUrl!));
                     }}
                     className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium hover:bg-sunken"
                   >
@@ -500,7 +528,7 @@ function RemoveDialog({
             onClick={() => {
               onClose();
               go({ name: 'projects' });
-              void remove(project.id);
+              settle(remove(project.id));
             }}
           >
             Remove project

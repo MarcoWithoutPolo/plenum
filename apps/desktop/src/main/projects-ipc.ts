@@ -66,6 +66,16 @@ import { openInTerminal } from './terminal.js';
 
 const DAY = 86_400_000;
 
+/** Pending approvals by what they ask of you. */
+function waitingOn(pending: { kind: string }[]): ProjectSummary['waiting'] {
+  const n = (...kinds: string[]) => pending.filter((a) => kinds.includes(a.kind)).length;
+  return {
+    questions: n('question'),
+    requests: n('install', 'network', 'create_repo', 'other'),
+    merges: n('merge_base', 'pull_request'),
+  };
+}
+
 /** The demo can make calls fail on purpose (CONCLAVE_DEMO_FAIL), for the tests. */
 const demo = process.env.CONCLAVE_DEMO === '1';
 
@@ -132,7 +142,7 @@ export function registerProjectIpc(
           // Replaced and skipped work leaves the total, so failures never inflate it.
           total: taskProgress(tasks).total,
         },
-        pendingApprovals: projects.approvals(project.id, 'pending').length,
+        waiting: waitingOn(projects.approvals(project.id, 'pending')),
         lastEvent: projects.events(project.id, { latest: 1 }).at(-1) ?? null,
       };
     }),

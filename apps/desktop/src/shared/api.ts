@@ -106,7 +106,8 @@ export interface ProjectSummary {
   /** A brain is working on it right now (in this app or a terminal). */
   running: boolean;
   counts: ProjectCounts;
-  pendingApprovals: number;
+  /** What's waiting on you, by kind: a question isn't "ready to merge" (U6). */
+  waiting: { questions: number; requests: number; merges: number };
   lastEvent: BrainEvent | null;
 }
 

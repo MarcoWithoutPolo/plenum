@@ -1,6 +1,7 @@
 import { Clock, Hourglass, Play, Users, X } from 'lucide-react';
 import type { StartCheck } from '@conclave/core';
 import { Button } from './bits';
+import { settle } from '@/lib/settle';
 
 const clock = (ms: number) =>
   new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -44,11 +45,11 @@ export function StartCheckNote({
           ))}
         </ul>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          <Button size="sm" variant="primary" disabled={busy} onClick={() => void onStart()}>
+          <Button size="sm" variant="primary" disabled={busy} onClick={() => settle(onStart())}>
             <Play className="size-3 fill-current" aria-hidden /> {label} anyway
           </Button>
           {check.waitUntil !== null && (
-            <Button size="sm" disabled={busy} onClick={() => void onStart(check.waitUntil!)}>
+            <Button size="sm" disabled={busy} onClick={() => settle(onStart(check.waitUntil!))}>
               <Clock className="size-3.5" aria-hidden /> Wait until {clock(check.waitUntil)}
             </Button>
           )}

@@ -11,9 +11,11 @@ import { CouncilScreen } from '@/screens/CouncilScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { UsageScreen } from '@/screens/UsageScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { settle } from '@/lib/settle';
 
 export function App() {
   const ready = useApp((s) => s.ready);
+  const loadError = useApp((s) => s.loadError);
   const screen = useApp((s) => s.screen);
   const init = useApp((s) => s.init);
   const open = useApp((s) => s.open);
@@ -21,7 +23,7 @@ export function App() {
   const initProjects = useProjects((s) => s.init);
 
   useEffect(() => {
-    void init().then(() => initProjects());
+    settle(init().then(() => initProjects()));
   }, [init, initProjects]);
 
   // A clicked notification opens its project.
@@ -45,7 +47,21 @@ export function App() {
     <div className="flex h-full">
       <Sidebar />
       <main className="relative flex min-w-0 flex-1 flex-col">
-        {!ready ? (
+        {!ready && loadError ? (
+          <div role="alert" className="grid flex-1 place-items-center px-8 text-center">
+            <div className="max-w-md">
+              <p className="text-[15px] font-semibold">Conclave couldn’t load</p>
+              <p className="mt-1 text-[13px] text-muted">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => settle(init().then(() => initProjects()))}
+                className="mt-4 rounded-xl border border-line-strong bg-panel px-4 py-2 text-[13px] font-medium hover:bg-sunken"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : !ready ? (
           <div className="grid flex-1 place-items-center text-muted">Loading…</div>
         ) : screen.name === 'accounts' ? (
           <AccountsScreen />

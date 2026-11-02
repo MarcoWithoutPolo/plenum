@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { request } from 'node:http';
+import { Agent, request } from 'node:http';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -170,6 +170,30 @@ describe('Static preview server', () => {
     }
     await server.stop();
     await expect(fetch(url)).rejects.toThrow();
+  });
+
+  it('stops at once while a page still holds a connection open (the preview pane)', async () => {
+    const root = folder({ 'site/index.html': '<h1>Home</h1>' });
+    const server = new PreviewServer(join(root, 'site'), {
+      kind: 'static',
+      root: join(root, 'site'),
+    });
+    servers.push(server);
+    const { url } = await server.start();
+    // A keep-alive connection, as the preview's iframe keeps one.
+    const agent = new Agent({ keepAlive: true });
+    await new Promise<void>((ok) =>
+      request(url, { agent }, (res) => {
+        res.resume();
+        res.on('end', () => ok());
+      }).end(),
+    );
+    const stopped = await Promise.race([
+      server.stop().then(() => 'stopped'),
+      new Promise((ok) => setTimeout(() => ok('still waiting'), 3000)),
+    ]);
+    agent.destroy();
+    expect(stopped).toBe('stopped');
   });
 });
 

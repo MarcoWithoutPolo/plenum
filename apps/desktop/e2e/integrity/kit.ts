@@ -24,7 +24,11 @@ export interface Running {
   close: () => Promise<void>;
 }
 
-export async function launch(data: DataSet, theme: Theme): Promise<Running> {
+export async function launch(
+  data: DataSet,
+  theme: Theme,
+  env: Record<string, string> = {},
+): Promise<Running> {
   const home = mkdtempSync(join(tmpdir(), 'conclave-int-home-'));
   const repo = mkdtempSync(join(tmpdir(), 'conclave-int-repo-'));
   const git = (...a: string[]) =>
@@ -46,6 +50,7 @@ export async function launch(data: DataSet, theme: Theme): Promise<Running> {
       CONCLAVE_HOME: home,
       CONCLAVE_E2E_REPO: repo,
       ...(data !== 'normal' && { CONCLAVE_DEMO_DATA: data }),
+      ...env,
     },
     colorScheme: theme,
   });

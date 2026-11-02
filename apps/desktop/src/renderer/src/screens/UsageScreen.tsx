@@ -9,6 +9,7 @@ import { compactNumber } from '@/components/UsageMeta';
 import { clock, elapsed } from '@/components/project-bits';
 import { useProjects } from '@/lib/projects';
 import { providerName, useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 /** Fixed series order (the registry's), so a provider always keeps its color and place. */
 const ORDER: ProviderId[] = PROVIDERS.filter((p) => p.id !== 'fake').map((p) => p.id);
@@ -27,8 +28,8 @@ export function UsageScreen() {
     setRefreshing(false);
   };
   useEffect(() => {
-    void loadUsage();
-    const t = window.setInterval(() => void loadUsage(), 30_000);
+    settle(loadUsage());
+    const t = window.setInterval(() => settle(loadUsage()), 30_000);
     return () => window.clearInterval(t);
   }, [loadUsage]);
 
@@ -78,7 +79,11 @@ export function UsageScreen() {
                 </button>
               ))}
             </div>
-            <Button onClick={() => void refresh()} disabled={refreshing} aria-label="Refresh usage">
+            <Button
+              onClick={() => settle(refresh())}
+              disabled={refreshing}
+              aria-label="Refresh usage"
+            >
               <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             </Button>
           </div>

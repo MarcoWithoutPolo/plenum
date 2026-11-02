@@ -302,7 +302,13 @@ export class PreviewServer {
     this.url = undefined;
     const http = this.http;
     this.http = undefined;
-    if (http) await new Promise<void>((r) => http.close(() => r()));
+    if (http) {
+      // close() waits for every open connection, and a preview pane keeps its own open
+      // (keep-alive): end them, or stopping would wait for ever (and so would quitting).
+      const closed = new Promise<void>((r) => http.close(() => r()));
+      http.closeAllConnections();
+      await closed;
+    }
     const child = this.child;
     this.child = undefined;
     if (child) await killTree(child);

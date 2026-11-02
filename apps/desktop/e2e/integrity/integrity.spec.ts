@@ -36,6 +36,8 @@ interface Screen {
   /** Open its pickers too (they're checked once per screen and size). */
   pickers?: string;
   only?: DataSet[];
+  /** Text this screen must show, per data set. */
+  expect?: Partial<Record<DataSet, string>>;
 }
 
 const nav = (name: string | RegExp) => async (page: Page) => {
@@ -51,7 +53,12 @@ const SCREENS: Screen[] = [
   { name: 'accounts', open: nav(/^Accounts/) },
   { name: 'chat', open: nav('New chat'), pickers: 'body' },
   { name: 'council', open: nav('Ask the council'), pickers: '[role="group"]' },
-  { name: 'projects', open: nav(/^Projects/) },
+  {
+    name: 'projects',
+    open: nav(/^Projects/),
+    // A project waiting on questions says so, not "Ready to merge" (U6).
+    expect: { stress: '40 questions for you' },
+  },
   {
     name: 'new project: where',
     open: async (page) => {
@@ -134,6 +141,9 @@ for (const cell of CELLS) {
               new Promise((ok) => setTimeout(ok, 2000)),
             ]),
           );
+          const must = screen.expect?.[cell.data];
+          if (must && !(await page.getByText(must).first().isVisible()))
+            problems.push(`${where}: "${must}" isn't shown`);
           for (const p of await layoutProblems(page)) problems.push(`${where}: ${p}`);
           for (const p of await accessibilityProblems(page)) problems.push(`${where}: ${p}`);
           if (screen.pickers)

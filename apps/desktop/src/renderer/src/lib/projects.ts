@@ -12,6 +12,7 @@ import type {
 } from '../../../shared/api';
 import { api } from './api';
 import { errorText, useApp } from './store';
+import { settle } from './settle';
 
 interface ProjectsState {
   loaded: boolean;
@@ -92,10 +93,10 @@ export const useProjects = create<ProjectsState>((set, get) => {
     pendingReload.set(
       event.projectId,
       window.setTimeout(() => {
-        void get().refresh();
-        if (get().details[event.projectId]) void get().load(event.projectId);
+        settle(get().refresh());
+        if (get().details[event.projectId]) settle(get().load(event.projectId));
         if (['approval', 'merge', 'question', 'decision', 'done'].includes(event.kind))
-          void get().refreshApprovals();
+          settle(get().refreshApprovals());
       }, 250),
     );
   };
@@ -111,8 +112,8 @@ export const useProjects = create<ProjectsState>((set, get) => {
       if (subscribed) return;
       subscribed = true;
       api().projects.onEvent(onEvent);
-      void Promise.all([get().refresh(), get().refreshApprovals()]).then(() =>
-        set({ loaded: true }),
+      settle(
+        Promise.all([get().refresh(), get().refreshApprovals()]).then(() => set({ loaded: true })),
       );
     },
 

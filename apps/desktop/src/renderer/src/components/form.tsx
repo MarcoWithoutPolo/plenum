@@ -20,6 +20,7 @@ import { SeatPicker, modelLabel } from './SeatPicker';
 import { ProviderDot } from './bits';
 import { api } from '@/lib/api';
 import { providerName, readyProviders, useApp } from '@/lib/store';
+import { settle } from '@/lib/settle';
 
 /* ── Field ───────────────────────────────────────────────────────────── */
 
@@ -654,7 +655,7 @@ export function TestCommandField({
         {folder && (
           <button
             type="button"
-            onClick={() => void tryIt()}
+            onClick={() => settle(tryIt())}
             disabled={!cmd || trying}
             className="inline-flex h-9 shrink-0 items-center rounded-xl border border-line-strong bg-panel px-3 text-[12.5px] font-medium hover:bg-sunken disabled:opacity-50"
           >
