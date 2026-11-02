@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   FakeAdapter,
   GitHub,
+  createProject,
   type Adapter,
   type CommandResult,
   type FakeOptions,
@@ -367,6 +368,13 @@ export function demoGitHub(): GitHub {
   });
 }
 
+/** In CONCLAVE_DEMO_DATA=empty no AI is installed yet (the first run, every empty state). */
+function installed(status: { version: string; detail: string }) {
+  return demoData() === 'empty'
+    ? { installed: false, auth: 'unknown' as const, version: undefined, detail: undefined }
+    : status;
+}
+
 /**
  * Demo providers for CONCLAVE_DEMO=1: the whole app works offline, costs
  * nothing, and end-to-end tests get deterministic answers.
@@ -403,7 +411,7 @@ export function demoAdapters(): Adapter[] {
         vision: 'files',
         resume: true,
         efforts: levels,
-        status: { version: '2.1.302', detail: 'claude.ai, max plan' },
+        status: installed({ version: '2.1.302', detail: 'claude.ai, max plan' }),
         // As Claude Code's start-up handshake reports them (test/fixtures/claude).
         models: {
           defaultModel: 'opus',
@@ -456,7 +464,7 @@ export function demoAdapters(): Adapter[] {
         displayName: 'OpenAI Codex',
         vision: 'native',
         resume: true,
-        status: { version: '0.163.0', detail: 'Logged in using ChatGPT' },
+        status: installed({ version: '0.163.0', detail: 'Logged in using ChatGPT' }),
         models: {
           defaultModel: 'gpt-6-astra',
           defaultEffort: 'ultra',
@@ -498,7 +506,7 @@ export function demoAdapters(): Adapter[] {
         displayName: 'Antigravity',
         vision: 'files',
         resume: true,
-        status: { version: '1.4.6', detail: 'Google account · 6 models' },
+        status: installed({ version: '1.4.6', detail: 'Google account · 6 models' }),
         // As `agy models` lists them; Gemini's thinking levels group into one model.
         models: {
           models: groupVariants([
@@ -524,7 +532,7 @@ function moreAIs(
   answer: (who: string) => FakeScript['reply'],
   act: FakeScript['act'],
 ): FakeAdapter[] {
-  const on = process.env.CONCLAVE_DEMO_TEAM === '9';
+  const on = process.env.CONCLAVE_DEMO_TEAM === '9' || demoData() === 'stress';
   const status = (version: string, detail: string) =>
     on
       ? { version, detail }
@@ -622,4 +630,89 @@ function moreAIs(
       },
     }),
   ];
+}
+
+/**
+ * CONCLAVE_DEMO_FAIL=<channel,…> (or `*`): those calls from the window fail, so the tests can
+ * check every action shows its failure. Read on every call, so a test can change it while the
+ * app runs.
+ */
+export function demoFailure(channel: string): void {
+  const fail = process.env.CONCLAVE_DEMO_FAIL?.split(',').map((c) => c.trim());
+  if (fail?.includes(channel) || fail?.includes('*')) {
+    throw new Error(`Demo failure: ${channel} was made to fail`);
+  }
+}
+
+/** CONCLAVE_DEMO_DATA: `empty` (no AI installed, nothing yet) or `stress` (long, many, mixed). */
+export const demoData = () => process.env.CONCLAVE_DEMO_DATA as 'empty' | 'stress' | undefined;
+
+const LONG_WORD = 'Supercalifragilisticexpialidocious'.repeat(9);
+const MIXED = [
+  'Café menu with crème brûlée 🍮 and 日本語のメニュー',
+  'تطبيق لإدارة المهام مع دعم الكتابة من اليمين إلى اليسار',
+  '한국어 사용자 인터페이스와 이모지 지원 ✅🚀',
+  'Kanban board with drag and drop, offline sync, conflict resolution and an export to CSV',
+];
+
+/**
+ * CONCLAVE_DEMO_DATA=stress: 300 threads, a project with 60 tasks and an Inbox of 40, with
+ * 80-character titles, a 300-character word, emoji, CJK and right-to-left text. Every screen
+ * has to stay usable with it.
+ */
+export async function seedStress(store: Store, repo: string | undefined): Promise<void> {
+  const title = (i: number) =>
+    i % 7 === 0 ? LONG_WORD : `${MIXED[i % MIXED.length]} — part ${i + 1} of a much longer plan`;
+  for (let i = 0; i < 300; i++) {
+    const thread = store.createThread({
+      title: title(i).slice(0, 200),
+      provider: (['claude', 'codex', 'antigravity'] as const)[i % 3]!,
+      mode: i % 5 === 0 ? 'council' : 'chat',
+    });
+    store.addMessage(thread.id, { role: 'user', content: `${title(i)}\n\n${LONG_WORD}` });
+    store.addMessage(thread.id, {
+      role: 'assistant',
+      provider: thread.provider,
+      content: `An answer with a long word: ${LONG_WORD}\n\n\`\`\`js\nconst x = '${LONG_WORD}';\n\`\`\``,
+    });
+  }
+  if (!repo) return;
+  const project = await createProject(
+    store,
+    [{ provider: 'claude' }, { provider: 'codex' }, { provider: 'antigravity' }],
+    {
+      repoPath: repo,
+      name: `A project with a very long name that goes on and on ${LONG_WORD}`.slice(0, 120),
+      goal: `${MIXED.join('. ')}. ${LONG_WORD}`,
+      testCommand: 'node -e 0',
+    },
+  );
+  const tasks = store.projects.addTasks(
+    project.id,
+    Array.from({ length: 60 }, (_, i) => ({
+      title: title(i).slice(0, 80),
+      spec: `${MIXED[i % MIXED.length]}\n\n${LONG_WORD}`,
+    })),
+  );
+  tasks.forEach((t, i) => {
+    if (i < 20) store.projects.updateTask(t.id, { status: 'merged' });
+    else if (i < 25) store.projects.updateTask(t.id, { status: 'failed' });
+  });
+  for (let i = 0; i < 40; i++) {
+    store.projects.requestApproval({
+      projectId: project.id,
+      taskId: tasks[25 + (i % 30)]!.id,
+      kind: 'question',
+      summary: title(i).slice(0, 120),
+      payload: {
+        question: `${title(i)}?`,
+        why: LONG_WORD,
+        options: [MIXED[0]!, MIXED[1]!, `${LONG_WORD.slice(0, 120)}`],
+        recommended: MIXED[0],
+        stage: 'build',
+        provider: 'codex',
+      },
+    });
+  }
+  store.projects.setStatus(project.id, 'needs_you', '40 questions waiting for you');
 }

@@ -36,9 +36,15 @@ const DEFAULT_LANES: Partial<Record<ProviderId, number>> = Object.fromEntries(
 );
 /** Only AIs that report plan usage can have some left for you. */
 const REPORTS_USAGE: ProviderId[] = PROVIDERS.filter((p) => p.reportsUsage).map((p) => p.id);
-/** AI · lanes · leave for me · daily cap, aligned across rows. */
+/**
+ * AI · lanes · leave for me · daily cap, aligned across rows. Where the four don't fit side by
+ * side (a narrow window, large text), each AI's controls stack, each with its own caption.
+ */
 const LIMIT_GRID =
-  'grid grid-cols-[8.5rem_8.5rem_12rem_1fr] items-center justify-items-start gap-x-5 px-4';
+  'grid grid-cols-[8.5rem_8.5rem_12rem_1fr] items-center justify-items-start gap-x-5 px-4 @max-[46rem]:grid-cols-1 @max-[46rem]:gap-y-2';
+/** A column's caption, shown next to its control only when the header row is hidden. */
+const STACKED_CAPTION =
+  'hidden text-[11px] font-medium tracking-wide text-faint uppercase @max-[46rem]:block';
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -218,67 +224,78 @@ export function SettingsScreen() {
                 Sign in to an AI in Accounts first.
               </p>
             )}
-            {ready.length > 0 && (
-              <div
-                aria-hidden
-                className={`${LIMIT_GRID} py-2 text-[11px] font-medium tracking-wide text-faint uppercase`}
-              >
-                <span>AI</span>
-                <span>Lanes at once</span>
-                <span>Leave for me</span>
-                <span>Daily cap</span>
-              </div>
-            )}
-            {ready.map((p) => {
-              const l = limitOf(p);
-              return (
-                <div key={p} className={`${LIMIT_GRID} py-2.5`}>
-                  <span className="flex items-center gap-2 text-[13.5px] font-medium">
-                    <ProviderDot provider={p} size={8} />
-                    {providerName(p)}
-                  </span>
-                  <Segmented
-                    size="sm"
-                    label={`${providerName(p)} lanes`}
-                    value={l.lanes ?? DEFAULT_LANES[p] ?? 1}
-                    onChange={(lanes) => setProvider(p, { lanes })}
-                    options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
-                  />
-                  {REPORTS_USAGE.includes(p) ? (
+            <div className="@container">
+              {ready.length > 0 && (
+                <div
+                  aria-hidden
+                  className={`${LIMIT_GRID} py-2 text-[11px] font-medium tracking-wide text-faint uppercase @max-[46rem]:hidden`}
+                >
+                  <span>AI</span>
+                  <span>Lanes at once</span>
+                  <span>Leave for me</span>
+                  <span>Daily cap</span>
+                </div>
+              )}
+              {ready.map((p) => {
+                const l = limitOf(p);
+                return (
+                  <div key={p} className={`${LIMIT_GRID} py-2.5`}>
+                    <span className="flex items-center gap-2 text-[13.5px] font-medium">
+                      <ProviderDot provider={p} size={8} />
+                      {providerName(p)}
+                    </span>
+                    <span aria-hidden className={STACKED_CAPTION}>
+                      Lanes at once
+                    </span>
                     <Segmented
                       size="sm"
-                      label={`${providerName(p)}: share left for you`}
-                      value={Math.round(l.leaveForMe * 100)}
-                      onChange={(pct) => setProvider(p, { leaveForMe: pct / 100 })}
-                      options={[0, 10, 20, 30].map((n) => ({ value: n, label: `${n}%` }))}
+                      label={`${providerName(p)} lanes`}
+                      value={l.lanes ?? DEFAULT_LANES[p] ?? 1}
+                      onChange={(lanes) => setProvider(p, { lanes })}
+                      options={[1, 2, 3, 4].map((n) => ({ value: n, label: String(n) }))}
                     />
-                  ) : (
-                    <span
-                      className="text-[12px] text-faint"
-                      title="This CLI doesn't report plan usage"
-                    >
-                      Not reported; use a daily cap
+                    <span aria-hidden className={STACKED_CAPTION}>
+                      Leave for me
                     </span>
-                  )}
-                  <span className="flex items-center gap-2 text-[12px] whitespace-nowrap text-faint">
-                    <input
-                      type="number"
-                      min={1}
-                      inputMode="numeric"
-                      aria-label={`${providerName(p)} daily cap (runs)`}
-                      placeholder="None"
-                      defaultValue={l.dailyCap ?? ''}
-                      onBlur={(e) => {
-                        const n = Math.floor(Number(e.target.value));
-                        setProvider(p, { dailyCap: e.target.value && n > 0 ? n : null });
-                      }}
-                      className="h-8 w-20 rounded-xl border border-line-strong bg-panel px-2.5 text-[12.5px] tabular-nums outline-none placeholder:text-faint focus:border-accent"
-                    />
-                    runs a day
-                  </span>
-                </div>
-              );
-            })}
+                    {REPORTS_USAGE.includes(p) ? (
+                      <Segmented
+                        size="sm"
+                        label={`${providerName(p)}: share left for you`}
+                        value={Math.round(l.leaveForMe * 100)}
+                        onChange={(pct) => setProvider(p, { leaveForMe: pct / 100 })}
+                        options={[0, 10, 20, 30].map((n) => ({ value: n, label: `${n}%` }))}
+                      />
+                    ) : (
+                      <span
+                        className="text-[12px] text-faint"
+                        title="This CLI doesn't report plan usage"
+                      >
+                        Not reported; use a daily cap
+                      </span>
+                    )}
+                    <span aria-hidden className={STACKED_CAPTION}>
+                      Daily cap
+                    </span>
+                    <span className="flex items-center gap-2 text-[12px] whitespace-nowrap text-faint">
+                      <input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        aria-label={`${providerName(p)} daily cap (runs)`}
+                        placeholder="None"
+                        defaultValue={l.dailyCap ?? ''}
+                        onBlur={(e) => {
+                          const n = Math.floor(Number(e.target.value));
+                          setProvider(p, { dailyCap: e.target.value && n > 0 ? n : null });
+                        }}
+                        className="h-8 w-20 rounded-xl border border-line-strong bg-panel px-2.5 text-[12.5px] tabular-nums outline-none placeholder:text-faint focus:border-accent"
+                      />
+                      runs a day
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </Section>
 
           <Section

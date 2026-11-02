@@ -46,6 +46,8 @@ import {
   detectPreview,
   previewAllowed,
 } from '@conclave/core';
+import { demoFailure } from './demo.js';
+
 import {
   IPC,
   type ApprovalItem,
@@ -64,6 +66,9 @@ import { openInTerminal } from './terminal.js';
 
 const DAY = 86_400_000;
 
+/** The demo can make calls fail on purpose (CONCLAVE_DEMO_FAIL), for the tests. */
+const demo = process.env.CONCLAVE_DEMO === '1';
+
 export function registerProjectIpc(
   engine: Engine,
   manager: BrainManager,
@@ -71,7 +76,10 @@ export function registerProjectIpc(
   getWindow: () => BrowserWindow | null,
 ): void {
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R | Promise<R>) =>
-    ipcMain.handle(channel, (_event, ...args: unknown[]) => fn(...(args as A)));
+    ipcMain.handle(channel, (_event, ...args: unknown[]) => {
+      if (demo) demoFailure(channel);
+      return fn(...(args as A));
+    });
   const projects = engine.store.projects;
   const id = (value: unknown): string => {
     if (typeof value !== 'string' || !/^[\w-]+$/.test(value)) throw new Error('Invalid id');

@@ -233,7 +233,10 @@ function Header({
   return (
     <section>
       <div className="flex items-center gap-3">
-        <h1 className="min-w-0 truncate text-[24px] font-semibold tracking-tight">
+        <h1
+          className="min-w-0 truncate text-[24px] font-semibold tracking-tight"
+          title={project.name}
+        >
           {project.name}
         </h1>
         <StatusPill status={project.status} running={running} reason={project.statusReason} />
@@ -803,7 +806,9 @@ function TaskRow({
         <TaskStatusIcon task={task} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13.5px] font-medium">{task.title}</span>
+        <span className="block truncate text-[13.5px] font-medium" title={task.title}>
+          {task.title}
+        </span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-faint">
           <span className={ACTIVE.includes(task.status) ? 'font-medium text-accent-ink' : ''}>
             {taskVerb(task)}
@@ -823,7 +828,9 @@ function TaskRow({
             <span className="text-warn">· attempt {task.attempts + 1}</span>
           )}
           {task.status === 'failed' && task.lastFailure && (
-            <span className="truncate text-danger">· {task.lastFailure.summary}</span>
+            <span className="truncate text-danger" title={task.lastFailure.summary}>
+              · {task.lastFailure.summary}
+            </span>
           )}
           {task.pinnedSeat && task.status !== 'merged' && (
             <span className="inline-flex items-center gap-1">

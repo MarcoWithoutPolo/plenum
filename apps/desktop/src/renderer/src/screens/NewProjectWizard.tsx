@@ -980,7 +980,9 @@ function FolderRow({
               </span>
             )}
           </div>
-          <div className={`truncate text-[12px] ${ok ? 'text-faint' : 'text-warn'}`}>{line}</div>
+          <div className={`truncate text-[12px] ${ok ? 'text-faint' : 'text-warn'}`} title={line}>
+            {line}
+          </div>
         </div>
         {ok ? (
           <CheckCircle2 className="size-4 shrink-0 text-ok" aria-label="Ready" />
@@ -1121,7 +1123,12 @@ function CloneList({
                     {r.isPrivate && <Lock className="size-3 text-faint" aria-label="Private" />}
                   </span>
                   {r.description && (
-                    <span className="block truncate text-[12px] text-faint">{r.description}</span>
+                    <span
+                      className="block truncate text-[12px] text-faint"
+                      title={r.description ?? undefined}
+                    >
+                      {r.description}
+                    </span>
                   )}
                 </span>
                 {r.language && <span className="text-[11.5px] text-faint">{r.language}</span>}

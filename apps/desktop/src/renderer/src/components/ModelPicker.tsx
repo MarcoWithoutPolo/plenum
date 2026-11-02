@@ -145,7 +145,8 @@ function PickerButton({
       ref={ref}
       type="button"
       onClick={toggle}
-      aria-label="Choose model"
+      // Starts with what it shows (a screen reader reads the current model), then what it does.
+      aria-label={`${[p?.name, model, effort].filter(Boolean).join(' ')}, choose model`}
       {...aria}
       className={`group inline-flex h-7.5 max-w-full items-center gap-2 rounded-full border px-2.5 text-[12.5px] font-medium transition ${
         open
@@ -154,8 +155,11 @@ function PickerButton({
       }`}
     >
       <Dot id={value.provider} />
-      <span>{p?.name}</span>
-      <span className={`truncate ${open ? 'text-accent-ink/80' : 'text-muted'}`}>{model}</span>
+      <span>{p?.name}</span>{' '}
+      <span className={`min-w-0 truncate ${open ? 'text-accent-ink' : 'text-muted'}`} title={model}>
+        {model}
+      </span>
+      {effort && ' '}
       {effort && (
         <span
           className={`inline-flex items-center gap-1 border-l pl-2 ${open ? 'border-accent/30' : 'border-line'}`}
@@ -488,7 +492,7 @@ function ModelRows({
                 }`}
               >
                 {g || 'All'}
-                <span className={on ? 'opacity-70' : 'text-faint'}> {count}</span>
+                <span className={on ? '' : 'text-faint'}> {count}</span>
               </button>
             );
           })}

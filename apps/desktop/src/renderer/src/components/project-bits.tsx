@@ -65,7 +65,7 @@ export function StatusPill({
         : base;
   return (
     <span
-      className={`inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium ${s.tone}`}
+      className={`inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap ${s.tone}`}
     >
       <span
         className={`size-1.5 rounded-full ${running && status !== 'waiting' ? 'live-dot' : ''}`}

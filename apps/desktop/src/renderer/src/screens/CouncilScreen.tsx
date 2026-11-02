@@ -231,14 +231,14 @@ function MemberChip({
               ref={ref}
               type="button"
               onClick={toggle}
-              aria-label={`${info.displayName} model`}
+              aria-label={`${providerName(info.provider)} ${modelLabel(info, s.model)}${s.effort ? ` · ${s.effort}` : ''}, ${info.displayName} model`}
               {...aria}
               className="inline-flex h-full items-center gap-1.5 rounded-r-full pr-2.5 pl-0.5 outline-none hover:brightness-95 focus-visible:underline"
             >
               <ProviderDot provider={info.provider} size={7} />
-              {providerName(info.provider)}
-              <span className="font-normal opacity-75">{modelLabel(info, s.model)}</span>
-              {s.effort && <span className="font-normal opacity-75">· {s.effort}</span>}
+              {providerName(info.provider)}{' '}
+              <span className="font-normal">{modelLabel(info, s.model)}</span>
+              {s.effort && <span className="font-normal"> · {s.effort}</span>}
               <ChevronDown className={`size-3 opacity-60 transition ${open ? 'rotate-180' : ''}`} />
             </button>
           )}

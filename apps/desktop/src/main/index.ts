@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
 import type { AppSettings } from '@conclave/shared';
 import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
-import { demoAdapters, demoGitHub, demoReadings } from './demo.js';
+import { demoAdapters, demoData, demoGitHub, demoReadings, seedStress } from './demo.js';
 import { registerIpc } from './ipc.js';
 import { registerProjectIpc } from './projects-ipc.js';
 import { Notifier } from './notify.js';
@@ -131,9 +131,11 @@ if (!singleInstance) {
     }
   });
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     const engine = new Engine(demo ? { adapters: demoAdapters() } : {});
     if (demo) demoReadings(engine.store);
+    if (demo && demoData() === 'stress' && engine.store.listThreads(1).length === 0)
+      await seedStress(engine.store, process.env.CONCLAVE_E2E_REPO);
     const brains = new BrainManager(engine, engine.home, {
       snapshotter: new ElectronSnapshotter(),
     });

@@ -40,7 +40,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11.5px] font-medium ${tones[tone]}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11.5px] font-medium whitespace-nowrap ${tones[tone]}`}
     >
       {children}
     </span>

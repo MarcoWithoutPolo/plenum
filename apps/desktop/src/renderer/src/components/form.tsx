@@ -199,7 +199,7 @@ export function SeatList({
             {i > 0 && <span className="text-[11px] text-faint">then</span>}
             <span
               title={gap}
-              className={`inline-flex h-7.5 items-center rounded-full border bg-panel ${gap ? 'border-warn/50 opacity-70' : 'border-line-strong'}`}
+              className={`inline-flex h-7.5 items-center rounded-full border bg-panel ${gap ? 'border-dashed border-warn' : 'border-line-strong'}`}
             >
               <SeatPicker
                 value={seat}
@@ -236,7 +236,7 @@ export function SeatList({
                   aria-label={`Move ${providerName(seat.provider)} up`}
                   title="Move up"
                   onClick={() => moveUp(i)}
-                  className="grid size-5.5 place-items-center rounded-full text-faint hover:bg-sunken hover:text-ink"
+                  className="grid size-6 place-items-center rounded-full text-faint hover:bg-sunken hover:text-ink"
                 >
                   <ArrowLeft className="size-3" />
                 </button>
@@ -245,7 +245,7 @@ export function SeatList({
                 type="button"
                 aria-label={`Remove ${providerName(seat.provider)}`}
                 onClick={() => onChange(seats.filter((_, j) => j !== i))}
-                className="mr-1 grid size-5.5 place-items-center rounded-full text-faint hover:bg-sunken hover:text-ink"
+                className="mr-1 grid size-6 place-items-center rounded-full text-faint hover:bg-sunken hover:text-ink"
               >
                 <X className="size-3" />
               </button>

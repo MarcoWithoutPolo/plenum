@@ -122,7 +122,9 @@ function ProjectCard({ summary, onOpen }: { summary: ProjectSummary; onOpen: () 
       className="group flex flex-col rounded-2xl border border-line bg-panel p-4.5 text-left shadow-card transition hover:-translate-y-px hover:border-line-strong"
     >
       <div className="flex items-center gap-2">
-        <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold">{project.name}</h3>
+        <h3 className="min-w-0 flex-1 truncate text-[15px] font-semibold" title={project.name}>
+          {project.name}
+        </h3>
         <StatusPill status={project.status} running={running} reason={project.statusReason} />
       </div>
       <p className="mt-1.5 line-clamp-2 min-h-[2.6em] text-[13px] leading-snug text-muted">
@@ -154,7 +156,9 @@ function ProjectCard({ summary, onOpen }: { summary: ProjectSummary; onOpen: () 
 
       <div className="mt-4 flex items-center gap-2 border-t border-line pt-3 text-[12px] text-faint">
         <GitBranch className="size-3.5 shrink-0" aria-hidden />
-        <span className="truncate">{folderName(project.repoPath)}</span>
+        <span className="truncate" title={project.repoPath}>
+          {folderName(project.repoPath)}
+        </span>
         {pendingApprovals > 0 ? (
           <span className="ml-auto shrink-0 rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
             Ready to merge

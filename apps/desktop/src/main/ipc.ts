@@ -7,8 +7,13 @@ import {
   streamProcess,
   type Engine,
 } from '@conclave/core';
+import { demoFailure } from './demo.js';
+
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
+
+/** The demo can make calls fail on purpose (CONCLAVE_DEMO_FAIL), for the tests. */
+const demo = process.env.CONCLAVE_DEMO === '1';
 
 /** Real providers from the registry; the demo's fake one never comes from the renderer. */
 const PROVIDERS = new Set<ProviderId>(REGISTRY.filter((p) => p.id !== 'fake').map((p) => p.id));
@@ -22,7 +27,10 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
   const update = (u: RunUpdate) => send(IPC.runUpdate, u);
 
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R | Promise<R>) =>
-    ipcMain.handle(channel, (_event: IpcMainInvokeEvent, ...args: unknown[]) => fn(...(args as A)));
+    ipcMain.handle(channel, (_event: IpcMainInvokeEvent, ...args: unknown[]) => {
+      if (demo) demoFailure(channel);
+      return fn(...(args as A));
+    });
 
   const adapter = (provider: unknown) => {
     if (typeof provider !== 'string' || !PROVIDERS.has(provider as ProviderId)) {

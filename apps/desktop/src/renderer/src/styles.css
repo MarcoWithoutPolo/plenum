@@ -11,12 +11,13 @@
   --border: #e4e1da;
   --border-strong: #d3cfc6;
   --text: #1c1b19;
-  --muted: #6b675f;
-  --faint: #9a958b;
+  --muted: #5f5b54;
+  /* Lighter than muted but still 4.5:1 on every surface (WCAG AA), as the integrity suite checks. */
+  --faint: #6c685f;
   --accent: #5b4fe0;
   --accent-soft: #ecebfd;
   --accent-text: #4033c4;
-  --ok: #1f8a4c;
+  --ok: #177a40;
   --ok-soft: #e3f4ea;
   --warn: #a15c07;
   --warn-soft: #fbefdb;
@@ -51,8 +52,9 @@
     --border-strong: #3a3b42;
     --text: #ecebe8;
     --muted: #a19e97;
-    --faint: #6f6c66;
-    --accent: #8c82ff;
+    --faint: #8f8c85;
+    /* White text on it passes 4.5:1 (buttons); accent-text stays light for text on dark. */
+    --accent: #6c61e8;
     --accent-soft: #24223d;
     --accent-text: #b4adff;
     --ok: #4cc283;
@@ -106,6 +108,8 @@ body {
 }
 
 body {
+  /* A long word or URL wraps instead of running out of its box (U16). */
+  overflow-wrap: anywhere;
   margin: 0;
   background: var(--bg);
   color: var(--text);
