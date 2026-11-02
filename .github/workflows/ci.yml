@@ -1,18 +1,27 @@
 name: CI
 
+# Each push and pull request: Ubuntu only (Linux minutes cost 1×), with the desktop end-to-end
+# suites and the two everyday rows of the UI integrity suite. About 8 billed minutes.
+# The full matrix (Windows 2×, macOS 10×), the control inventory and every integrity size run
+# on demand, on every release tag, and once a week (v1.0 C1/F13).
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Sunday night (UTC).
+    - cron: '0 22 * * 0'
 
 jobs:
-  check:
-    name: ${{ matrix.os }} / node ${{ matrix.node }}
-    runs-on: ${{ matrix.os }}
+  quick:
+    name: ubuntu / node ${{ matrix.node }}
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         node: [22, 24]
     steps:
       - uses: actions/checkout@v4
@@ -26,11 +35,49 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run desktop:build
-      - name: Desktop end-to-end (demo mode)
+      - name: Desktop end-to-end (demo mode, virtual display)
+        # The control inventory clicks every control on every screen: the full run only.
+        run: xvfb-run -a npm run -w @conclave/desktop e2e -- --grep-invert "every control on"
+      - name: Keep the end-to-end traces of a failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-ubuntu-node${{ matrix.node }}
+          path: apps/desktop/test-results/
+          retention-days: 7
+
+  full:
+    name: ${{ matrix.os }} / node ${{ matrix.node }} (full)
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22, 24]
+    env:
+      # Every window size in the UI integrity suite, not only the two everyday ones.
+      CONCLAVE_FULL_MATRIX: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run desktop:build
+      - name: Desktop end-to-end, every suite
         if: runner.os != 'Linux'
         run: npm run -w @conclave/desktop e2e
+      - name: Desktop end-to-end, every suite (virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run -w @conclave/desktop e2e
       - name: Keep the end-to-end traces of a failure
-        if: failure() && runner.os != 'Linux'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ matrix.os }}-node${{ matrix.node }}

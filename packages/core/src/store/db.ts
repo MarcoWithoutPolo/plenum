@@ -1,6 +1,6 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type * as Sqlite from 'node:sqlite';
 import type { DatabaseSync } from 'node:sqlite';
 import { findReplacement } from '../brain/similar.js';
@@ -303,7 +303,46 @@ export function openDatabase(path = join(defaultHome(), 'conclave.db')): Databas
   const db = new (sqlite().DatabaseSync)(path);
   // The wait first: switching to WAL needs a moment's lock another process may hold (E11).
   db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  if (path !== ':memory:') backupBeforeMigrating(db, path);
   migrate(db);
+  return db;
+}
+
+/** How many old-version backups are kept next to the database. */
+const KEEP_BACKUPS = 3;
+
+/**
+ * Before an upgrade changes the database, copy it to `conclave.db.bak-<version>` (v1.0 C8), and
+ * keep the last three. VACUUM INTO writes a consistent copy even while the database is open.
+ */
+function backupBeforeMigrating(db: DatabaseSync, path: string): void {
+  const { user_version: v } = db.prepare('PRAGMA user_version').get() as { user_version: number };
+  if (v === 0 || v >= MIGRATIONS.length) return;
+  const target = `${path}.bak-${v}`;
+  if (!existsSync(target)) db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+  const dir = dirname(path);
+  const base = basename(path);
+  const backups = readdirSync(dir)
+    .filter((f) => f.startsWith(`${base}.bak-`))
+    .map((f) => ({ f, v: Number(f.slice(`${base}.bak-`.length)) }))
+    .filter((b) => Number.isInteger(b.v))
+    .sort((a, b) => b.v - a.v);
+  for (const old of backups.slice(KEEP_BACKUPS)) rmSync(join(dir, old.f), { force: true });
+}
+
+/** Test support: a database at an older schema version (the first `version` migrations). */
+export function databaseAtVersion(path: string, version: number): DatabaseSync {
+  mkdirSync(dirname(path), { recursive: true });
+  const db = new (sqlite().DatabaseSync)(path);
+  db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  for (let v = 0; v < version; v++) {
+    transaction(db, () => {
+      const step = MIGRATIONS[v]!;
+      if (typeof step === 'string') db.exec(step);
+      else step(db);
+      db.exec(`PRAGMA user_version = ${v + 1}`);
+    });
+  }
   return db;
 }
 

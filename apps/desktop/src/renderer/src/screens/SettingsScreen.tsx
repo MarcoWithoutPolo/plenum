@@ -605,8 +605,58 @@ export function SettingsScreen() {
               </label>
             ))}
           </Section>
+
+          <About />
         </div>
       </div>
     </div>
+  );
+}
+
+/** Settings → About (v1.0 C9): the version, and a diagnostics report to save. */
+function About() {
+  const [info, setInfo] = useState<{ version: string; electron: string; platform: string } | null>(
+    null,
+  );
+  const [saved, setSaved] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    settle(api().about.info().then(setInfo));
+  }, []);
+  const exportLogs = async () => {
+    setBusy(true);
+    try {
+      const r = await api().about.exportLogs();
+      if (r) setSaved(r.path);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Section
+      id="about"
+      title="About"
+      hint="What's installed, and what to send when something goes wrong."
+    >
+      <Row
+        label={info ? `Conclave ${info.version}` : 'Conclave'}
+        hint={info ? `Electron ${info.electron} · ${info.platform}` : ' '}
+      >
+        <span />
+      </Row>
+      <Row
+        label="Export logs"
+        hint="A text file with versions, recent project events and settings. Anything that looks like a key or token is removed, and nothing is sent anywhere: you choose where to save it."
+      >
+        <Button onClick={() => settle(exportLogs())} disabled={busy}>
+          {busy ? 'Saving…' : 'Export logs…'}
+        </Button>
+      </Row>
+      {saved && (
+        <p role="status" className="px-4 py-3 text-[12.5px] text-muted [overflow-wrap:anywhere]">
+          Saved to {saved}
+        </p>
+      )}
+    </Section>
   );
 }

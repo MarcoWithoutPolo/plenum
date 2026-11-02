@@ -73,6 +73,7 @@
   ],
   "settings": [
     "button: Add quiet hours",
+    "button: Export logs…",
     "button: Save",
     "button: Show shortcuts",
     "radio: #",

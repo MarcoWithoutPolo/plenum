@@ -1,8 +1,15 @@
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, shell } from 'electron';
 import type { AppSettings, AppearanceSettings } from '@conclave/shared';
-import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
+import {
+  BrainManager,
+  Engine,
+  GitHub,
+  diagnosticsReport,
+  silenceSqliteWarning,
+} from '@conclave/core';
 import {
   demoAdapters,
   demoData,
@@ -88,6 +95,35 @@ function createWindow(): BrowserWindow {
 
 function registerSettings(engine: Engine, brains: BrainManager): void {
   ipcMain.handle(IPC.settingsGet, (): AppSettings => engine.store.settings.get());
+  ipcMain.handle(IPC.about, () => ({
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    platform: process.platform,
+  }));
+  // Export logs (C9): a redacted report, saved where you choose; nothing is sent anywhere.
+  ipcMain.handle(IPC.diagnosticsExport, async () => {
+    if (demo) demoFailure(IPC.diagnosticsExport);
+    const name = `conclave-diagnostics-${new Date().toISOString().slice(0, 10)}.txt`;
+    const target =
+      demo && process.env.CONCLAVE_E2E_SAVE
+        ? process.env.CONCLAVE_E2E_SAVE
+        : (
+            await dialog.showSaveDialog({
+              title: 'Save the diagnostics report',
+              defaultPath: join(app.getPath('downloads'), name),
+              filters: [{ name: 'Text', extensions: ['txt'] }],
+            })
+          ).filePath;
+    if (!target) return null;
+    const report = await diagnosticsReport(engine, {
+      version: app.getVersion(),
+      electron: process.versions.electron,
+      platform: process.platform,
+      arch: process.arch,
+    });
+    writeFileSync(target, report);
+    return { path: target };
+  });
   // Read synchronously by the preload, so the first paint already has the right look.
   ipcMain.on(IPC.appearanceGet, (event) => {
     event.returnValue = engine.store.settings.get().appearance;

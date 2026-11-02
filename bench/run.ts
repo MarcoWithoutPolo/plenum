@@ -54,7 +54,7 @@ const { values } = parseArgs({
     contenders: { type: 'string', default: 'claude,codex,antigravity,conclave' },
     /**
      * Force Conclave's team, e.g. "builder:antigravity,reviewer:claude+codex". A seat can name a
-     * model: "builder:codex@gpt-6-luna+claude".
+     * model and an effort: "builder:codex@gpt-6-luna~medium+claude".
      */
     team: { type: 'string' },
     /** Conclave's permission level (Antigravity can only build at 2 or 5). */
@@ -91,8 +91,14 @@ const team = values.team
         return [
           role,
           providers.split('+').map((seat) => {
-            const [provider, model] = seat.split('@') as [string, string | undefined];
-            return { provider: provider as ProviderId, ...(model && { model }) };
+            // provider[@model][~effort], e.g. "codex~medium" or "claude@sonnet~low".
+            const [who, effort] = seat.split('~') as [string, string | undefined];
+            const [provider, model] = who.split('@') as [string, string | undefined];
+            return {
+              provider: provider as ProviderId,
+              ...(model && { model }),
+              ...(effort && { effort }),
+            };
           }),
         ];
       }),
@@ -104,7 +110,7 @@ const variant = `${
     ? `-${values.team
         .replace(/(?:^|,)([a-z])[a-z]*:/g, (m, r: string) => `${m.startsWith(',') ? ',' : ''}${r}=`)
         .replace(/,/g, '-')
-        .replace(/[@.:]/g, '_')}`
+        .replace(/[@.:~]/g, '_')}`
     : ''
 }${parallel > 1 ? `-${parallel}l` : ''}`;
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);

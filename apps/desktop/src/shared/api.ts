@@ -400,6 +400,12 @@ export interface ConclaveApi {
     get(): Promise<AppSettings>;
     update(patch: SettingsPatch): Promise<AppSettings>;
   };
+  /** Settings → About (v1.0 C9). */
+  about: {
+    info(): Promise<{ version: string; electron: string; platform: string }>;
+    /** Save the diagnostics report where you choose; null when you cancel. */
+    exportLogs(): Promise<{ path: string } | null>;
+  };
   local: {
     /** Download a model into Ollama, after the user confirms (several GB). */
     pull(model: string): Promise<{ ok: boolean; cancelled?: boolean; error?: string }>;
@@ -418,6 +424,8 @@ export const IPC = {
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
   appearanceGet: 'appearance:get',
+  about: 'app:about',
+  diagnosticsExport: 'diagnostics:export',
   openProject: 'app:open-project',
   accountsList: 'accounts:list',
   accountsSignIn: 'accounts:sign-in',
