@@ -57,3 +57,4 @@ export const VERSION = '0.0.0';
 export * from './crash.js';
 export * from './seats.js';
 export * from './diagnostics.js';
+export * from './mcp.js';

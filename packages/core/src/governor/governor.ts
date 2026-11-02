@@ -1,4 +1,4 @@
-import type { ProviderId, Seat } from '@conclave/shared';
+import { providerEntry, type ProviderId, type Seat } from '@conclave/shared';
 import type { RunResult } from '../collect.js';
 import type { QuotaReading } from '../store/store.js';
 import { ceilingFor, policyBlock, type GovernorPolicy } from './policy.js';
@@ -50,16 +50,29 @@ export class Governor {
     this.policy = opts.policy;
   }
 
+  /** The AIs that share `provider`'s plan, itself included (F12). */
+  private plan(provider: ProviderId): ProviderId[] {
+    const groups = this.policy?.limits().sharedPlans ?? [];
+    return groups.find((g) => g.includes(provider)) ?? [provider];
+  }
+
   availability(provider: ProviderId): Availability {
     const now = this.now();
     const block = this.policy && policyBlock(this.policy, provider, new Date(now));
     if (block) return { ok: false, ...block };
-    const cool = this.cooldowns.get(provider);
-    if (cool && cool.until > now) return { ok: false, reason: cool.reason, until: cool.until };
+    const plan = this.plan(provider);
+    // A limit on an AI that shares this one's plan is this one's limit too.
+    const via = (p: ProviderId) =>
+      p === provider ? '' : ` (on ${providerEntry(p)?.short ?? p}, which shares its plan)`;
+    for (const p of plan) {
+      const cool = this.cooldowns.get(p);
+      if (cool && cool.until > now)
+        return { ok: false, reason: cool.reason + via(p), until: cool.until };
+    }
 
     const ceiling = ceilingFor(this.policy, provider, this.ceiling);
     for (const q of this.readings()) {
-      if (q.provider !== provider || q.utilization === null) continue;
+      if (!plan.includes(q.provider) || q.utilization === null) continue;
       // A reading only counts until its window resets.
       if (q.resetsAt !== null && q.resetsAt <= now) continue;
       if (q.window === 'limit' && q.resetsAt === null && now - q.at > this.base) continue;
@@ -72,11 +85,11 @@ export class Governor {
         return {
           ok: false,
           reason:
-            q.window === 'limit'
+            (q.window === 'limit'
               ? 'usage limit reached'
               : this.policy && left > 0
                 ? `leaving ${left}% for you, ${windowName(q.window)} at ${pct}%`
-                : `${windowName(q.window)} at ${pct}%`,
+                : `${windowName(q.window)} at ${pct}%`) + via(q.provider),
           until: q.resetsAt,
         };
       }

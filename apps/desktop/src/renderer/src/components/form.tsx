@@ -684,3 +684,32 @@ export function TestCommandField({
     </div>
   );
 }
+
+/** An on/off switch: a checkbox with the switch role, drawn as a switch. */
+export function Switch({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  // The hidden checkbox sits inside the drawn switch, so its own spot is the switch itself.
+  return (
+    <span className="relative inline-flex shrink-0">
+      <input
+        type="checkbox"
+        role="switch"
+        aria-label={label}
+        disabled={disabled}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="peer sr-only"
+      />
+      <span className="relative h-5 w-9 shrink-0 rounded-full bg-line-strong transition peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-disabled:opacity-50 after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
+    </span>
+  );
+}

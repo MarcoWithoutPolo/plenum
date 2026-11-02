@@ -76,6 +76,11 @@ interface State {
   refreshProviders(): Promise<void>;
   refreshThreads(): Promise<void>;
   loadThread(id: string): Promise<ThreadDetail | null>;
+  /**
+   * Goes up each time you open a screen. Screens are keyed by it, so a round that finishes and
+   * moves a new council to its saved thread doesn't remount it and wipe what you're typing.
+   */
+  screenSeq: number;
   open(screen: Screen): void;
   sendChat(threadId: string | undefined, text: string, seat: Seat): Promise<void>;
   askCouncil(
@@ -108,6 +113,7 @@ export const useApp = create<State>((set, get) => ({
   threads: [],
   details: {},
   screen: { name: 'chat' },
+  screenSeq: 0,
   liveChats: {},
   liveCouncils: {},
   councilSeats: {},
@@ -158,7 +164,7 @@ export const useApp = create<State>((set, get) => ({
   },
 
   open(screen) {
-    set({ screen });
+    set((s) => ({ screen, screenSeq: s.screenSeq + 1 }));
     if ('threadId' in screen && screen.threadId) settle(get().loadThread(screen.threadId));
   },
 

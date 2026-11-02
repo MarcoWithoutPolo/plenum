@@ -7,3 +7,4 @@ out/
 test-results/
 playwright-report/
 apps/desktop/e2e/integrity/controls.json
+apps/desktop/release/

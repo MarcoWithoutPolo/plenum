@@ -1,0 +1,8 @@
+{
+  "name": "photos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "python -m unittest"
+  }
+}

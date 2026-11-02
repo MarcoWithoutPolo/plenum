@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Emberlight</title>
+    <meta
+      name="description"
+      content="Keep a tiny ember alight as it rises up a cold chimney. Catch sparks, dodge frost."
+    />
+    <meta name="theme-color" content="#0d0a18" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body data-state="ready">
+    <main class="app">
+      <header class="hud">
+        <h1 class="title"><span aria-hidden="true" class="title-mark"></span>Emberlight</h1>
+        <dl class="scores">
+          <div>
+            <dt>Score</dt>
+            <dd data-score>0</dd>
+          </div>
+          <div>
+            <dt>Best</dt>
+            <dd data-best>0</dd>
+          </div>
+        </dl>
+        <button type="button" class="hud-btn" data-pause aria-pressed="false" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="6" y="5" width="4" height="14" rx="1.5" />
+            <rect x="14" y="5" width="4" height="14" rx="1.5" />
+          </svg>
+          <span>Pause</span>
+        </button>
+      </header>
+
+      <div class="stage">
+        <button type="button" class="touch touch-left" data-move="left" aria-label="Left">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M15 5 8 12l7 7" />
+          </svg>
+        </button>
+
+        <div class="screen">
+          <canvas
+            id="game"
+            width="360"
+            height="560"
+            role="img"
+            aria-label="The chimney. Your ember glows near the bottom; sparks and frost fall from above."
+          ></canvas>
+
+          <div class="overlay" data-overlay>
+            <div class="panel">
+              <p class="kicker" data-kicker>A tiny game about staying warm</p>
+              <h2 data-headline>Keep the ember alight</h2>
+              <p data-message>
+                Your ember cools every second. Catch golden <strong class="spark">sparks</strong> to
+                warm up and dodge blue <strong class="frost">frost</strong>. The colder you get, the
+                less you can see.
+              </p>
+              <button type="button" class="start" data-start>Start</button>
+              <p class="keys">
+                <kbd>Space</kbd> start · <kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd> move ·
+                <kbd>P</kbd> pause
+              </p>
+              <section class="table" data-table hidden aria-labelledby="table-title">
+                <h3 id="table-title">High scores</h3>
+                <ol data-scores></ol>
+              </section>
+            </div>
+          </div>
+
+          <p class="paused-label" aria-hidden="true">Paused</p>
+        </div>
+
+        <button type="button" class="touch touch-right" data-move="right" aria-label="Right">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m9 5 7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      <p class="visually-hidden" role="status" data-announce></p>
+    </main>
+  </body>
+</html>

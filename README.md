@@ -103,6 +103,43 @@ The Accounts screen shows what's installed and connected, opens each sign-in in 
 
 ## Get started
 
+### Install
+
+Download the installer for your system from the [latest release](https://github.com/MarcoWithoutPolo/conclave/releases/latest):
+
+- **Windows:** `Conclave-Setup-<version>.exe`. It installs for you alone, with no administrator prompt. The installer
+  isn't signed yet, so Windows SmartScreen may warn about it: choose **More info**, then **Run anyway**.
+- **macOS:** `Conclave-<version>.dmg`. It isn't signed yet: the first time, right-click Conclave in Applications and
+  choose **Open**.
+- **Linux:** `Conclave-<version>.AppImage` (make it executable and run it) or the `.deb`.
+
+The first start finds the AI CLIs you have, helps you sign in to each through its own login, and builds your team. One
+AI is enough to start; two or more from different companies unlock councils, independent reviews and limit backup.
+
+Installed copies update themselves from the releases: a new version downloads quietly and installs when you restart,
+never while a project is building. Your data stays in `~/.conclave` through installs, updates and uninstalls, and the
+database is backed up before any upgrade changes it.
+
+### Background mode
+
+Closing the window can leave your projects working: Conclave stays in the system tray (the menu bar on a Mac), and the
+tray menu shows what's running and what waits in the Inbox, and pauses or quits everything. Settings → Background
+chooses what closing does and whether Conclave opens when you sign in to your computer.
+
+### Use it from Claude Code (MCP)
+
+Conclave is also an MCP server, so Claude Code or any MCP client can ask a council, see your projects and the Inbox,
+queue a task and answer a project's question. Merges, pushes and installs still wait for you. Settings → About shows
+the exact line for your install; it looks like this:
+
+```bash
+claude mcp add conclave -- "C:\Users\you\AppData\Local\Programs\Conclave\Conclave.exe" --mcp
+```
+
+From a clone, `npm --prefix <clone> run -s conclave -- mcp` does the same.
+
+### From source
+
 Requires Node.js 22.13 or newer, and git.
 
 ```bash
@@ -128,6 +165,7 @@ npm run conclave -- project new ./my-repo --goal "..." --test "npm test" --paral
 npm run conclave -- project run <id>           # work until the goal is met
 npm run conclave -- project steer <id> "..."   # tell it what to change (--apply to apply)
 npm run conclave -- project status <id>
+npm run conclave -- mcp                        # serve Conclave to an MCP client over stdio
 ```
 
 Data lives in `~/.conclave` (set `CONCLAVE_HOME` to move it).
@@ -162,6 +200,8 @@ test/fixtures     recorded CLI output that the adapter tests replay
 ```bash
 npm run check                    # lint, format, typecheck, unit tests
 npm run e2e                      # build, then drive the real app (demo mode) with Playwright
+npm run -w @conclave/desktop dist   # the installer for this system, in apps/desktop/release/
+npx tsx --conditions=development bench/soak.ts --minutes 10   # the chaos soak (Q4)
 ```
 
 Every adapter maps its CLI's output onto one event format, and tests replay recorded output, so nothing above the adapter layer depends on a particular CLI. Live checks against the real CLIs are opt-in: `CONCLAVE_LIVE=1 npm test`, and the private-test scenarios in `apps/desktop/e2e/scenario-*.spec.ts`.

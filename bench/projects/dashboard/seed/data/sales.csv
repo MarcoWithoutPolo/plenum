@@ -1,0 +1,501 @@
+date,region,category,product,units,revenue
+2025-01-02,North,Office Supplies,"Paper, A4, 500 sheets",16,108.8
+2025-01-02,East,Furniture,"Desk Lamp, LED",6,208.5
+2025-01-03,South,Furniture,Bookshelf,2,259.98
+2025-01-04,North,Electronics,"Headphones, Noise Cancelling",4,599.96
+2025-01-06,West,Electronics,Wireless Mouse,1,22.49
+2025-01-06,West,Furniture,Standing Desk,3,1497
+2025-01-08,South,Electronics,USB-C Hub,15,592.5
+2025-01-08,East,Electronics,USB-C Hub,3,106.65
+2025-01-09,North,Apparel,Hoodie,18,765
+2025-01-11,North,Furniture,Office Chair,4,788.4
+2025-01-11,South,Furniture,Office Chair,1,197.1
+2025-01-13,West,Electronics,USB-C Hub,1,39.5
+2025-01-13,North,Electronics,Wireless Mouse,11,274.89
+2025-01-14,East,Furniture,"Desk Lamp, LED",1,34.75
+2025-01-15,North,Electronics,Wireless Mouse,20,499.8
+2025-01-15,West,Electronics,USB-C Hub,5,197.5
+2025-01-15,North,Apparel,Cap,9,143.91
+2025-01-16,North,Office Supplies,Sticky Notes,4,12.6
+2025-01-16,West,Office Supplies,"Paper, A4, 500 sheets",10,68
+2025-01-16,South,Apparel,Hoodie,1,42.5
+2025-01-17,South,Furniture,Bookshelf,1,129.99
+2025-01-17,West,Electronics,USB-C Hub,10,355.5
+2025-01-17,South,Office Supplies,Stapler,3,36.75
+2025-01-19,West,Furniture,"Desk Lamp, LED",13,406.58
+2025-01-19,North,Apparel,Hoodie,10,425
+2025-01-20,West,Furniture,Bookshelf,4,519.96
+2025-01-21,North,Apparel,T-Shirt,7,126
+2025-01-21,West,Furniture,Office Chair,2,438
+2025-01-21,North,Furniture,Office Chair,1,219
+2025-01-21,East,Office Supplies,"Paper, A4, 500 sheets",17,115.6
+2025-01-22,South,Furniture,Office Chair,3,591.3
+2025-01-22,West,Electronics,"Monitor 27""",2,578
+2025-01-22,East,Apparel,Hoodie,3,127.5
+2025-01-22,East,Apparel,T-Shirt,8,129.6
+2025-01-23,South,Apparel,T-Shirt,13,234
+2025-01-23,East,Electronics,Wireless Mouse,5,112.46
+2025-01-23,East,Apparel,Hoodie,19,807.5
+2025-01-24,East,Furniture,"Desk Lamp, LED",5,173.75
+2025-01-25,East,Furniture,"Desk Lamp, LED",12,417
+2025-01-27,West,Electronics,"Headphones, Noise Cancelling",3,404.97
+2025-01-28,South,Electronics,"Headphones, Noise Cancelling",3,404.97
+2025-01-29,West,Electronics,"Monitor 27""",4,1040.4
+2025-01-29,East,Electronics,Wireless Mouse,1,24.99
+2025-01-29,West,Office Supplies,Gel Pens (12-pack),2,19.98
+2025-01-29,South,Apparel,T-Shirt,19,307.8
+2025-01-30,South,Electronics,"Headphones, Noise Cancelling",2,269.98
+2025-01-31,North,Furniture,Office Chair,1,219
+2025-02-01,South,Electronics,Webcam HD,12,719.4
+2025-02-01,West,Furniture,Standing Desk,2,998
+2025-02-01,South,Furniture,Standing Desk,1,449.1
+2025-02-01,West,Electronics,"Headphones, Noise Cancelling",2,299.98
+2025-02-02,East,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-02-03,South,Apparel,Cap,9,143.91
+2025-02-04,West,Office Supplies,Notebook A5,14,63
+2025-02-06,East,Apparel,Cap,5,79.95
+2025-02-08,East,Office Supplies,"Paper, A4, 500 sheets",19,129.2
+2025-02-09,North,Electronics,"Headphones, Noise Cancelling",2,299.98
+2025-02-10,West,Furniture,Standing Desk,2,898.2
+2025-02-10,East,Electronics,USB-C Hub,17,671.5
+2025-02-11,East,Furniture,Bookshelf,4,519.96
+2025-02-11,North,Apparel,T-Shirt,19,342
+2025-02-12,West,Furniture,Office Chair,1,197.1
+2025-02-12,North,Electronics,USB-C Hub,20,790
+2025-02-13,West,Electronics,"Headphones, Noise Cancelling",1,149.99
+2025-02-13,West,Office Supplies,"Paper, A4, 500 sheets",15,102
+2025-02-13,North,Apparel,Hoodie,20,765
+2025-02-14,West,Furniture,Standing Desk,3,1497
+2025-02-14,South,Electronics,USB-C Hub,16,632
+2025-02-15,East,Apparel,T-Shirt,5,90
+2025-02-16,West,Furniture,Bookshelf,4,467.96
+2025-02-16,North,Apparel,Hoodie,4,153
+2025-02-18,East,Apparel,T-Shirt,4,72
+2025-02-19,South,Furniture,Bookshelf,4,519.96
+2025-02-20,South,Office Supplies,Sticky Notes,17,53.55
+2025-02-23,East,Electronics,"Monitor 27""",4,1156
+2025-02-23,West,Office Supplies,Gel Pens (12-pack),15,149.85
+2025-02-23,North,Office Supplies,Stapler,1,12.25
+2025-02-25,East,Office Supplies,Gel Pens (12-pack),14,139.86
+2025-02-25,North,Apparel,Hoodie,18,765
+2025-02-27,North,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-02-27,South,Electronics,USB-C Hub,11,434.5
+2025-02-28,North,Office Supplies,Stapler,15,165.38
+2025-03-01,North,Electronics,Wireless Mouse,19,474.81
+2025-03-01,West,Furniture,Bookshelf,4,519.96
+2025-03-03,East,Apparel,Cap,16,255.84
+2025-03-03,South,Office Supplies,Notebook A5,13,58.5
+2025-03-03,North,Apparel,T-Shirt,8,144
+2025-03-04,North,Office Supplies,Gel Pens (12-pack),10,99.9
+2025-03-05,East,Apparel,Hoodie,14,595
+2025-03-06,East,Office Supplies,Notebook A5,13,58.5
+2025-03-06,South,Furniture,Bookshelf,2,259.98
+2025-03-07,South,Office Supplies,Sticky Notes,6,17.01
+2025-03-07,West,Office Supplies,"Paper, A4, 500 sheets",17,115.6
+2025-03-07,South,Office Supplies,Gel Pens (12-pack),16,143.86
+2025-03-08,West,Apparel,Hoodie,11,420.75
+2025-03-10,North,Office Supplies,Gel Pens (12-pack),4,35.96
+2025-03-10,North,Office Supplies,Notebook A5,8,36
+2025-03-12,East,Electronics,"Headphones, Noise Cancelling",2,299.98
+2025-03-12,North,Electronics,Wireless Mouse,17,424.83
+2025-03-13,West,Office Supplies,Stapler,8,98
+2025-03-14,South,Office Supplies,Sticky Notes,4,12.6
+2025-03-15,West,Apparel,Hoodie,11,467.5
+2025-03-15,North,Apparel,Cap,13,207.87
+2025-03-15,East,Furniture,Bookshelf,2,259.98
+2025-03-16,South,Furniture,Standing Desk,2,998
+2025-03-16,West,Furniture,Bookshelf,4,467.96
+2025-03-17,North,Electronics,Webcam HD,14,839.3
+2025-03-18,South,Apparel,Cap,12,191.88
+2025-03-18,North,Furniture,"Desk Lamp, LED",14,486.5
+2025-03-19,West,Apparel,T-Shirt,3,54
+2025-03-20,West,Electronics,USB-C Hub,14,553
+2025-03-20,South,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-03-21,South,Office Supplies,"Paper, A4, 500 sheets",16,108.8
+2025-03-21,North,Apparel,Hoodie,10,425
+2025-03-21,West,Apparel,Hoodie,11,467.5
+2025-03-21,East,Office Supplies,"Paper, A4, 500 sheets",15,91.8
+2025-03-21,West,Apparel,Hoodie,5,212.5
+2025-03-21,South,Furniture,Bookshelf,1,129.99
+2025-03-22,North,Office Supplies,Sticky Notes,9,25.51
+2025-03-22,West,Electronics,Webcam HD,1,53.96
+2025-03-22,West,Electronics,Webcam HD,14,755.37
+2025-03-23,South,Office Supplies,"Paper, A4, 500 sheets",17,104.04
+2025-03-24,East,Electronics,USB-C Hub,2,79
+2025-03-24,North,Furniture,Standing Desk,3,1497
+2025-03-25,North,Apparel,Cap,5,79.95
+2025-03-26,South,Electronics,Webcam HD,4,239.8
+2025-03-27,North,Apparel,Hoodie,5,212.5
+2025-03-27,West,Office Supplies,Gel Pens (12-pack),14,125.87
+2025-03-28,West,Furniture,Standing Desk,1,499
+2025-03-30,West,Furniture,"Desk Lamp, LED",19,660.25
+2025-03-30,West,Furniture,"Desk Lamp, LED",1,34.75
+2025-03-31,East,Apparel,Hoodie,1,42.5
+2025-03-31,West,Furniture,Office Chair,4,876
+2025-03-31,South,Office Supplies,Sticky Notes,12,37.8
+2025-04-02,West,Electronics,"Headphones, Noise Cancelling",1,149.99
+2025-04-04,East,Apparel,Hoodie,13,552.5
+2025-04-04,West,Office Supplies,Notebook A5,13,52.65
+2025-04-04,South,Electronics,Webcam HD,16,959.2
+2025-04-05,East,Office Supplies,Sticky Notes,19,59.85
+2025-04-05,North,Office Supplies,Gel Pens (12-pack),6,59.94
+2025-04-06,West,Apparel,T-Shirt,10,180
+2025-04-06,East,Office Supplies,Notebook A5,13,58.5
+2025-04-06,North,Office Supplies,"Paper, A4, 500 sheets",20,136
+2025-04-07,West,Furniture,Standing Desk,3,1347.3
+2025-04-07,East,Apparel,Hoodie,17,722.5
+2025-04-12,East,Office Supplies,Notebook A5,6,27
+2025-04-13,East,Apparel,T-Shirt,2,36
+2025-04-14,South,Electronics,Webcam HD,4,239.8
+2025-04-15,South,Electronics,USB-C Hub,11,391.05
+2025-04-15,West,Electronics,USB-C Hub,5,197.5
+2025-04-16,South,Electronics,Wireless Mouse,6,149.94
+2025-04-16,South,Apparel,T-Shirt,4,72
+2025-04-16,North,Electronics,Webcam HD,9,539.55
+2025-04-17,South,Apparel,Hoodie,20,850
+2025-04-17,South,Furniture,Bookshelf,4,519.96
+2025-04-19,East,Apparel,Cap,20,319.8
+2025-04-19,North,Furniture,Bookshelf,2,233.98
+2025-04-19,South,Apparel,Cap,3,47.97
+2025-04-20,West,Furniture,Standing Desk,2,998
+2025-04-21,East,Office Supplies,"Paper, A4, 500 sheets",3,20.4
+2025-04-21,North,Office Supplies,Notebook A5,10,45
+2025-04-21,East,Apparel,T-Shirt,18,324
+2025-04-22,South,Electronics,USB-C Hub,10,395
+2025-04-23,East,Apparel,Hoodie,16,680
+2025-04-24,East,Office Supplies,Stapler,14,154.35
+2025-04-24,East,Office Supplies,Notebook A5,13,58.5
+2025-04-24,East,Apparel,Hoodie,16,680
+2025-04-24,North,Electronics,"Monitor 27""",4,1156
+2025-04-25,South,Apparel,T-Shirt,2,32.4
+2025-04-26,East,Electronics,"Headphones, Noise Cancelling",2,269.98
+2025-04-27,South,Furniture,Standing Desk,2,998
+2025-04-30,West,Office Supplies,Notebook A5,9,36.45
+2025-05-01,West,Office Supplies,Stapler,4,49
+2025-05-02,North,Office Supplies,Sticky Notes,17,53.55
+2025-05-03,East,Apparel,Hoodie,10,425
+2025-05-04,South,Electronics,Webcam HD,11,659.45
+2025-05-05,South,Office Supplies,Stapler,12,147
+2025-05-05,East,Furniture,Office Chair,1,197.1
+2025-05-05,East,Office Supplies,Sticky Notes,13,40.95
+2025-05-06,East,Apparel,Hoodie,6,255
+2025-05-08,West,Furniture,Office Chair,3,657
+2025-05-08,South,Office Supplies,Gel Pens (12-pack),8,79.92
+2025-05-10,South,Electronics,Webcam HD,3,179.85
+2025-05-12,South,Apparel,T-Shirt,7,126
+2025-05-12,East,Furniture,Bookshelf,3,389.97
+2025-05-13,North,Furniture,Office Chair,3,657
+2025-05-14,East,Office Supplies,Sticky Notes,13,40.95
+2025-05-15,East,Apparel,Hoodie,7,267.75
+2025-05-15,East,Furniture,Office Chair,2,438
+2025-05-15,East,Office Supplies,"Paper, A4, 500 sheets",19,116.28
+2025-05-15,West,Furniture,Standing Desk,2,898.2
+2025-05-15,North,Electronics,Wireless Mouse,19,474.81
+2025-05-17,West,Office Supplies,Sticky Notes,17,53.55
+2025-05-18,East,Apparel,T-Shirt,7,126
+2025-05-19,North,Furniture,"Desk Lamp, LED",12,417
+2025-05-20,West,Apparel,Cap,7,111.93
+2025-05-20,South,Office Supplies,"Paper, A4, 500 sheets",19,129.2
+2025-05-22,West,Office Supplies,Notebook A5,10,45
+2025-05-22,West,Apparel,Cap,5,79.95
+2025-05-23,North,Furniture,Standing Desk,4,1996
+2025-05-23,West,Furniture,Office Chair,3,657
+2025-05-23,East,Electronics,"Monitor 27""",1,260.1
+2025-05-25,West,Office Supplies,Sticky Notes,6,18.9
+2025-05-26,North,Apparel,Cap,9,143.91
+2025-05-27,North,Office Supplies,Gel Pens (12-pack),5,49.95
+2025-05-30,West,Furniture,Standing Desk,1,499
+2025-05-30,North,Electronics,Webcam HD,5,299.75
+2025-05-31,East,Apparel,Hoodie,10,425
+2025-05-31,East,Office Supplies,Sticky Notes,19,59.85
+2025-05-31,East,Electronics,Wireless Mouse,1,24.99
+2025-06-01,South,Apparel,Hoodie,4,170
+2025-06-01,South,Furniture,Bookshelf,1,129.99
+2025-06-03,East,Furniture,Bookshelf,3,389.97
+2025-06-03,South,Apparel,T-Shirt,13,234
+2025-06-04,East,Office Supplies,Sticky Notes,19,53.87
+2025-06-05,East,Office Supplies,Gel Pens (12-pack),10,99.9
+2025-06-06,East,Apparel,T-Shirt,4,72
+2025-06-07,East,Apparel,Hoodie,6,255
+2025-06-08,North,Office Supplies,Sticky Notes,1,3.15
+2025-06-08,West,Office Supplies,Notebook A5,5,20.25
+2025-06-08,North,Apparel,T-Shirt,4,72
+2025-06-11,South,Office Supplies,"Paper, A4, 500 sheets",14,95.2
+2025-06-13,South,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-06-14,East,Electronics,Webcam HD,3,179.85
+2025-06-16,West,Furniture,"Desk Lamp, LED",2,69.5
+2025-06-16,East,Electronics,Webcam HD,17,1019.15
+2025-06-16,West,Furniture,Office Chair,1,219
+2025-06-16,South,Apparel,Hoodie,2,85
+2025-06-17,West,Furniture,Standing Desk,4,1996
+2025-06-18,West,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-06-18,West,Office Supplies,Sticky Notes,19,59.85
+2025-06-19,East,Furniture,Office Chair,3,657
+2025-06-19,East,Electronics,Webcam HD,13,779.35
+2025-06-20,South,Apparel,T-Shirt,4,64.8
+2025-06-20,East,Office Supplies,Notebook A5,13,58.5
+2025-06-21,West,Electronics,"Headphones, Noise Cancelling",1,134.99
+2025-06-21,East,Office Supplies,Stapler,19,232.75
+2025-06-22,East,Apparel,Hoodie,9,382.5
+2025-06-23,West,Office Supplies,Sticky Notes,20,63
+2025-06-23,East,Apparel,T-Shirt,17,306
+2025-06-23,North,Furniture,Bookshelf,2,259.98
+2025-06-24,West,Furniture,"Desk Lamp, LED",12,417
+2025-06-24,North,Office Supplies,"Paper, A4, 500 sheets",15,91.8
+2025-06-26,South,Office Supplies,Notebook A5,4,18
+2025-06-26,South,Furniture,Standing Desk,2,998
+2025-06-27,West,Apparel,T-Shirt,18,324
+2025-06-28,North,Electronics,Wireless Mouse,15,374.85
+2025-06-28,North,Electronics,"Headphones, Noise Cancelling",1,134.99
+2025-06-29,West,Furniture,Bookshelf,3,389.97
+2025-06-30,West,Apparel,Hoodie,13,552.5
+2025-06-30,South,Furniture,Office Chair,4,876
+2025-07-01,East,Furniture,Office Chair,2,438
+2025-07-03,East,Electronics,USB-C Hub,1,35.55
+2025-07-06,North,Apparel,Cap,16,255.84
+2025-07-09,South,Furniture,Bookshelf,2,259.98
+2025-07-10,West,Apparel,Cap,2,28.78
+2025-07-10,West,Furniture,"Desk Lamp, LED",12,375.3
+2025-07-11,East,Apparel,Cap,11,175.89
+2025-07-11,North,Office Supplies,Gel Pens (12-pack),12,119.88
+2025-07-11,South,Electronics,"Monitor 27""",3,867
+2025-07-12,North,Furniture,"Desk Lamp, LED",7,243.25
+2025-07-14,North,Electronics,USB-C Hub,7,276.5
+2025-07-14,North,Office Supplies,Stapler,13,159.25
+2025-07-16,West,Furniture,Bookshelf,3,389.97
+2025-07-16,East,Furniture,Office Chair,1,219
+2025-07-17,South,Office Supplies,Sticky Notes,1,3.15
+2025-07-17,South,Office Supplies,Sticky Notes,5,15.75
+2025-07-17,West,Apparel,Cap,5,79.95
+2025-07-18,East,Apparel,T-Shirt,20,360
+2025-07-18,West,Apparel,T-Shirt,7,126
+2025-07-18,South,Apparel,Hoodie,8,340
+2025-07-20,East,Furniture,Standing Desk,4,1796.4
+2025-07-21,West,Furniture,"Desk Lamp, LED",13,451.75
+2025-07-21,South,Furniture,Bookshelf,4,519.96
+2025-07-22,West,Apparel,T-Shirt,8,144
+2025-07-22,West,Electronics,USB-C Hub,19,675.45
+2025-07-22,South,Electronics,"Monitor 27""",2,578
+2025-07-24,West,Furniture,Bookshelf,3,389.97
+2025-07-25,North,Office Supplies,Sticky Notes,12,34.02
+2025-07-25,East,Furniture,Office Chair,4,876
+2025-07-28,South,Electronics,Webcam HD,7,377.69
+2025-07-28,East,Office Supplies,Stapler,9,99.23
+2025-07-28,East,Apparel,Cap,7,111.93
+2025-07-28,North,Furniture,Bookshelf,2,259.98
+2025-07-30,South,Office Supplies,Stapler,15,183.75
+2025-07-31,South,Electronics,USB-C Hub,11,391.05
+2025-07-31,North,Furniture,Standing Desk,3,1497
+2025-07-31,North,Electronics,Webcam HD,2,119.9
+2025-07-31,North,Furniture,Standing Desk,3,1497
+2025-07-31,North,Apparel,Cap,5,79.95
+2025-08-03,South,Electronics,Wireless Mouse,7,157.44
+2025-08-03,East,Office Supplies,Stapler,15,183.75
+2025-08-04,East,Apparel,Cap,13,207.87
+2025-08-04,South,Apparel,Hoodie,6,229.5
+2025-08-06,North,Office Supplies,Gel Pens (12-pack),1,9.99
+2025-08-06,West,Office Supplies,Stapler,6,73.5
+2025-08-07,West,Furniture,Bookshelf,3,389.97
+2025-08-07,West,Furniture,Bookshelf,3,389.97
+2025-08-08,West,Office Supplies,Stapler,12,147
+2025-08-08,South,Apparel,Cap,19,273.43
+2025-08-09,South,Apparel,T-Shirt,6,108
+2025-08-10,South,Office Supplies,"Paper, A4, 500 sheets",5,30.6
+2025-08-10,South,Electronics,USB-C Hub,9,355.5
+2025-08-11,North,Office Supplies,Gel Pens (12-pack),5,49.95
+2025-08-12,West,Office Supplies,Sticky Notes,4,12.6
+2025-08-13,South,Furniture,Standing Desk,4,1996
+2025-08-13,East,Apparel,T-Shirt,15,270
+2025-08-14,North,Office Supplies,Notebook A5,2,9
+2025-08-15,South,Office Supplies,Sticky Notes,14,44.1
+2025-08-15,West,Electronics,"Headphones, Noise Cancelling",4,599.96
+2025-08-17,North,Office Supplies,Notebook A5,17,76.5
+2025-08-18,West,Apparel,T-Shirt,1,18
+2025-08-18,North,Office Supplies,Notebook A5,10,40.5
+2025-08-18,North,Apparel,Cap,9,143.91
+2025-08-19,North,Apparel,Cap,14,223.86
+2025-08-21,South,Furniture,Standing Desk,4,1996
+2025-08-22,South,Apparel,T-Shirt,8,144
+2025-08-22,South,Office Supplies,Notebook A5,15,67.5
+2025-08-23,West,Office Supplies,"Paper, A4, 500 sheets",2,13.6
+2025-08-24,East,Electronics,Webcam HD,8,479.6
+2025-08-25,West,Furniture,Office Chair,2,438
+2025-08-25,East,Electronics,Wireless Mouse,7,174.93
+2025-08-26,North,Furniture,"Desk Lamp, LED",11,344.03
+2025-08-28,North,Office Supplies,Sticky Notes,20,63
+2025-08-28,North,Furniture,Office Chair,1,219
+2025-08-29,South,Office Supplies,Stapler,3,33.08
+2025-08-30,East,Office Supplies,Notebook A5,7,31.5
+2025-08-31,North,Apparel,Cap,5,79.95
+2025-08-31,West,Furniture,Standing Desk,4,1996
+2025-09-02,East,Apparel,Hoodie,13,497.25
+2025-09-02,South,Electronics,"Monitor 27""",3,867
+2025-09-02,East,Furniture,"Desk Lamp, LED",17,590.75
+2025-09-02,West,Apparel,Hoodie,17,722.5
+2025-09-02,East,Office Supplies,Notebook A5,3,13.5
+2025-09-02,East,Office Supplies,Gel Pens (12-pack),17,169.83
+2025-09-03,South,Office Supplies,Gel Pens (12-pack),7,69.93
+2025-09-04,South,Furniture,Office Chair,1,219
+2025-09-04,South,Office Supplies,Sticky Notes,17,53.55
+2025-09-04,South,Office Supplies,"Paper, A4, 500 sheets",13,88.4
+2025-09-06,East,Electronics,Webcam HD,16,959.2
+2025-09-06,North,Office Supplies,Notebook A5,20,90
+2025-09-07,West,Office Supplies,Stapler,4,44.1
+2025-09-07,South,Office Supplies,Gel Pens (12-pack),13,129.87
+2025-09-08,South,Office Supplies,Notebook A5,17,76.5
+2025-09-08,West,Electronics,Wireless Mouse,6,149.94
+2025-09-09,North,Electronics,"Headphones, Noise Cancelling",1,149.99
+2025-09-09,North,Electronics,"Monitor 27""",3,867
+2025-09-09,West,Office Supplies,Sticky Notes,7,22.05
+2025-09-10,West,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-09-10,North,Furniture,Office Chair,1,219
+2025-09-11,East,Electronics,Webcam HD,4,239.8
+2025-09-12,South,Furniture,Office Chair,2,438
+2025-09-12,East,Apparel,Hoodie,8,340
+2025-09-12,South,Apparel,T-Shirt,18,324
+2025-09-13,South,Apparel,T-Shirt,15,270
+2025-09-14,East,Office Supplies,Gel Pens (12-pack),11,109.89
+2025-09-14,South,Electronics,Webcam HD,17,1019.15
+2025-09-14,South,Office Supplies,Sticky Notes,4,12.6
+2025-09-15,East,Apparel,Hoodie,10,425
+2025-09-15,West,Office Supplies,"Paper, A4, 500 sheets",6,40.8
+2025-09-16,South,Electronics,Wireless Mouse,20,499.8
+2025-09-16,South,Electronics,Wireless Mouse,19,474.81
+2025-09-17,West,Furniture,Bookshelf,4,519.96
+2025-09-17,West,Electronics,"Headphones, Noise Cancelling",4,599.96
+2025-09-18,South,Furniture,Standing Desk,2,998
+2025-09-18,East,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-09-19,South,Apparel,T-Shirt,8,144
+2025-09-19,South,Electronics,USB-C Hub,5,177.75
+2025-09-20,East,Furniture,Office Chair,2,438
+2025-09-21,North,Electronics,Webcam HD,13,779.35
+2025-09-21,South,Office Supplies,Gel Pens (12-pack),20,199.8
+2025-09-21,West,Furniture,"Desk Lamp, LED",7,243.25
+2025-09-22,East,Furniture,Standing Desk,4,1996
+2025-09-23,East,Electronics,"Monitor 27""",4,1156
+2025-09-24,West,Electronics,USB-C Hub,4,158
+2025-09-24,North,Furniture,Bookshelf,4,519.96
+2025-09-25,North,Furniture,Standing Desk,2,998
+2025-09-26,West,Furniture,Office Chair,1,219
+2025-09-27,West,Apparel,Hoodie,13,552.5
+2025-09-27,South,Electronics,"Headphones, Noise Cancelling",1,149.99
+2025-09-28,North,Office Supplies,Sticky Notes,7,22.05
+2025-09-28,East,Office Supplies,"Paper, A4, 500 sheets",5,30.6
+2025-09-29,North,Electronics,"Monitor 27""",1,289
+2025-09-29,North,Office Supplies,Gel Pens (12-pack),19,189.81
+2025-10-01,East,Apparel,Cap,8,127.92
+2025-10-02,South,Office Supplies,Sticky Notes,19,59.85
+2025-10-03,West,Apparel,Cap,5,79.95
+2025-10-05,North,Office Supplies,Notebook A5,8,36
+2025-10-06,South,Apparel,Hoodie,6,255
+2025-10-06,West,Office Supplies,Gel Pens (12-pack),11,109.89
+2025-10-06,North,Furniture,Office Chair,2,438
+2025-10-07,West,Apparel,Cap,7,111.93
+2025-10-08,South,Apparel,Hoodie,1,42.5
+2025-10-09,West,Electronics,"Monitor 27""",3,867
+2025-10-09,South,Apparel,T-Shirt,3,54
+2025-10-09,North,Office Supplies,Stapler,3,36.75
+2025-10-09,North,Apparel,T-Shirt,7,126
+2025-10-10,East,Office Supplies,"Paper, A4, 500 sheets",11,74.8
+2025-10-10,East,Apparel,Cap,19,303.81
+2025-10-11,North,Furniture,Standing Desk,1,499
+2025-10-11,West,Electronics,Webcam HD,14,755.37
+2025-10-12,West,Furniture,Standing Desk,2,898.2
+2025-10-12,East,Electronics,"Monitor 27""",4,1156
+2025-10-12,North,Electronics,"Monitor 27""",3,867
+2025-10-16,North,Furniture,"Desk Lamp, LED",10,347.5
+2025-10-19,East,Electronics,USB-C Hub,17,671.5
+2025-10-24,East,Electronics,"Monitor 27""",4,1156
+2025-10-26,West,Electronics,USB-C Hub,20,790
+2025-10-26,East,Electronics,Wireless Mouse,10,249.9
+2025-10-27,East,Office Supplies,"Paper, A4, 500 sheets",19,129.2
+2025-10-27,North,Apparel,Cap,16,255.84
+2025-10-28,South,Furniture,Standing Desk,1,499
+2025-10-30,North,Electronics,USB-C Hub,4,158
+2025-10-30,North,Apparel,Hoodie,13,497.25
+2025-10-30,South,Furniture,Standing Desk,2,998
+2025-10-30,West,Apparel,Cap,9,143.91
+2025-10-31,North,Furniture,Standing Desk,3,1497
+2025-11-01,West,Electronics,"Monitor 27""",4,1156
+2025-11-01,North,Electronics,"Headphones, Noise Cancelling",2,299.98
+2025-11-02,East,Office Supplies,Sticky Notes,6,18.9
+2025-11-06,South,Apparel,Hoodie,11,467.5
+2025-11-07,North,Furniture,"Desk Lamp, LED",15,521.25
+2025-11-08,North,Furniture,Standing Desk,1,499
+2025-11-08,South,Office Supplies,Notebook A5,4,16.2
+2025-11-09,North,Electronics,"Headphones, Noise Cancelling",1,149.99
+2025-11-09,North,Apparel,Hoodie,2,85
+2025-11-10,North,Furniture,"Desk Lamp, LED",5,156.38
+2025-11-10,South,Furniture,"Desk Lamp, LED",6,208.5
+2025-11-10,North,Apparel,T-Shirt,1,16.2
+2025-11-12,West,Office Supplies,"Paper, A4, 500 sheets",19,129.2
+2025-11-13,North,Electronics,USB-C Hub,10,355.5
+2025-11-15,South,Apparel,Cap,14,201.47
+2025-11-15,West,Furniture,Office Chair,2,394.2
+2025-11-17,South,Furniture,Office Chair,3,657
+2025-11-17,North,Office Supplies,Notebook A5,9,40.5
+2025-11-18,East,Apparel,Hoodie,16,680
+2025-11-19,South,Electronics,USB-C Hub,9,355.5
+2025-11-20,East,Office Supplies,Notebook A5,7,31.5
+2025-11-21,South,Furniture,"Desk Lamp, LED",6,208.5
+2025-11-21,South,Furniture,"Desk Lamp, LED",19,660.25
+2025-11-22,North,Furniture,Office Chair,2,438
+2025-11-23,South,Apparel,Hoodie,2,76.5
+2025-11-24,East,Office Supplies,Sticky Notes,7,22.05
+2025-11-24,West,Electronics,"Monitor 27""",2,520.2
+2025-11-24,South,Apparel,T-Shirt,4,72
+2025-11-24,West,Electronics,USB-C Hub,14,497.7
+2025-11-25,West,Furniture,Office Chair,3,657
+2025-11-26,East,Electronics,"Headphones, Noise Cancelling",1,149.99
+2025-11-27,South,Apparel,Hoodie,15,637.5
+2025-11-29,North,Electronics,USB-C Hub,16,632
+2025-11-29,North,Office Supplies,Stapler,13,159.25
+2025-11-29,North,Apparel,T-Shirt,13,210.6
+2025-11-30,West,Electronics,USB-C Hub,1,39.5
+2025-12-01,East,Furniture,"Desk Lamp, LED",13,451.75
+2025-12-01,East,Electronics,USB-C Hub,2,79
+2025-12-02,East,Office Supplies,Gel Pens (12-pack),11,109.89
+2025-12-03,North,Office Supplies,Notebook A5,16,72
+2025-12-03,East,Apparel,Hoodie,18,765
+2025-12-03,West,Office Supplies,Gel Pens (12-pack),20,179.82
+2025-12-04,East,Apparel,T-Shirt,3,54
+2025-12-04,West,Office Supplies,Stapler,13,159.25
+2025-12-05,South,Apparel,T-Shirt,19,307.8
+2025-12-06,South,Office Supplies,Notebook A5,10,45
+2025-12-06,North,Furniture,"Desk Lamp, LED",3,93.83
+2025-12-08,South,Furniture,Office Chair,4,876
+2025-12-09,East,Electronics,Wireless Mouse,4,89.96
+2025-12-09,West,Furniture,"Desk Lamp, LED",13,451.75
+2025-12-10,North,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-12-10,South,Electronics,"Headphones, Noise Cancelling",3,449.97
+2025-12-11,West,Electronics,USB-C Hub,6,237
+2025-12-11,East,Apparel,T-Shirt,5,90
+2025-12-12,West,Apparel,T-Shirt,20,360
+2025-12-13,East,Electronics,"Headphones, Noise Cancelling",2,269.98
+2025-12-14,West,Office Supplies,Gel Pens (12-pack),2,19.98
+2025-12-14,West,Apparel,Cap,8,127.92
+2025-12-14,South,Apparel,T-Shirt,16,259.2
+2025-12-16,West,Apparel,Cap,6,95.94
+2025-12-17,East,Electronics,"Monitor 27""",1,260.1
+2025-12-18,West,Office Supplies,Notebook A5,20,90
+2025-12-19,South,Apparel,T-Shirt,14,252
+2025-12-20,West,Electronics,Webcam HD,8,479.6
+2025-12-20,North,Furniture,"Desk Lamp, LED",12,375.3
+2025-12-21,West,Apparel,Cap,14,223.86
+2025-12-21,North,Apparel,Cap,5,79.95
+2025-12-21,North,Electronics,Webcam HD,6,323.73
+2025-12-22,East,Furniture,Bookshelf,1,129.99
+2025-12-23,East,Furniture,"Desk Lamp, LED",13,451.75
+2025-12-23,North,Office Supplies,Sticky Notes,13,36.85
+2025-12-23,North,Apparel,T-Shirt,13,210.6
+2025-12-24,East,Furniture,"Desk Lamp, LED",4,139
+2025-12-24,South,Apparel,Cap,10,159.9
+2025-12-25,South,Apparel,Hoodie,8,340
+2025-12-25,South,Furniture,Office Chair,4,876
+2025-12-26,East,Electronics,USB-C Hub,20,790
+2025-12-27,West,Furniture,"Desk Lamp, LED",6,208.5
+2025-12-28,South,Office Supplies,Gel Pens (12-pack),11,109.89
+2025-12-29,South,Furniture,Office Chair,2,438
+2025-12-30,East,Office Supplies,Stapler,1,12.25
+2025-12-31,South,Apparel,T-Shirt,19,342
+2025-12-31,South,Office Supplies,"Paper, A4, 500 sheets",1,6.12

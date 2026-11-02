@@ -122,4 +122,18 @@ describe('Start-up check', () => {
       'Everything is paused in Settings. Nothing runs until you turn Pause everything off.',
     ]);
   });
+
+  it('says when the limit is on another AI that shares the plan (F12)', () => {
+    const until = at(16, 10);
+    const { notes } = teamCheck(
+      { routing: { ...routing, builder: seats('cursor', 'codex') } },
+      outs({
+        cursor: { reason: 'usage limit reached (on Grok, which shares its plan)', until },
+      }),
+      stats,
+    );
+    expect(notes[0]!.text).toBe(
+      `Cursor is at its usage limit until ${clock(until)}: it shares one plan with Grok. Building moves to Codex.`,
+    );
+  });
 });

@@ -11,16 +11,20 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "dist": "electron-vite build && electron-builder"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
+    "@floating-ui/react-dom": "^2.1.8",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.9.0",
+    "electron-builder": "^26.18.0",
+    "electron-updater": "6.8.10",
     "electron-vite": "^6.0.0",
     "lucide-react": "^1.59.0",
     "react": "^19.3.1",
@@ -31,7 +35,7 @@
     "vite": "^8.3.4",
     "zustand": "^5.0.15"
   },
-  "dependencies": {
-    "@floating-ui/react-dom": "^2.1.8"
-  }
+  "productName": "Conclave",
+  "author": "Conclave contributors",
+  "homepage": "https://github.com/MarcoWithoutPolo/conclave"
 }

@@ -44,6 +44,11 @@ export const LimitSettings = z.object({
   quietHours: z.array(QuietHours).default([]),
   /** Nothing new starts on any project; running steps finish. */
   pauseAll: z.boolean().default(false),
+  /**
+   * AIs billed on one plan (F12): Cursor and Grok share The X Subscription. A limit on one
+   * counts for all of them.
+   */
+  sharedPlans: z.array(z.array(ProviderId).min(2)).default([]),
 });
 export type LimitSettings = z.infer<typeof LimitSettings>;
 
@@ -97,6 +102,25 @@ export const CouncilSettings = z.object({
 });
 export type CouncilSettings = z.infer<typeof CouncilSettings>;
 
+/** v1.0 F11: what closing the window does, and starting with the computer. */
+export const BackgroundSettings = z.object({
+  /** Closing the window while projects run: ask, keep them running (tray), or quit. */
+  onClose: z.enum(['ask', 'keep', 'quit']).default('ask'),
+  /** Open Conclave, hidden in the tray, when you sign in to the computer. */
+  openAtLogin: z.boolean().default(false),
+});
+export type BackgroundSettings = z.infer<typeof BackgroundSettings>;
+
+/** v1.0 F7: the welcome shown once, on a new install. */
+export const FirstRunSettings = z.object({
+  /** Finished, with at least one AI connected: it doesn't come back. */
+  done: z.boolean().default(false),
+  at: z.number().nullable().default(null),
+  /** Shown once and left with "Look around first". */
+  seen: z.boolean().default(false),
+});
+export type FirstRunSettings = z.infer<typeof FirstRunSettings>;
+
 /** App-wide settings, stored in the settings table. Unknown or missing keys get defaults. */
 export const AppSettings = z.object({
   notifications: NotificationSettings.prefault({}),
@@ -105,5 +129,7 @@ export const AppSettings = z.object({
   defaults: DefaultSettings.prefault({}),
   appearance: AppearanceSettings.prefault({}),
   council: CouncilSettings.prefault({}),
+  background: BackgroundSettings.prefault({}),
+  firstRun: FirstRunSettings.prefault({}),
 });
 export type AppSettings = z.infer<typeof AppSettings>;

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recipe book</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Recipe book</h1>
+    </header>
+    <main>
+      <section class="browse" aria-label="Recipes">
+        <label for="search">Search</label>
+        <input id="search" type="search" autocomplete="off" placeholder="Title or ingredient" />
+        <ul id="list" class="list"></ul>
+        <p id="empty" class="muted" hidden>No recipes yet.</p>
+      </section>
+
+      <section class="detail" aria-live="polite">
+        <article data-recipe-detail hidden></article>
+      </section>
+
+      <section class="editor">
+        <h2 id="form-heading">New recipe</h2>
+        <form id="form" novalidate>
+          <label for="title">Title</label>
+          <input id="title" name="title" autocomplete="off" />
+          <label for="ingredients">Ingredients</label>
+          <textarea
+            id="ingredients"
+            name="ingredients"
+            rows="5"
+            placeholder="One per line"
+          ></textarea>
+          <label for="steps">Steps</label>
+          <textarea id="steps" name="steps" rows="5" placeholder="One per line"></textarea>
+          <label for="tags">Tags</label>
+          <input id="tags" name="tags" autocomplete="off" placeholder="Comma-separated" />
+          <label for="minutes">Minutes</label>
+          <input id="minutes" name="minutes" type="number" min="1" step="1" inputmode="numeric" />
+          <label for="photo">Photo</label>
+          <input id="photo" name="photo" type="file" accept="image/png,image/jpeg" />
+          <p id="message" role="alert" class="message"></p>
+          <div class="actions">
+            <button type="submit">Save recipe</button>
+            <button type="button" id="cancel" class="secondary" hidden>Cancel</button>
+          </div>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

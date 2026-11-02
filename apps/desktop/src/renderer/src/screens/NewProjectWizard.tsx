@@ -46,6 +46,7 @@ import { api } from '@/lib/api';
 import { useProjects } from '@/lib/projects';
 import { errorText, readyProviders, useApp } from '@/lib/store';
 import { mustOpen, settle } from '@/lib/settle';
+import { EXAMPLES } from '@/lib/examples';
 
 type Step = 'where' | 'what' | 'clarify';
 type Source = 'folder' | 'new' | 'clone';
@@ -670,6 +671,33 @@ export function NewProjectWizard({
                 ))}
               </div>
             </Field>
+          )}
+          {!issue && (
+            <div role="group" aria-label="Start from an example">
+              <p className="text-[12.5px] font-semibold text-muted">Start from an example</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {EXAMPLES.map((x) => (
+                  <button
+                    key={x.id}
+                    type="button"
+                    aria-pressed={goal === x.goal}
+                    onClick={() => {
+                      setGoal(x.goal);
+                      setDoneWhen(x.doneWhen);
+                      setDesign(x.design ?? '');
+                      setShowDesign(Boolean(x.design));
+                    }}
+                    className={`inline-flex h-7.5 items-center rounded-full border px-2.5 text-[12.5px] ${
+                      goal === x.goal
+                        ? 'border-accent bg-accent-soft text-accent-ink'
+                        : 'border-line-strong hover:bg-sunken'
+                    }`}
+                  >
+                    {x.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           <Field
             label="Goal"

@@ -31,6 +31,12 @@ const name = (provider: ProviderId) => seatLabel({ provider });
 
 /** "is at its usage limit until 4:10 PM", from the governor's reason. */
 function state(a: Extract<Availability, { ok: false }>): string {
+  // The limit is another AI's on the same plan (F12): say so after the state.
+  const shared = / \(on (.+), which shares its plan\)$/.exec(a.reason);
+  if (shared) {
+    const own = state({ ...a, reason: a.reason.slice(0, shared.index) });
+    return `${own}: it shares one plan with ${shared[1]}`;
+  }
   const until = a.until !== null ? ` until ${clock(a.until)}` : '';
   if (/^quiet hours/.test(a.reason)) return `is in quiet hours${until}`;
   if (/^daily cap/.test(a.reason)) return `has used its daily cap${until}`;

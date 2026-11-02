@@ -402,9 +402,17 @@ export interface ConclaveApi {
   };
   /** Settings → About (v1.0 C9). */
   about: {
-    info(): Promise<{ version: string; electron: string; platform: string }>;
+    info(): Promise<AboutInfo>;
     /** Save the diagnostics report where you choose; null when you cancel. */
     exportLogs(): Promise<{ path: string } | null>;
+  };
+  /** Updates from the public releases (v1.0 F10). */
+  updates: {
+    get(): Promise<UpdateState>;
+    check(): Promise<void>;
+    /** Refused, with the reason, while a project is building. */
+    restart(): Promise<{ ok: true } | { ok: false; reason: string }>;
+    onChange(listener: (state: UpdateState) => void): () => void;
   };
   local: {
     /** Download a model into Ollama, after the user confirms (several GB). */
@@ -412,12 +420,34 @@ export interface ConclaveApi {
   };
   /** A notification was clicked: open this project. */
   onOpenProject(listener: (projectId: string) => void): () => void;
+  /** The tray's Inbox item (F11). */
+  onOpenInbox(listener: () => void): () => void;
   onInstallLog(listener: (log: InstallLog) => void): () => void;
   openExternal(url: string): Promise<void>;
   platform: NodeJS.Platform;
 }
 
 /** A partial change to each settings section. */
+/** What Settings → About and the tray show about updates (F10). */
+export type UpdateState =
+  | { kind: 'off'; reason: string }
+  | { kind: 'idle'; checkedAt: number | null }
+  | { kind: 'checking' }
+  | { kind: 'downloading'; version: string; percent: number }
+  /** Downloaded: it installs on the next restart, or now with Restart to update. */
+  | { kind: 'ready'; version: string }
+  /** macOS without a signature can't update itself: the release page has the new version. */
+  | { kind: 'available'; version: string; url: string }
+  | { kind: 'error'; message: string };
+
+export interface AboutInfo {
+  version: string;
+  electron: string;
+  platform: string;
+  /** The command that adds Conclave to Claude Code as an MCP server (F9). */
+  mcp: string;
+}
+
 export type SettingsPatch = { [K in keyof AppSettings]?: Partial<AppSettings[K]> };
 
 export const IPC = {
@@ -427,6 +457,11 @@ export const IPC = {
   about: 'app:about',
   diagnosticsExport: 'diagnostics:export',
   openProject: 'app:open-project',
+  openInbox: 'app:open-inbox',
+  updateGet: 'update:get',
+  updateCheck: 'update:check',
+  updateRestart: 'update:restart',
+  updateChanged: 'update:changed',
   accountsList: 'accounts:list',
   accountsSignIn: 'accounts:sign-in',
   accountsInstall: 'accounts:install',

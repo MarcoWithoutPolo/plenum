@@ -1,7 +1,13 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { AppearanceSettings, BrainEvent } from '@conclave/shared';
 import { applyLook } from '../shared/look.js';
-import { IPC, type ConclaveApi, type InstallLog, type RunUpdate } from '../shared/api.js';
+import {
+  IPC,
+  type ConclaveApi,
+  type InstallLog,
+  type RunUpdate,
+  type UpdateState,
+} from '../shared/api.js';
 
 const invoke = <T>(channel: string, ...args: unknown[]) =>
   ipcRenderer.invoke(channel, ...args) as Promise<T>;
@@ -114,7 +120,14 @@ const api: ConclaveApi = {
     info: () => invoke(IPC.about),
     exportLogs: () => invoke(IPC.diagnosticsExport),
   },
+  updates: {
+    get: () => invoke(IPC.updateGet),
+    check: () => invoke(IPC.updateCheck),
+    restart: () => invoke(IPC.updateRestart),
+    onChange: (listener) => listen<UpdateState>(IPC.updateChanged, listener),
+  },
   onOpenProject: (listener) => listen<string>(IPC.openProject, listener),
+  onOpenInbox: (listener) => listen<void>(IPC.openInbox, listener),
   onInstallLog: (listener) => listen<InstallLog>(IPC.installLog, listener),
   openExternal: (url) => invoke(IPC.openExternal, url),
   platform: process.platform,

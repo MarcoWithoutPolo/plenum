@@ -1,0 +1,56 @@
+# Installers (v1.0 C2/F10). The main process, preload and window are fully bundled by
+# electron-vite, so the package needs no node_modules: just `out/` and package.json.
+appId: com.conclave.app # set once: changing it breaks updates and taskbar grouping
+productName: Conclave
+copyright: Copyright © Conclave contributors
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asar: true
+# Updates (F10): electron-updater reads the latest release of the public repository.
+publish:
+  provider: github
+  owner: MarcoWithoutPolo
+  repo: conclave
+  releaseType: draft # you publish it by hand
+# The workspace hoists electron to the repo root; pin the exact version it installed.
+electronVersion: 44.9.0
+# The tray icon (F11).
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+# Your data lives in ~/.conclave, outside the install: installing, updating and uninstalling
+# never touch it.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  perMachine: false # per-user: no administrator prompt
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  artifactName: Conclave-Setup-${version}.${ext}
+mac:
+  target:
+    - target: dmg
+      arch: [universal]
+    # The update check reads latest-mac.yml, which comes with the zip.
+    - target: zip
+      arch: [universal]
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  artifactName: Conclave-${version}.${ext}
+linux:
+  target: [AppImage, deb]
+  executableName: conclave
+  category: Development
+  icon: build/icon.png
+  maintainer: Conclave contributors
+  artifactName: Conclave-${version}.${ext}

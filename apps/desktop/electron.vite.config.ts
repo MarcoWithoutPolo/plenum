@@ -45,7 +45,13 @@ export default defineConfig({
     resolve: { alias },
     build: {
       outDir: 'out/main',
-      rollupOptions: { input: resolve(here, 'src/main/index.ts') },
+      rollupOptions: {
+        input: {
+          index: resolve(here, 'src/main/index.ts'),
+          // `Conclave --mcp`, run as plain Node (F9).
+          mcp: resolve(here, 'src/main/mcp.ts'),
+        },
+      },
     },
   },
   preload: {

@@ -1,0 +1,53 @@
+name: Release
+
+# A v* tag builds the three installers and attaches them to a draft release, which you publish
+# by hand (v1.0 F10). Published releases are what installed copies update from.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win --x64
+          - os: macos-latest
+            args: --mac --universal
+          - os: ubuntu-latest
+            args: --linux AppImage deb --x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build the app
+        run: npm run desktop:build
+      - name: Build the installer into the draft release
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Unsigned at first (I4): no certificate is looked for.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder ${{ matrix.args }} --publish always
+      - name: The installed app opens (smoke test)
+        if: runner.os != 'Linux'
+        working-directory: apps/desktop
+        run: npx playwright test e2e/packaged.spec.ts
+      - name: The installed app opens (smoke test, virtual display)
+        if: runner.os == 'Linux'
+        working-directory: apps/desktop
+        run: xvfb-run -a npx playwright test e2e/packaged.spec.ts

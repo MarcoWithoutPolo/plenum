@@ -1,0 +1,148 @@
+:root {
+  color-scheme: light dark;
+  --bg: #faf8f5;
+  --card: #ffffff;
+  --text: #1f1d1a;
+  --muted: #5b5750;
+  --line: #ddd8d0;
+  --accent: #a3401b;
+  --on-accent: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161514;
+    --card: #211f1d;
+    --text: #efebe5;
+    --muted: #b3ada4;
+    --line: #3b3834;
+    --accent: #f08a5d;
+    --on-accent: #1a0d07;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+}
+header,
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+h1 {
+  font-size: 1.6rem;
+  margin: 16px 0;
+}
+main {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  padding-bottom: 32px;
+}
+@media (min-width: 900px) {
+  main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.2fr);
+    align-items: start;
+  }
+}
+section.browse,
+section.detail article,
+section.editor {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+section.detail article[hidden] {
+  display: none;
+}
+label {
+  display: block;
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
+label:first-child {
+  margin-top: 0;
+}
+input,
+textarea,
+button {
+  font: inherit;
+  color: inherit;
+}
+input,
+textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line);
+}
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+}
+.list li + li {
+  margin-top: 6px;
+}
+.list .item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border-color: var(--line);
+  font-weight: 500;
+}
+.list li.selected .item {
+  border-color: var(--accent);
+}
+.muted {
+  color: var(--muted);
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.message {
+  color: var(--accent);
+  min-height: 1.5em;
+  margin: 12px 0 0;
+}
+[data-recipe-detail] img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+[data-recipe-detail] h2 {
+  margin-top: 0;
+}

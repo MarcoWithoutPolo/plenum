@@ -11,6 +11,9 @@ export default tseslint.config(
       'bench/projects/**',
       'bench/results/**',
       '**/test-results/**',
+      'apps/desktop/release/**',
+      // A CommonJS script run once by Electron to draw the app icon.
+      'apps/desktop/build/make-icon.cjs',
     ],
   },
   ...tseslint.configs.recommended,

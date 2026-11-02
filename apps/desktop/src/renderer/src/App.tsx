@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { useProjects } from '@/lib/projects';
-import { useApp } from '@/lib/store';
+import { readyProviders, useApp } from '@/lib/store';
 import { api } from '@/lib/api';
 import { AccountsScreen } from '@/screens/AccountsScreen';
 import { InboxScreen } from '@/screens/InboxScreen';
@@ -11,6 +11,7 @@ import { CouncilScreen } from '@/screens/CouncilScreen';
 import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { UsageScreen } from '@/screens/UsageScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { FirstRun } from '@/screens/FirstRun';
 import { settle } from '@/lib/settle';
 import { SHOW_SHORTCUTS } from '@/lib/events';
 import { Shortcuts } from '@/components/Shortcuts';
@@ -20,13 +21,29 @@ export function App() {
   const ready = useApp((s) => s.ready);
   const loadError = useApp((s) => s.loadError);
   const screen = useApp((s) => s.screen);
+  const screenSeq = useApp((s) => s.screenSeq);
   const init = useApp((s) => s.init);
   const open = useApp((s) => s.open);
 
   const initProjects = useProjects((s) => s.init);
 
+  // The first run (F7): on a new install, until one AI is connected and it's finished. Someone
+  // with chats or projects already is past it.
+  const [firstRun, setFirstRun] = useState(false);
   useEffect(() => {
-    settle(init().then(() => initProjects()));
+    settle(
+      init()
+        .then(() => initProjects())
+        .then(async () => {
+          const settings = await api().settings.get();
+          if (settings.firstRun.done) return;
+          const fresh =
+            useApp.getState().threads.length === 0 && useProjects.getState().summaries.length === 0;
+          const connected = readyProviders(useApp.getState().providers).length > 0;
+          if (fresh && !(settings.firstRun.seen && connected)) setFirstRun(true);
+          else await api().settings.update({ firstRun: { done: true, at: Date.now() } });
+        }),
+    );
   }, [init, initProjects]);
 
   // A clicked notification opens its project.
@@ -34,6 +51,8 @@ export function App() {
     () => api().onOpenProject((projectId) => open({ name: 'projects', projectId })),
     [open],
   );
+  // The tray's Inbox item (F11).
+  useEffect(() => api().onOpenInbox(() => open({ name: 'approvals' })), [open]);
 
   const [shortcuts, setShortcuts] = useState(false);
   useEffect(() => {
@@ -92,7 +111,7 @@ export function App() {
         ) : screen.name === 'settings' ? (
           <SettingsScreen />
         ) : screen.name === 'council' ? (
-          <CouncilScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
+          <CouncilScreen key={screenSeq} threadId={screen.threadId} />
         ) : (
           <ChatScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
         )}
@@ -100,6 +119,7 @@ export function App() {
         <Announcer />
         <Toast />
       </main>
+      {firstRun && <FirstRun onClose={() => setFirstRun(false)} />}
     </div>
   );
 }

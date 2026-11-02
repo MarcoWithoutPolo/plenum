@@ -1,0 +1,134 @@
+[
+  {
+    "id": "yirgacheffe-sunrise",
+    "name": "Yirgacheffe Sunrise",
+    "roast": "light",
+    "price": 19,
+    "origin": "Gedeo, Ethiopia",
+    "process": "Washed",
+    "notes": ["Jasmine", "Bergamot", "Lemon curd"],
+    "description": "Our brightest coffee: floral and tea-like, with a long citrus finish. Grown by smallholders around Yirgacheffe at nearly 2,000 metres.",
+    "color": "#e9b949"
+  },
+  {
+    "id": "nyeri-crimson",
+    "name": "Nyeri Crimson",
+    "roast": "light",
+    "price": 21.5,
+    "origin": "Nyeri, Kenya",
+    "process": "Washed",
+    "notes": ["Blackcurrant", "Grapefruit", "Brown sugar"],
+    "description": "Juicy and bold for a light roast. SL28 and SL34 cherries from the Gikirima cooperative, dried slowly on raised beds.",
+    "color": "#c2414b"
+  },
+  {
+    "id": "tarrazu-honey",
+    "name": "Tarrazú Honey",
+    "roast": "light",
+    "price": 22,
+    "origin": "Tarrazú, Costa Rica",
+    "process": "Honey",
+    "notes": ["Apricot", "Honey", "Almond"],
+    "description": "A honey-processed lot with a syrupy body and stone-fruit sweetness. Lovely as a pour-over on a slow Sunday.",
+    "color": "#e0883c"
+  },
+  {
+    "id": "huila-daybreak",
+    "name": "Huila Daybreak",
+    "roast": "medium",
+    "price": 16,
+    "origin": "Huila, Colombia",
+    "process": "Washed",
+    "notes": ["Red apple", "Caramel", "Milk chocolate"],
+    "description": "The everyday cup we drink ourselves. Balanced, sweet and forgiving in any brewer, from French press to espresso.",
+    "color": "#5f8f5a"
+  },
+  {
+    "id": "antigua-ember",
+    "name": "Antigua Ember",
+    "roast": "medium",
+    "price": 17.5,
+    "origin": "Antigua, Guatemala",
+    "process": "Washed",
+    "notes": ["Cocoa", "Orange peel", "Toffee"],
+    "description": "Grown in volcanic soil between three volcanoes. Rich and rounded, with a gentle smoky sweetness.",
+    "color": "#b4572e"
+  },
+  {
+    "id": "cerrado-cocoa",
+    "name": "Cerrado Cocoa",
+    "roast": "medium",
+    "price": 14,
+    "origin": "Cerrado Mineiro, Brazil",
+    "process": "Natural",
+    "notes": ["Hazelnut", "Cocoa", "Brown butter"],
+    "description": "Nutty, chocolatey and low in acidity. A crowd pleaser that shines with milk.",
+    "color": "#8a6a4f"
+  },
+  {
+    "id": "fogline-blend",
+    "name": "Fogline Blend",
+    "roast": "medium",
+    "price": 12.5,
+    "origin": "Brazil and Colombia",
+    "process": "Washed and natural",
+    "notes": ["Graham cracker", "Molasses", "Plum"],
+    "description": "Our house blend for big pots and early mornings. Comforting and consistent, bag after bag.",
+    "color": "#6b8aa6"
+  },
+  {
+    "id": "lantern-decaf",
+    "name": "Lantern Decaf",
+    "roast": "medium",
+    "price": 16.5,
+    "origin": "Cauca, Colombia",
+    "process": "Sugarcane decaf",
+    "notes": ["Maple", "Red grape", "Cocoa nib"],
+    "description": "Decaffeinated with natural sugarcane ethyl acetate, so all the sweetness stays. Evening coffee without the compromise.",
+    "color": "#7a6aa8"
+  },
+  {
+    "id": "northwind-espresso",
+    "name": "Northwind Espresso",
+    "roast": "dark",
+    "price": 15.5,
+    "origin": "Brazil, Guatemala and Ethiopia",
+    "process": "Blend",
+    "notes": ["Dark chocolate", "Cherry", "Treacle"],
+    "description": "Built for espresso: thick crema, low bitterness and a sweet cherry note that cuts through milk.",
+    "color": "#3f5b4c"
+  },
+  {
+    "id": "mandheling-night",
+    "name": "Mandheling Night",
+    "roast": "dark",
+    "price": 18,
+    "origin": "North Sumatra, Indonesia",
+    "process": "Wet-hulled",
+    "notes": ["Cedar", "Dark cocoa", "Black pepper"],
+    "description": "Earthy, heavy-bodied and low in acidity, with a hint of spice. A classic dark roast done gently.",
+    "color": "#2f4858"
+  },
+  {
+    "id": "harbor-french",
+    "name": "Harbor French Roast",
+    "roast": "dark",
+    "price": 13.5,
+    "origin": "Central America",
+    "process": "Washed",
+    "notes": ["Smoke", "Bittersweet chocolate", "Molasses"],
+    "description": "Roasted to second crack for drinkers who like it bold. Bittersweet, smoky and unapologetic.",
+    "color": "#4a3b52"
+  },
+  {
+    "id": "bonfire-reserve",
+    "name": "Bonfire Reserve",
+    "roast": "dark",
+    "price": 24,
+    "origin": "Jinotega, Nicaragua",
+    "process": "Natural",
+    "notes": ["Fig", "Dark rum", "Cacao"],
+    "description": "A small-lot natural Pacamara, roasted dark but slow to keep its fruit. Our most decadent bag.",
+    "color": "#7d2e2e"
+  }
+]

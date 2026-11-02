@@ -32,3 +32,38 @@ describe('Governor readings without a reset time (E10)', () => {
     expect(g.availability('codex').ok).toBe(true);
   });
 });
+
+describe('Shared plans (F12)', () => {
+  const at = Date.UTC(2026, 10, 2, 12);
+  const policy = (sharedPlans: ('cursor' | 'grok')[][]) => ({
+    limits: () => ({ providers: {}, quietHours: [], pauseAll: false, sharedPlans }),
+    runsToday: () => 0,
+  });
+  const limited = () => [
+    { provider: 'grok' as const, window: 'limit', utilization: 1, resetsAt: at + 3_600_000, at },
+  ];
+
+  it('a limit on Grok pauses Cursor too when they share a plan, and says why', () => {
+    const g = new Governor(limited, { now: () => at, policy: policy([['cursor', 'grok']]) });
+    const a = g.availability('cursor');
+    expect(a.ok).toBe(false);
+    expect(!a.ok && a.reason).toBe('usage limit reached (on Grok, which shares its plan)');
+    expect(!a.ok && a.until).toBe(at + 3_600_000);
+  });
+
+  it('a rate-limited run on Cursor cools Grok down too', () => {
+    const g = new Governor(() => [], { now: () => at, policy: policy([['cursor', 'grok']]) });
+    g.observe('cursor', {
+      ok: false,
+      rateLimited: { message: 'Rate limit', resetsAt: at + 60_000 },
+    });
+    expect(g.availability('grok').ok).toBe(false);
+    expect(g.availability('codex').ok).toBe(true);
+  });
+
+  it('without the setting, each stands alone', () => {
+    const g = new Governor(limited, { now: () => at, policy: policy([]) });
+    expect(g.availability('cursor').ok).toBe(true);
+    expect(g.availability('grok').ok).toBe(false);
+  });
+});

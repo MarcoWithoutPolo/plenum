@@ -11,9 +11,9 @@ import type {
 } from '@conclave/shared';
 import { PROVIDERS } from '@conclave/shared';
 import { Button, ProviderDot } from '@/components/bits';
-import { Segmented, inputClass } from '@/components/form';
+import { Segmented, Switch, inputClass } from '@/components/form';
 import { api } from '@/lib/api';
-import type { SettingsPatch } from '../../../shared/api';
+import type { AboutInfo, SettingsPatch, UpdateState } from '../../../shared/api';
 import { providerName, useApp } from '@/lib/store';
 import { settle } from '@/lib/settle';
 import { SHOW_SHORTCUTS } from '@/lib/events';
@@ -52,34 +52,6 @@ const STACKED_CAPTION =
   'hidden text-[11px] font-medium tracking-wide text-faint uppercase @max-[46rem]:block';
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-function Switch({
-  label,
-  checked,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (on: boolean) => void;
-}) {
-  // The hidden checkbox sits inside the drawn switch, so its own spot is the switch itself.
-  return (
-    <span className="relative inline-flex shrink-0">
-      <input
-        type="checkbox"
-        role="switch"
-        aria-label={label}
-        disabled={disabled}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="peer sr-only"
-      />
-      <span className="relative h-5 w-9 shrink-0 rounded-full bg-line-strong transition peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-disabled:opacity-50 after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
-    </span>
-  );
-}
 
 /** A setting with its label and hint on the left and its control on the right. */
 function Row({
@@ -495,6 +467,60 @@ export function SettingsScreen() {
           </Section>
 
           <Section
+            id="background"
+            title="Background"
+            hint="Projects can keep working with the window closed. Conclave stays in the tray (the menu bar on a Mac)."
+          >
+            {api().platform !== 'darwin' && (
+              <Row
+                label="When you close the window"
+                hint="Only matters while a project is running. Quitting stops projects, and their steps go back to the queue."
+              >
+                <Segmented
+                  label="When you close the window"
+                  value={settings?.background.onClose ?? 'ask'}
+                  onChange={(onClose) =>
+                    settle(
+                      save((s) => ({ ...s, background: { ...s.background, onClose } }), {
+                        background: { onClose },
+                      }),
+                    )
+                  }
+                  options={[
+                    { value: 'ask', label: 'Ask' },
+                    { value: 'keep', label: 'Keep running' },
+                    { value: 'quit', label: 'Quit' },
+                  ]}
+                />
+              </Row>
+            )}
+            {api().platform !== 'linux' && (
+              <label className="flex cursor-pointer items-center gap-4 px-4 py-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-medium">
+                    Open when you sign in to your computer
+                  </span>
+                  <span className="block text-[12px] text-faint">
+                    Starts in the tray, so running projects pick up where they left off.
+                  </span>
+                </span>
+                <Switch
+                  label="Open when you sign in to your computer"
+                  disabled={!settings}
+                  checked={settings?.background.openAtLogin ?? false}
+                  onChange={(openAtLogin) =>
+                    settle(
+                      save((s) => ({ ...s, background: { ...s.background, openAtLogin } }), {
+                        background: { openAtLogin },
+                      }),
+                    )
+                  }
+                />
+              </label>
+            )}
+          </Section>
+
+          <Section
             id="appearance"
             title="Appearance and accessibility"
             hint="How Conclave looks and reads. Each change applies at once and is kept."
@@ -615,9 +641,18 @@ export function SettingsScreen() {
 
 /** Settings → About (v1.0 C9): the version, and a diagnostics report to save. */
 function About() {
-  const [info, setInfo] = useState<{ version: string; electron: string; platform: string } | null>(
-    null,
-  );
+  const [info, setInfo] = useState<AboutInfo | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [update, setUpdate] = useState<UpdateState | null>(null);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+  useEffect(() => {
+    settle(api().updates.get().then(setUpdate));
+    return api().updates.onChange(setUpdate);
+  }, []);
+  const restart = async () => {
+    const r = await api().updates.restart();
+    setUpdateNote(r.ok ? null : r.reason);
+  };
   const [saved, setSaved] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -644,6 +679,60 @@ function About() {
       >
         <span />
       </Row>
+      <Row label="Updates" hint={updateText(update)}>
+        {update?.kind === 'ready' ? (
+          <Button variant="primary" onClick={() => settle(restart())}>
+            Restart to update
+          </Button>
+        ) : update?.kind === 'available' ? (
+          <Button onClick={() => settle(api().openExternal(update.url))}>Download</Button>
+        ) : (
+          <Button
+            disabled={
+              !update ||
+              update.kind === 'off' ||
+              update.kind === 'checking' ||
+              update.kind === 'downloading'
+            }
+            onClick={() => settle(api().updates.check())}
+          >
+            Check now
+          </Button>
+        )}
+      </Row>
+      {updateNote && (
+        <p role="status" className="px-4 pb-3 text-[12.5px] text-muted">
+          {updateNote}
+        </p>
+      )}
+      <div className="px-4 py-3">
+        <span className="block text-[13.5px] font-medium">Use Conclave from Claude Code</span>
+        <span className="block text-[12px] text-faint">
+          Run this once in a terminal. Claude Code can then ask a council, see your projects and the
+          Inbox, queue tasks and answer questions. Merges, pushes and installs stay with you.
+        </span>
+        <div className="mt-2 flex items-start gap-2">
+          <code
+            aria-label="Command that adds Conclave to Claude Code"
+            className="min-w-0 flex-1 rounded-lg selectable border border-line bg-sunken px-2.5 py-1.5 font-mono text-[12px] [overflow-wrap:anywhere]"
+          >
+            {info?.mcp ?? '…'}
+          </code>
+          <Button
+            disabled={!info}
+            onClick={() =>
+              settle(
+                navigator.clipboard.writeText(info!.mcp).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }),
+              )
+            }
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
+        </div>
+      </div>
       <Row
         label="Export logs"
         hint="A text file with versions, recent project events and settings. Anything that looks like a key or token is removed, and nothing is sent anywhere: you choose where to save it."
@@ -659,4 +748,26 @@ function About() {
       )}
     </Section>
   );
+}
+
+function updateText(u: UpdateState | null): string {
+  if (!u) return ' ';
+  switch (u.kind) {
+    case 'off':
+      return u.reason;
+    case 'idle':
+      return u.checkedAt
+        ? `Up to date. Checked ${new Date(u.checkedAt).toLocaleString()}; Conclave checks daily.`
+        : 'Conclave checks for a new version daily and downloads it quietly.';
+    case 'checking':
+      return 'Checking…';
+    case 'downloading':
+      return `Downloading ${u.version}: ${u.percent}%`;
+    case 'ready':
+      return `${u.version} is ready. It installs when you restart, never while a project is building.`;
+    case 'available':
+      return `${u.version} is available on the release page.`;
+    case 'error':
+      return `Couldn't check for updates: ${u.message}`;
+  }
 }

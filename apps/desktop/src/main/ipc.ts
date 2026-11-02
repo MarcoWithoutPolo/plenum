@@ -15,7 +15,7 @@ import {
   streamProcess,
   type Engine,
 } from '@conclave/core';
-import { demoFailure } from './demo.js';
+import { demoFailure, demoSignIn } from './demo.js';
 
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
@@ -93,7 +93,10 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
     );
   });
 
-  handle(IPC.accountsSignIn, (provider: ProviderId) => openInTerminal(adapter(provider).login()));
+  handle(IPC.accountsSignIn, (provider: ProviderId) =>
+    // The demo signs in by itself after a moment: no terminal, no real sign-in.
+    demo ? demoSignIn(provider) : openInTerminal(adapter(provider).login()),
+  );
 
   handle(IPC.accountsInstall, async (provider: ProviderId) => {
     const pkg = INSTALL_PACKAGES[provider];

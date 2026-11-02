@@ -43,6 +43,7 @@ test('runs with a locked-down renderer', async () => {
   expect(exposed.require).toBe('undefined');
   expect(exposed.process).toBe('undefined');
   expect(exposed.bridge).toEqual([
+    'about',
     'accounts',
     'approvals',
     'chat',
@@ -51,6 +52,7 @@ test('runs with a locked-down renderer', async () => {
     'github',
     'local',
     'onInstallLog',
+    'onOpenInbox',
     'onOpenProject',
     'openExternal',
     'platform',
@@ -58,6 +60,7 @@ test('runs with a locked-down renderer', async () => {
     'runs',
     'settings',
     'threads',
+    'updates',
     'usage',
   ]);
 });

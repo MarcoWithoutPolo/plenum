@@ -368,6 +368,39 @@ export function demoGitHub(): GitHub {
   });
 }
 
+/**
+ * CONCLAVE_DEMO_CONNECTED=<n> (F7 tests): the first n installed AIs are signed in and the others
+ * signed out, and Sign in signs one in after a moment, as if its own sign-in had finished.
+ */
+const signedIn = new Set<string>();
+const connectedCount = process.env.CONCLAVE_DEMO_CONNECTED;
+
+export function demoSignIn(provider: string): Promise<{ opened: boolean }> {
+  setTimeout(() => signedIn.add(provider), 800);
+  return Promise.resolve({ opened: true });
+}
+
+function withDemoAuth(adapters: Adapter[]): Adapter[] {
+  if (connectedCount === undefined) return adapters;
+  let left = Number(connectedCount);
+  for (const a of adapters) {
+    const detect = a.detect.bind(a);
+    // Decided once, in registry order: the first n installed ones start signed in.
+    const start = detect().then((s) => {
+      if (s.installed && left > 0) {
+        left--;
+        signedIn.add(a.id);
+      }
+    });
+    a.detect = async () => {
+      await start;
+      const s = await detect();
+      return s.installed ? { ...s, auth: signedIn.has(a.id) ? 'signed_in' : 'signed_out' } : s;
+    };
+  }
+  return adapters;
+}
+
 /** In CONCLAVE_DEMO_DATA=empty no AI is installed yet (the first run, every empty state). */
 function installed(status: { version: string; detail: string }) {
   return demoData() === 'empty'
@@ -405,7 +438,7 @@ export function demoAdapters(): Adapter[] {
   };
   const hours = (h: number) => Date.now() + h * 3_600_000;
   const levels = ['low', 'medium', 'high', 'xhigh', 'max'];
-  return [
+  return withDemoAuth([
     new FakeAdapter(
       { reply: answer('Claude'), delayMs: 25, act: projectAct },
       {
@@ -525,7 +558,7 @@ export function demoAdapters(): Adapter[] {
       },
     ),
     ...moreAIs(answer, projectAct),
-  ];
+  ]);
 }
 
 /**
@@ -570,6 +603,7 @@ function moreAIs(
             { id: 'auto', label: 'Auto' },
             { id: 'composer-2.5', label: 'Composer 2.5' },
             { id: 'composer-2.5-fast', label: 'Composer 2.5 Fast' },
+            { id: 'grok-5-code', label: 'Grok 5 Code' },
             { id: 'claude-opus-5-5-low', label: 'Claude Opus 5.5 1M Low' },
             { id: 'claude-opus-5-5-high', label: 'Claude Opus 5.5 1M High' },
             { id: 'claude-opus-5-5-xhigh', label: 'Claude Opus 5.5 1M Extra High' },

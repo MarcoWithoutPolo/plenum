@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import './quiet.js';
 import { parseArgs } from 'node:util';
-import { Engine, VERSION, parseSeat } from '@conclave/core';
+import { Engine, VERSION, parseSeat, serveMcp } from '@conclave/core';
 import { askCommand } from './ask.js';
 import { chatCommand } from './chat.js';
 import { projectCommand } from './project.js';
@@ -38,6 +38,8 @@ Commands:
   project decisions <id> List what's been decided and assumed
   project decide <id> "question" "answer"   Add a decision
   project steer <id> "..." [--apply]        Tell a project what to change
+  mcp                    Serve Conclave to Claude Code or any MCP client over stdio:
+                         claude mcp add conclave -- npm --prefix <this folder> run -s conclave -- mcp
 
 Options:
   --json         Machine-readable output (doctor, ask)
@@ -128,6 +130,10 @@ export async function main(argv: string[]): Promise<number> {
           ...(values.use && { use: values.use }),
           ...(values['effort-up'] && { effortUp: true }),
         });
+      case 'mcp':
+        // stdout carries the protocol: nothing else may print there.
+        await serveMcp(engine, VERSION);
+        return 0;
       case 'threads':
         return threadsCommand(engine);
       case 'show':

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kanban</title>
+    <script>
+      // Apply the saved theme before the first paint, so there's no flash of the wrong one.
+      try {
+        const theme = localStorage.getItem('kanban-theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {
+        // storage unavailable: follow the system
+      }
+    </script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <h1>Kanban</h1>
+        <div class="tools">
+          <div class="theme">
+            <label for="theme">Theme</label>
+            <select id="theme">
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+          <button type="button" id="export">Export CSV</button>
+          <button
+            type="button"
+            id="show-shortcuts"
+            aria-label="Keyboard shortcuts"
+            aria-keyshortcuts="?"
+          >
+            ?
+          </button>
+        </div>
+      </header>
+      <form id="add">
+        <label for="new-card">New card</label>
+        <input id="new-card" autocomplete="off" aria-keyshortcuts="N" />
+        <button type="submit">Add card</button>
+      </form>
+      <div id="board"></div>
+    </main>
+    <dialog id="shortcuts" aria-labelledby="shortcuts-title">
+      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+      <dl>
+        <div>
+          <dt><kbd>N</kbd></dt>
+          <dd>Go to the New card field</dd>
+        </div>
+        <div>
+          <dt><kbd>?</kbd></dt>
+          <dd>Show these shortcuts</dd>
+        </div>
+        <div>
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt>
+          <dd>Move the focused card left or right (ArrowLeft / ArrowRight)</dd>
+        </div>
+        <div>
+          <dt><kbd>Delete</kbd></dt>
+          <dd>Delete the focused card</dd>
+        </div>
+        <div>
+          <dt><kbd>Esc</kbd></dt>
+          <dd>Close this dialog</dd>
+        </div>
+      </dl>
+      <p class="hint">Press Tab to reach a card.</p>
+      <form method="dialog">
+        <button type="submit">Close</button>
+      </form>
+    </dialog>
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>

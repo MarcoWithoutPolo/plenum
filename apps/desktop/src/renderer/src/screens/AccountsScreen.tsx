@@ -26,6 +26,8 @@ import { Badge, Button, GitHubMark, ProviderDot } from '@/components/bits';
 import { PlanUsage, relative } from '@/components/PlanUsage';
 import { Popover } from '@/components/Popover';
 import { SeatPicker, modelLabel } from '@/components/SeatPicker';
+import { Switch } from '@/components/form';
+import { progressLine } from './FirstRun';
 import { settle } from '@/lib/settle';
 
 /** How often the screen refreshes plan usage while you look at it. */
@@ -124,6 +126,30 @@ export function AccountsScreen() {
     setSettings(next);
   };
 
+  const sharedPlan = Boolean(
+    settings?.limits.sharedPlans.some((g) => g.includes('cursor') && g.includes('grok')),
+  );
+  /** F12: one plan for Cursor and Grok; Cursor then defaults to a Grok model (I5). */
+  const saveSharedPlan = async (on: boolean) => {
+    const others = (settings?.limits.sharedPlans ?? []).filter(
+      (g) => !(g.includes('cursor') && g.includes('grok')),
+    );
+    const cursor = providers.find((p) => p.provider === 'cursor');
+    const grokModel = cursor?.models.find((m) => /grok/i.test(m.id))?.id;
+    const own = settings?.defaults.providers.cursor;
+    const next = await api().settings.update({
+      limits: { sharedPlans: on ? [...others, ['cursor', 'grok']] : others },
+      ...(on &&
+        grokModel &&
+        !own?.model && {
+          defaults: {
+            providers: { ...settings?.defaults.providers, cursor: { ...own, model: grokModel } },
+          },
+        }),
+    });
+    setSettings(next);
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="drag flex h-10 shrink-0 items-center px-6" />
@@ -133,6 +159,9 @@ export function AccountsScreen() {
             <div className="min-w-0 flex-1">
               <h1 className="text-[22px] font-semibold tracking-tight">Accounts</h1>
               <p className="mt-1 text-[13.5px] text-muted">{summary}</p>
+              {connected.length === 1 && (
+                <p className="mt-1 text-[12.5px] text-muted">{progressLine(1)}</p>
+              )}
             </div>
             <span className="text-[12.5px] text-faint" aria-live="off">
               {checking ? 'Checking…' : `Checked ${relative(checkedAt, 'past')}`}
@@ -182,6 +211,28 @@ export function AccountsScreen() {
             ))}
           </div>
 
+          {yours.some((p) => p.provider === 'cursor') &&
+            yours.some((p) => p.provider === 'grok') && (
+              <label className="mt-3 flex cursor-pointer items-center gap-4 rounded-2xl border border-line bg-panel px-4 py-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-medium">
+                    Cursor and Grok share one plan
+                  </span>
+                  <span className="block text-[12px] text-faint">
+                    Turn this on if both come with The X Subscription. A usage limit on one then
+                    pauses both, and Cursor uses a Grok model unless you choose another. Cursor's
+                    Claude and GPT models are billed per use.
+                  </span>
+                </span>
+                <Switch
+                  label="Cursor and Grok share one plan"
+                  disabled={!settings}
+                  checked={sharedPlan}
+                  onChange={(on) => settle(saveSharedPlan(on))}
+                />
+              </label>
+            )}
+
           {toAdd.length > 0 && (
             <>
               <h2 className="mt-8 text-[12px] font-semibold tracking-wide text-muted uppercase">
@@ -212,7 +263,7 @@ export function AccountsScreen() {
 }
 
 /** Which AI new chats start with: one of the connected ones, or the last one you used. */
-function ChatDefault({
+export function ChatDefault({
   connected,
   value,
   onChange,
@@ -276,7 +327,7 @@ function ChatDefault({
 }
 
 /** A status says it in words and an icon, never by color alone. */
-function Status({ info }: { info: ProviderInfo }) {
+export function Status({ info }: { info: ProviderInfo }) {
   if (info.auth === 'signed_in' && info.limit)
     return (
       <Badge tone="warn">
@@ -498,7 +549,13 @@ function ProviderCard({
 }
 
 /** An AI you could add: what it costs, how to install it on this computer, and Install. */
-function AddRow({ info, onChanged }: { info: ProviderInfo; onChanged: () => Promise<void> }) {
+export function AddRow({
+  info,
+  onChanged,
+}: {
+  info: ProviderInfo;
+  onChanged: () => Promise<void>;
+}) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [log, setLog] = useState('');

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sales dashboard</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Sales dashboard</h1>
+      <form id="filters" class="filters">
+        <div class="field">
+          <label for="region">Region</label>
+          <select id="region">
+            <option value="">All regions</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="category">Category</label>
+          <select id="category">
+            <option value="">All categories</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="from">From</label>
+          <input id="from" type="date" />
+        </div>
+        <div class="field">
+          <label for="to">To</label>
+          <input id="to" type="date" />
+        </div>
+        <button id="export" type="button">Export CSV</button>
+      </form>
+      <section class="totals" aria-label="Totals">
+        <div class="tile">
+          <span class="label">Revenue</span><strong data-total-revenue>-</strong>
+        </div>
+        <div class="tile"><span class="label">Units</span><strong data-total-units>-</strong></div>
+        <div class="tile">
+          <span class="label">Orders</span><strong data-total-orders>-</strong>
+        </div>
+      </section>
+      <section class="charts">
+        <figure>
+          <figcaption>Revenue by month</figcaption>
+          <div data-chart="month"></div>
+        </figure>
+        <figure>
+          <figcaption>Revenue by category</figcaption>
+          <div data-chart="category"></div>
+        </figure>
+      </section>
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>
