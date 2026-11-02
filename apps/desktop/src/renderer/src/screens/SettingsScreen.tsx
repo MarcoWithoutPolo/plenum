@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import type {
   AppSettings,
+  AppearanceSettings,
   LimitSettings,
   NotificationSettings,
   ProviderId,
@@ -15,6 +16,8 @@ import { api } from '@/lib/api';
 import type { SettingsPatch } from '../../../shared/api';
 import { providerName, useApp } from '@/lib/store';
 import { settle } from '@/lib/settle';
+import { SHOW_SHORTCUTS } from '@/lib/events';
+import { applyLook } from '../../../shared/look';
 
 const NOTICES: { key: keyof NotificationSettings; label: string; hint: string }[] = [
   {
@@ -61,8 +64,9 @@ function Switch({
   disabled?: boolean;
   onChange: (on: boolean) => void;
 }) {
+  // The hidden checkbox sits inside the drawn switch, so its own spot is the switch itself.
   return (
-    <>
+    <span className="relative inline-flex shrink-0">
       <input
         type="checkbox"
         role="switch"
@@ -73,7 +77,28 @@ function Switch({
         className="peer sr-only"
       />
       <span className="relative h-5 w-9 shrink-0 rounded-full bg-line-strong transition peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-disabled:opacity-50 after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
-    </>
+    </span>
+  );
+}
+
+/** A setting with its label and hint on the left and its control on the right. */
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+      <span className="min-w-0 flex-1 basis-60">
+        <span className="block text-[13.5px] font-medium">{label}</span>
+        <span className="block text-[12px] text-faint">{hint}</span>
+      </span>
+      {children}
+    </div>
   );
 }
 
@@ -185,6 +210,13 @@ export function SettingsScreen() {
     save((s) => ({ ...s, notifications: { ...s.notifications, [key]: on } }), {
       notifications: { [key]: on },
     });
+  const look = settings?.appearance;
+  const setLook = (patch: Partial<AppearanceSettings>) =>
+    save((s) => ({ ...s, appearance: { ...s.appearance, ...patch } }), { appearance: patch });
+  // The page side of the look follows what's saved (theme and size are the window's).
+  useEffect(() => {
+    if (look) applyLook(document.documentElement, look);
+  }, [look]);
   const setLimits = (patch: Partial<LimitSettings>) =>
     save((s) => ({ ...s, limits: { ...s.limits, ...patch } }), { limits: patch });
   const limits = settings?.limits;
@@ -433,6 +465,97 @@ export function SettingsScreen() {
                 await refreshProviders();
               }}
             />
+          </Section>
+
+          <Section
+            id="appearance"
+            title="Appearance and accessibility"
+            hint="How Conclave looks and reads. Each change applies at once and is kept."
+          >
+            <Row label="Theme" hint="Follows your system unless you pick one.">
+              <Segmented
+                label="Theme"
+                value={look?.theme ?? 'system'}
+                onChange={(theme) => settle(setLook({ theme }))}
+                options={[
+                  { value: 'system', label: 'System' },
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' },
+                ]}
+              />
+            </Row>
+            <Row label="Text size" hint="Everything scales, menus and dialogs included.">
+              <Segmented
+                label="Text size"
+                value={look?.textScale ?? 1}
+                onChange={(textScale) => settle(setLook({ textScale }))}
+                options={([0.9, 1, 1.15, 1.3] as const).map((n) => ({
+                  value: n,
+                  label: `${Math.round(n * 100)}%`,
+                }))}
+              />
+            </Row>
+            <Row label="Reduce motion" hint="Turns off animations and moving progress bars.">
+              <Segmented
+                label="Reduce motion"
+                value={look?.motion ?? 'system'}
+                onChange={(motion) => settle(setLook({ motion }))}
+                options={[
+                  { value: 'system', label: 'Follow system' },
+                  { value: 'reduce', label: 'Always' },
+                ]}
+              />
+            </Row>
+            <label className="flex cursor-pointer items-center gap-4 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-medium">Higher contrast</span>
+                <span className="block text-[12px] text-faint">Stronger text and borders.</span>
+              </span>
+              <Switch
+                label="Higher contrast"
+                disabled={!look}
+                checked={look?.contrast === 'high'}
+                onChange={(on) => settle(setLook({ contrast: on ? 'high' : 'normal' }))}
+              />
+            </label>
+            <label className="flex cursor-pointer items-center gap-4 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-medium">Always show focus outlines</span>
+                <span className="block text-[12px] text-faint">
+                  Even after clicking with the mouse, not only with the keyboard.
+                </span>
+              </span>
+              <Switch
+                label="Always show focus outlines"
+                disabled={!look}
+                checked={look?.focusAlways ?? false}
+                onChange={(focusAlways) => settle(setLook({ focusAlways }))}
+              />
+            </label>
+            <label className="flex cursor-pointer items-center gap-4 px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-medium">
+                  Announce progress to screen readers
+                </span>
+                <span className="block text-[12px] text-faint">
+                  A council answered, a project needs you, a merge landed.
+                </span>
+              </span>
+              <Switch
+                label="Announce progress to screen readers"
+                disabled={!look}
+                checked={look?.announce ?? true}
+                onChange={(announce) => settle(setLook({ announce }))}
+              />
+            </label>
+            <Row
+              label="Keyboard shortcuts"
+              hint="Every shortcut in one list. Also opens with Ctrl+/ or ?."
+            >
+              <Button onClick={() => window.dispatchEvent(new Event(SHOW_SHORTCUTS))}>
+                Show shortcuts
+              </Button>
+            </Row>
           </Section>
 
           <Section

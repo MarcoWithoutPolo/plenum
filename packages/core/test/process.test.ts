@@ -7,6 +7,7 @@ import {
   isNotFound,
   killTree,
   runCommand,
+  runShell,
   streamProcess,
   type ProcessChunk,
 } from '../src/index.js';
@@ -133,5 +134,28 @@ describe('killTree (E6)', () => {
     const still = alive(orphan);
     if (still) process.kill(orphan);
     expect(still).toBe(false);
+  }, 30_000);
+});
+
+describe('runCommand keeps blank lines (E13)', () => {
+  it('returns output exactly, empty lines included (a diff needs them)', async () => {
+    const r = await runCommand(process.execPath, [
+      '-e',
+      "process.stdout.write(['a', '', '  ', 'b', ''].join(String.fromCharCode(10)))",
+    ]);
+    expect(r.stdout.split('\n')).toEqual(['a', '', '  ', 'b']);
+  });
+});
+
+describe('runShell stops everything it started (E6)', () => {
+  it('a timeout returns soon even when a child keeps the output open', async () => {
+    // The shell starts a child that holds stdout and runs for a minute.
+    const started = Date.now();
+    const r = await runShell(
+      `"${process.execPath}" -e "setInterval(() => console.log('tick'), 200)"`,
+      { cwd: process.cwd(), timeoutMs: 1_000 },
+    );
+    expect(r.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(12_000);
   }, 30_000);
 });

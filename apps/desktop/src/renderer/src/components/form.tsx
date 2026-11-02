@@ -15,7 +15,7 @@ import type {
   TeamInsights,
   TryTestResult,
 } from '../../../shared/api';
-import { Popover } from './Popover';
+import { Popover, onRadioKeyDown } from './Popover';
 import { SeatPicker, modelLabel } from './SeatPicker';
 import { ProviderDot } from './bits';
 import { api } from '@/lib/api';
@@ -84,6 +84,8 @@ export function Segmented<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={label}
+      // The arrow keys move focus with the choice, so the next press starts from it.
+      onKeyDown={onRadioKeyDown}
       className="inline-flex flex-wrap rounded-xl border border-line bg-sunken/60 p-0.5"
     >
       {options.map((o) => {
@@ -96,16 +98,6 @@ export function Segmented<T extends string | number>({
             aria-checked={on}
             title={o.title}
             onClick={() => onChange(o.value)}
-            onKeyDown={(e) => {
-              const i = options.findIndex((x) => x.value === value);
-              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-                e.preventDefault();
-                onChange(options[(i + 1) % options.length]!.value);
-              } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                onChange(options[(i - 1 + options.length) % options.length]!.value);
-              }
-            }}
             tabIndex={on ? 0 : -1}
             className={`rounded-[10px] px-3 font-medium whitespace-nowrap transition ${
               size === 'sm' ? 'h-7 text-[12px]' : 'h-7.5 text-[12.5px]'

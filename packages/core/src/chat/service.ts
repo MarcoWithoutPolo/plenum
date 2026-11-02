@@ -5,6 +5,7 @@ import { collect, type RunResult } from '../collect.js';
 import type { Store } from '../store/store.js';
 import type { RunSource } from '../store/usage.js';
 import { buildChatPrompt } from './transcript.js';
+import { seatOptions } from '../seats.js';
 
 export interface EngineContext {
   store: Store;
@@ -77,8 +78,7 @@ export class ChatService {
           role: 'chat',
           readOnly: true,
           timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-          ...(seat.model && { model: seat.model }),
-          ...(seat.effort && { effort: seat.effort }),
+          ...seatOptions(seat, this.ctx.store.settings),
           ...(resume && session && { sessionId: session.sessionId }),
           ...(opts.signal && { signal: opts.signal }),
         }),

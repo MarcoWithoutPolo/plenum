@@ -193,3 +193,36 @@ export function onListKeyDown(e: React.KeyboardEvent<HTMLElement>) {
     next.focus();
   }
 }
+
+/**
+ * Arrow keys in a radio group, as the ARIA pattern has it: move to the next or previous option
+ * and select it (Home and End jump). Put it on the element with role="radiogroup".
+ */
+export function onRadioKeyDown(e: React.KeyboardEvent<HTMLElement>) {
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (step === undefined && e.key !== 'Home' && e.key !== 'End') return;
+  const radios = [
+    ...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]:not([disabled])'),
+  ];
+  if (!radios.length) return;
+  const at = radios.indexOf(document.activeElement as HTMLElement);
+  const next =
+    e.key === 'Home'
+      ? radios[0]
+      : e.key === 'End'
+        ? radios.at(-1)
+        : radios[(Math.max(at, 0) + step! + radios.length) % radios.length];
+  if (!next) return;
+  e.preventDefault();
+  const group = e.currentTarget;
+  const index = radios.indexOf(next);
+  next.focus();
+  // Marked so the option can tell an arrow key from a click (a picker stays open for arrows).
+  next.dataset.arrow = '1';
+  next.click();
+  delete next.dataset.arrow;
+  // Choosing re-renders the group; keep focus on the chosen option once it has.
+  requestAnimationFrame(() =>
+    group.querySelectorAll<HTMLElement>('[role="radio"]:not([disabled])')[index]?.focus(),
+  );
+}

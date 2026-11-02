@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { BrainEvent } from '@conclave/shared';
+import type { AppearanceSettings, BrainEvent } from '@conclave/shared';
+import { applyLook } from '../shared/look.js';
 import { IPC, type ConclaveApi, type InstallLog, type RunUpdate } from '../shared/api.js';
 
 const invoke = <T>(channel: string, ...args: unknown[]) =>
@@ -114,3 +115,17 @@ const api: ConclaveApi = {
 };
 
 contextBridge.exposeInMainWorld('conclave', api);
+
+// The look (F3) is on the page before it first paints: no flash of the wrong contrast or motion.
+try {
+  const look = ipcRenderer.sendSync(IPC.appearanceGet) as AppearanceSettings | undefined;
+  if (look) {
+    // The parser makes the page's own <html> after this runs: set it once that exists, which is
+    // still before the first paint.
+    const apply = () => applyLook(document.documentElement, look);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+    else apply();
+  }
+} catch {
+  // The defaults (from the stylesheet) until the app loads its settings.
+}

@@ -411,6 +411,7 @@ export type SettingsPatch = { [K in keyof AppSettings]?: Partial<AppSettings[K]>
 export const IPC = {
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
+  appearanceGet: 'appearance:get',
   openProject: 'app:open-project',
   accountsList: 'accounts:list',
   accountsSignIn: 'accounts:sign-in',

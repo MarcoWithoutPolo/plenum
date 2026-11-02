@@ -52,6 +52,7 @@ import { QUESTION_KINDS } from './answers.js';
 import { isRunnableInstall, parseAssumptions, parseDeletes, parseQuestion } from './questions.js';
 import { builderPlan, countsAsAttempt, sentBackBy } from './recovery.js';
 import { findReplacement } from './similar.js';
+import { seatOptions } from '../seats.js';
 
 export interface BrainOptions {
   /** Conclave's data folder; worktrees go under <home>/projects/<project id>. */
@@ -2374,8 +2375,7 @@ export class Brain {
           ...(permissions && { permissions }),
           timeoutMs: this.agentTimeout,
           ...(signal && { signal }),
-          ...(seat.model && { model: seat.model }),
-          ...(seat.effort && { effort: seat.effort }),
+          ...seatOptions(seat, this.ctx.store.settings),
           ...(extra.images?.length && { images: extra.images }),
         }),
       ),

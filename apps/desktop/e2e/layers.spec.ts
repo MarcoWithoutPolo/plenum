@@ -209,3 +209,56 @@ for (const size of SIZES) {
     );
   });
 }
+
+test('a menu stays attached to its button while the dialog behind it scrolls (U27)', async () => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.getByRole('button', { name: /^Projects/ }).click();
+  await page.getByRole('button', { name: 'New project' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'New project' });
+  const choose = dialog.getByRole('button', { name: 'Choose a folder' });
+  if (await choose.isVisible()) {
+    await choose.click();
+    await expect(dialog.getByLabel('Ready')).toBeVisible();
+  }
+  const next = dialog.getByRole('button', { name: 'Next' });
+  if (await dialog.getByRole('textbox', { name: 'Goal' }).isHidden()) await next.click();
+  const trigger = dialog.locator('[aria-haspopup="dialog"]:visible').first();
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  const popover = page.locator(`[id="${await trigger.getAttribute('aria-controls')}"]`);
+  await expect(popover).toBeVisible();
+  // Wheel over the dialog, away from the menu: the dialog body scrolls under it.
+  const box = (await dialog.boundingBox())!;
+  await page.mouse.move(box.x + 24, box.y + box.height / 2);
+  await page.mouse.wheel(0, 120);
+  await page.waitForTimeout(300);
+  if (await popover.isVisible()) {
+    const t = (await trigger.boundingBox())!;
+    const p = (await popover.boundingBox())!;
+    const gap = Math.min(Math.abs(p.y - (t.y + t.height)), Math.abs(t.y - (p.y + p.height)));
+    expect(gap, 'the menu moved away from its button').toBeLessThan(14);
+  }
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1320, height: 860 });
+});
+
+test('arrow keys move through the effort choices, focus and selection together (U23)', async () => {
+  await page.getByRole('button', { name: 'New chat' }).click();
+  await page.getByRole('button', { name: /choose model/ }).click();
+  const efforts = page.getByRole('radiogroup', { name: /Effort/ });
+  const radios = efforts.getByRole('radio');
+  const checked = efforts.locator('[role="radio"][aria-checked="true"]');
+  await checked.focus();
+  const from = await radios.evaluateAll((els) =>
+    els.findIndex((e) => e === document.activeElement),
+  );
+  await page.keyboard.press('ArrowRight');
+  const to = await radios.evaluateAll((els) => els.findIndex((e) => e === document.activeElement));
+  expect(to).toBe((from + 1) % (await radios.count()));
+  await expect(radios.nth(to)).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Home');
+  await expect(radios.first()).toBeFocused();
+  await expect(radios.first()).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+});

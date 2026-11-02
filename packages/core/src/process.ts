@@ -8,6 +8,8 @@ export interface ProcessOptions {
   cwd?: string;
   /** Written to stdin, then stdin is closed. Prompts go here so they never hit command-line limits or quoting. */
   stdin?: string;
+  /** Keep empty lines (a diff's blank context lines); CLIs' JSON streams skip them. */
+  keepBlank?: boolean;
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -37,17 +39,19 @@ export async function* streamProcess(opts: ProcessOptions): AsyncGenerator<Proce
     env: opts.env ?? process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
+    // Its own process group on macOS and Linux, so a stop takes what the CLI started (E6).
+    detached: process.platform !== 'win32',
   });
 
   let spawnError: string | undefined;
   let killedReason: string | undefined;
   const kill = (reason: string) => {
-    if (child.exitCode !== null || child.killed) return;
+    // Already over: nothing to stop (and no process table to read).
+    if (killedReason || child.exitCode !== null || child.signalCode !== null) return;
     killedReason = reason;
-    // On Windows the child is often an npm .cmd shim: killing it alone leaves the CLI and the
-    // shells it started running (and holding the worktree). Take the whole tree down.
-    if (process.platform === 'win32') void killTree(child);
-    else child.kill();
+    // The child is often an npm shim or a shell: killing it alone leaves the CLI and what it
+    // started running (and holding the worktree). Take the whole tree down, everywhere (E6).
+    void killTree(child);
   };
   const onAbort = () => kill('Cancelled');
   opts.signal?.addEventListener('abort', onAbort, { once: true });
@@ -64,7 +68,7 @@ export async function* streamProcess(opts: ProcessOptions): AsyncGenerator<Proce
     while ((nl = buffered.indexOf('\n')) >= 0) {
       const line = buffered.slice(0, nl).replace(/\r$/, '');
       buffered = buffered.slice(nl + 1);
-      if (line.trim()) push({ kind: 'line', line });
+      if (opts.keepBlank || line.trim()) push({ kind: 'line', line });
     }
   });
   child.stderr?.setEncoding('utf8');
@@ -117,7 +121,14 @@ export async function runCommand(
 ): Promise<CommandResult> {
   const lines: string[] = [];
   let stderr = '';
-  for await (const chunk of streamProcess({ timeoutMs: 20_000, ...opts, command, args })) {
+  // Everything a command prints, blank lines included (git diffs need them, E13).
+  for await (const chunk of streamProcess({
+    timeoutMs: 20_000,
+    keepBlank: true,
+    ...opts,
+    command,
+    args,
+  })) {
     if (chunk.kind === 'line') lines.push(chunk.line);
     else if (chunk.kind === 'stderr') stderr += chunk.text;
     else
@@ -162,25 +173,38 @@ export async function killTree(child: ChildProcess, timeoutMs = 8000): Promise<v
 }
 
 /** Run a short Windows command, never waiting past `ms`; resolves with its output. */
-function quick(command: string, args: string[], ms: number): Promise<string> {
+function quick(
+  command: string,
+  args: string[],
+  ms: number,
+): Promise<{ out: string; code: number | null }> {
   return new Promise((done) => {
     const p = nodeSpawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     let out = '';
     p.stdout?.on('data', (d: Buffer) => (out += d.toString('utf8')));
     const timer = setTimeout(() => {
       p.kill();
-      done(out);
+      done({ out, code: null });
     }, ms).unref();
-    p.once('exit', () => {
+    p.once('exit', (code) => {
       clearTimeout(timer);
-      done(out);
+      done({ out, code });
     });
     p.once('error', () => {
       clearTimeout(timer);
-      done(out);
+      done({ out, code: null });
     });
   });
 }
+
+const isAlive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Kill a process tree on Windows. taskkill /T can stall on a tree that is still starting (npm
@@ -190,6 +214,13 @@ function quick(command: string, args: string[], ms: number): Promise<string> {
  * few times for children that were still being started.
  */
 async function killWindowsTree(root: number, timeoutMs: number): Promise<void> {
+  // The usual case: the tree is whole, and one taskkill /T ends it. Reading the process table
+  // costs a second of CPU, so only when the root is already gone (its children may live on) or
+  // taskkill failed or stalled.
+  if (isAlive(root)) {
+    const { code } = await quick('taskkill', ['/pid', String(root), '/T', '/F'], 3_000);
+    if (code === 0) return;
+  }
   const known = new Set([root]);
   const end = (pid: number) => {
     try {
@@ -199,8 +230,8 @@ async function killWindowsTree(root: number, timeoutMs: number): Promise<void> {
     }
   };
   end(root);
-  for (let round = 0; round < 4; round++) {
-    const table = await quick(
+  for (let round = 0; round < 3; round++) {
+    const { out: table } = await quick(
       'powershell.exe',
       [
         '-NoProfile',
@@ -225,7 +256,8 @@ async function killWindowsTree(root: number, timeoutMs: number): Promise<void> {
         }
       }
     }
-    if (found.length === 0 && round > 0) return;
+    // Nothing descended from it: done (one look at the process table, no more).
+    if (found.length === 0) return;
     found.forEach(end);
     await new Promise((r) => setTimeout(r, 200).unref());
   }
@@ -266,6 +298,8 @@ export function runShell(
       cwd: opts.cwd,
       shell: true,
       windowsHide: true,
+      // Its own process group on macOS and Linux, so a stop takes everything it started (E6).
+      detached: process.platform !== 'win32',
       env: { ...process.env, CI: '1', FORCE_COLOR: '0' },
     });
     let output = '';
@@ -275,28 +309,32 @@ export function runShell(
     };
     child.stdout?.on('data', add);
     child.stderr?.on('data', add);
-    const killTree = () => {
-      if (child.exitCode !== null || child.pid === undefined) return;
-      if (process.platform === 'win32') {
-        nodeSpawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
-      } else {
-        child.kill('SIGKILL');
-      }
+    let done = false;
+    const finish = (code: number | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      opts.signal?.removeEventListener('abort', onAbort);
+      resolve({ code, output, timedOut, durationMs: Date.now() - started });
+    };
+    // Stopped (a timeout, Stop, a skip): the whole tree goes, even what outlived the shell, and
+    // the result comes back within seconds even if something still holds the output open (E6).
+    const stop = () => {
+      void killTree(child);
+      setTimeout(() => finish(child.exitCode), 5_000).unref();
     };
     const timer = setTimeout(
       () => {
         timedOut = true;
-        killTree();
+        stop();
       },
       opts.timeoutMs ?? 15 * 60_000,
     );
-    const onAbort = () => killTree();
+    const onAbort = () => stop();
     opts.signal?.addEventListener('abort', onAbort, { once: true });
     child.on('error', (err) => add(Buffer.from(`\n${err.message}\n`)));
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      opts.signal?.removeEventListener('abort', onAbort);
-      resolve({ code, output, timedOut, durationMs: Date.now() - started });
-    });
+    // Normally 'close' (all output read); after 'exit', give the pipes a moment, no more.
+    child.on('exit', (code) => setTimeout(() => finish(code), 5_000).unref());
+    child.on('close', (code) => finish(code));
   });
 }

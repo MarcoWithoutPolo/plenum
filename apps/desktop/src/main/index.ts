@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, ipcMain, nativeTheme, Notification, shell } from 'electron';
-import type { AppSettings } from '@conclave/shared';
+import type { AppSettings, AppearanceSettings } from '@conclave/shared';
 import { BrainManager, Engine, GitHub, silenceSqliteWarning } from '@conclave/core';
 import {
   demoAdapters,
@@ -22,6 +22,15 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const demo = process.env.CONCLAVE_DEMO === '1';
 
 let window: BrowserWindow | null = null;
+/** How the app looks (F3), read once the engine is up; theme and zoom are applied here. */
+let appearance: AppearanceSettings | undefined;
+
+function applyAppearance(next: AppearanceSettings): void {
+  appearance = next;
+  // The renderer's light and dark styles follow prefers-color-scheme, which this sets.
+  nativeTheme.themeSource = next.theme;
+  if (window && !window.isDestroyed()) window.webContents.setZoomFactor(next.textScale);
+}
 
 function createWindow(): BrowserWindow {
   const dark = nativeTheme.shouldUseDarkColors;
@@ -42,6 +51,8 @@ function createWindow(): BrowserWindow {
       },
     }),
     webPreferences: {
+      // Text size (F3): the window's zoom, so menus and dialogs scale and measure together.
+      zoomFactor: appearance?.textScale ?? 1,
       preload: join(here, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
@@ -52,6 +63,10 @@ function createWindow(): BrowserWindow {
   });
 
   win.once('ready-to-show', () => win.show());
+  // Chromium remembers a zoom between launches; the text size setting is the only one that counts.
+  win.webContents.on('did-finish-load', () =>
+    win.webContents.setZoomFactor(appearance?.textScale ?? 1),
+  );
 
   // The renderer never navigates; links open in the user's browser.
   win.webContents.on('will-navigate', (event, url) => {
@@ -73,6 +88,10 @@ function createWindow(): BrowserWindow {
 
 function registerSettings(engine: Engine, brains: BrainManager): void {
   ipcMain.handle(IPC.settingsGet, (): AppSettings => engine.store.settings.get());
+  // Read synchronously by the preload, so the first paint already has the right look.
+  ipcMain.on(IPC.appearanceGet, (event) => {
+    event.returnValue = engine.store.settings.get().appearance;
+  });
   // The store merges each section and validates the whole result, so a patch only
   // changes the keys it names (and a bad value throws instead of being saved).
   ipcMain.handle(IPC.settingsUpdate, (_e, patch: SettingsPatch): AppSettings => {
@@ -82,11 +101,16 @@ function registerSettings(engine: Engine, brains: BrainManager): void {
     const notifications = section(patch?.notifications);
     const limits = section(patch?.limits);
     const local = section(patch?.local);
+    const defaults = section(patch?.defaults);
+    const appearance = section(patch?.appearance);
     const next = engine.store.settings.update({
       ...(notifications && { notifications }),
       ...(limits && { limits }),
       ...(local && { local }),
+      ...(defaults && { defaults }),
+      ...(appearance && { appearance }),
     } as SettingsPatch);
+    if (appearance) applyAppearance(next.appearance);
     // Limits changed (Pause everything off, quiet hours, caps): waiting projects look again now.
     if (limits) brains.wake();
     return next;
@@ -160,6 +184,7 @@ if (!singleInstance) {
     registerIpc(engine, () => window);
     registerProjectIpc(engine, brains, demo ? demoGitHub() : new GitHub(), () => window);
     registerSettings(engine, brains);
+    applyAppearance(engine.store.settings.get().appearance);
     watchForNotices(engine, brains);
     window = createWindow();
 

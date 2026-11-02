@@ -44,7 +44,7 @@ export type Message = z.infer<typeof Message>;
 
 /** Who answers: a provider plus optional model and reasoning effort (the CLI's defaults when omitted). */
 /** A model or effort id goes to a CLI as an argument: it may never look like an option (U26). */
-const CliValue = z
+export const CliValue = z
   .string()
   .max(200)
   .regex(/^[^-\s][^\s]*$/, 'A model or effort id can’t start with "-" or contain spaces');

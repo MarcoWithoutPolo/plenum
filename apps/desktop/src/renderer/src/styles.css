@@ -387,3 +387,28 @@ kbd {
     'liga' 0,
     'calt' 0;
 }
+
+/* ── Appearance and accessibility (v1.0 F3) ─────────────────────────── */
+
+/* Reduce motion, whatever the system says. */
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Higher contrast: text one step darker (lighter in dark mode), stronger borders. */
+html[data-contrast='high'] {
+  --faint: var(--muted);
+  --muted: var(--text);
+  --border: var(--border-strong);
+}
+
+/* Focus outlines even after a mouse click. */
+html[data-focus='always'] :focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

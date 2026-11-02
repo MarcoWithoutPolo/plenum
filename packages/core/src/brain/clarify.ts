@@ -6,6 +6,7 @@ import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';
 import { Governor } from '../governor/governor.js';
 import { extractJson } from './json.js';
+import { seatOptions } from '../seats.js';
 
 const run = promisify(execFile);
 
@@ -132,8 +133,7 @@ export async function clarify(
       readOnly: true,
       timeoutMs: opts.timeoutMs ?? 10 * 60_000,
       ...(opts.signal && { signal: opts.signal }),
-      ...(seat.model && { model: seat.model }),
-      ...(seat.effort && { effort: seat.effort }),
+      ...seatOptions(seat, ctx.store.settings),
     }),
   );
   recordUsage(

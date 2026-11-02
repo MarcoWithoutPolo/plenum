@@ -4,6 +4,8 @@ import { firstPreferred, preferred, shortName } from '@conclave/shared';
 import type { ProviderInfo, QuotaInfo, RunUpdate, ThreadDetail } from '../../../shared/api';
 import { api, newRequestId } from './api';
 import { settle } from './settle';
+import { announce } from './announce';
+import { applyLook } from '../../../shared/look';
 
 export type Screen =
   | { name: 'chat'; threadId?: string }
@@ -52,6 +54,9 @@ interface State {
   ready: boolean;
   /** Why the app couldn't load (it offers Retry), or null. */
   loadError: string | null;
+  /** The AI new chats start with (Accounts → Start new chats with); null: the last one used. */
+  chatDefault: ProviderId | null;
+  setChatDefault(provider: ProviderId | null): Promise<void>;
   providers: ProviderInfo[];
   quotas: QuotaInfo[];
   threads: Thread[];
@@ -92,6 +97,7 @@ export const errorText = (err: unknown) =>
 export const useApp = create<State>((set, get) => ({
   ready: false,
   loadError: null,
+  chatDefault: null,
   providers: [],
   quotas: [],
   threads: [],
@@ -111,8 +117,13 @@ export const useApp = create<State>((set, get) => ({
     // A failure shows with Retry instead of "Loading…" for good (U9).
     try {
       set({ loadError: null });
-      await Promise.all([get().refreshProviders(), get().refreshThreads()]);
-      set({ ready: true });
+      const [settings] = await Promise.all([
+        api().settings.get(),
+        get().refreshProviders(),
+        get().refreshThreads(),
+      ]);
+      applyLook(document.documentElement, settings.appearance);
+      set({ ready: true, chatDefault: settings.defaults.chat });
     } catch (err) {
       set({ loadError: errorText(err) });
       throw err;
@@ -228,6 +239,7 @@ export const useApp = create<State>((set, get) => ({
         },
       }));
       await get().loadThread(result.thread.id);
+      announce('The council answered');
       // Show the round only if you're still where you asked it (U5).
       set((s) =>
         s.screen.name === 'council' && (s.screen.threadId ?? undefined) === threadId
@@ -244,6 +256,11 @@ export const useApp = create<State>((set, get) => ({
       settle(get().refreshThreads());
       settle(refreshQuotas(set));
     }
+  },
+
+  async setChatDefault(provider) {
+    const saved = await api().settings.update({ defaults: { chat: provider } });
+    set({ chatDefault: saved.defaults.chat });
   },
 
   cancel(requestId) {
@@ -361,8 +378,15 @@ export function readyProviders(providers: ProviderInfo[]): ProviderInfo[] {
   return providers.filter((p) => p.auth === 'signed_in');
 }
 
-export function defaultSeat(providers: ProviderInfo[], last?: Seat): Seat | undefined {
+export function defaultSeat(
+  providers: ProviderInfo[],
+  last?: Seat,
+  chatDefault?: ProviderId | null,
+): Seat | undefined {
   const ready = readyProviders(providers);
+  // The AI you chose for new chats (F2) comes before the one you used last.
+  if (chatDefault && ready.some((p) => p.provider === chatDefault))
+    return { provider: chatDefault };
   if (last && ready.some((p) => p.provider === last.provider)) return last;
   const pick = firstPreferred(ready);
   return pick && { provider: pick.provider };

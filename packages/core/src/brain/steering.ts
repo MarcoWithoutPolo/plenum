@@ -13,6 +13,7 @@ import { decisionsSection } from '../store/decisions.js';
 import type { ProjectStore } from '../store/projects.js';
 import { extractJson } from './json.js';
 import { skipTask } from './recovery.js';
+import { seatOptions } from '../seats.js';
 
 /* ── Board actions: instant, no AI ─────────────────────────────────── */
 
@@ -209,8 +210,7 @@ export async function steer(
       role: 'planner',
       readOnly: true,
       timeoutMs: 5 * 60_000,
-      ...(seat.model && { model: seat.model }),
-      ...(seat.effort && { effort: seat.effort }),
+      ...seatOptions(seat, ctx.store.settings),
     }),
   );
   recordUsage(ctx.store, { seat, role: 'planner', source: 'project', refId: project.id }, result);

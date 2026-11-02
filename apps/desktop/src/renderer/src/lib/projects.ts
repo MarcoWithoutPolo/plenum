@@ -13,6 +13,7 @@ import type {
 import { api } from './api';
 import { errorText, useApp } from './store';
 import { settle } from './settle';
+import { announce } from './announce';
 
 interface ProjectsState {
   loaded: boolean;
@@ -79,6 +80,11 @@ export const useProjects = create<ProjectsState>((set, get) => {
 
   /** Live events append at once; the heavier refresh of tasks and status is batched. */
   const onEvent = (event: BrainEvent) => {
+    // Screen readers hear what needs you or just landed (F3).
+    if (event.kind === 'question') announce('A project needs your answer');
+    else if (event.kind === 'done') announce('A project met its goal');
+    else if (event.kind === 'merge' && event.message.startsWith('Merged into'))
+      announce('A task was merged');
     set((s) => {
       const d = s.details[event.projectId];
       if (!d || d.events.some((e) => e.id === event.id)) return {};

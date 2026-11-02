@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Clock, Gauge, Plug, Plus, Search, Terminal } from 'lucide-react';
-import { Popover, onListKeyDown, type PopoverTriggerProps } from './Popover';
+import { Popover, onListKeyDown, onRadioKeyDown, type PopoverTriggerProps } from './Popover';
 
 /*
  * The model picker. Providers on the left, the chosen provider's models on the right, and that
@@ -412,9 +412,9 @@ function PickerPanel({
                   provider={provider}
                   value={value}
                   here={here}
-                  onChange={(v) => {
+                  onChange={(v, done) => {
                     onChange(v);
-                    close();
+                    if (done) close();
                   }}
                 />
               </>
@@ -634,7 +634,8 @@ function Effort({
   provider: PickerProvider;
   value: PickerValue;
   here: boolean;
-  onChange: (v: PickerValue) => void;
+  /** `done`: a click (the choice is made, the picker closes); arrow keys only move. */
+  onChange: (v: PickerValue, done: boolean) => void;
 }) {
   const model = modelOf(provider, here ? value.model : undefined);
   const levels = model?.efforts ?? [];
@@ -653,13 +654,16 @@ function Effort({
     : auto
       ? `Auto uses ${auto.label}, the ${model?.label} default`
       : `Auto uses your ${provider.name} setting`;
-  const set = (effort: string | undefined, fast = here && value.fast) =>
-    onChange({
-      provider: provider.id,
-      ...(here && value.model && { model: value.model }),
-      ...(effort && { effort }),
-      ...(fast && { fast: true }),
-    });
+  const set = (effort: string | undefined, fast = here && value.fast, done = true) =>
+    onChange(
+      {
+        provider: provider.id,
+        ...(here && value.model && { model: value.model }),
+        ...(effort && { effort }),
+        ...(fast && { fast: true }),
+      },
+      done,
+    );
   return (
     <div className="shrink-0 border-t border-line bg-sunken/60 px-4 pt-2.5 pb-3">
       <div className="mb-2 flex items-center gap-1.5">
@@ -683,6 +687,7 @@ function Effort({
       <div
         role="radiogroup"
         aria-labelledby="picker-effort"
+        onKeyDown={onRadioKeyDown}
         className="flex rounded-xl border border-line bg-panel p-0.5"
       >
         {[undefined, ...levels].map((l) => {
@@ -693,9 +698,12 @@ function Effort({
               type="button"
               role="radio"
               aria-checked={on}
+              // One stop for Tab; the arrow keys move inside (U23).
+              tabIndex={on ? 0 : -1}
               aria-label={l?.label ?? 'Auto'}
               title={l?.note ?? note}
-              onClick={() => set(l?.id)}
+              // Chosen with the arrow keys: keep the picker open to go on choosing (U23).
+              onClick={(e) => set(l?.id, undefined, !e.currentTarget.dataset.arrow)}
               className={`h-7 min-w-0 flex-auto rounded-[10px] px-2 text-[11.5px] font-medium whitespace-nowrap transition ${
                 on ? 'bg-accent text-white shadow-sm' : 'text-muted hover:bg-sunken hover:text-ink'
               }`}

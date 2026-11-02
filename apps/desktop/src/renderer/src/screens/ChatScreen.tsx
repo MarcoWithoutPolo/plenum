@@ -20,6 +20,7 @@ import { settle } from '@/lib/settle';
 export function ChatScreen({ threadId }: { threadId?: string }) {
   const providers = useApp((s) => s.providers);
   const lastSeat = useApp((s) => s.lastSeat);
+  const chatDefault = useApp((s) => s.chatDefault);
   const detail = useApp((s) => (threadId ? s.details[threadId] : undefined));
   const live = useApp((s) => s.liveChats[threadId ?? NEW]);
   const sendChat = useApp((s) => s.sendChat);
@@ -28,14 +29,14 @@ export function ChatScreen({ threadId }: { threadId?: string }) {
 
   const thread = detail?.thread;
   const [seat, setSeat] = useState<Seat | undefined>(() =>
-    thread ? seatOf(thread) : defaultSeat(providers, lastSeat),
+    thread ? seatOf(thread) : defaultSeat(providers, lastSeat, chatDefault),
   );
   // Adopt the thread's seat once it loads, and pick a default when providers arrive.
   useEffect(() => {
     if (thread) setSeat(seatOf(thread));
   }, [thread?.id]);
   useEffect(() => {
-    if (!seat) setSeat(defaultSeat(providers, lastSeat));
+    if (!seat) setSeat(defaultSeat(providers, lastSeat, chatDefault));
   }, [providers, lastSeat, seat]);
 
   const messages = detail?.messages ?? [];

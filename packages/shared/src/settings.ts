@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CliValue } from './chat.js';
 import { ProviderId } from './providers.js';
 
 /** Which desktop notifications to show. All on by default. */
@@ -55,10 +56,44 @@ export const LocalSettings = z.object({
 });
 export type LocalSettings = z.infer<typeof LocalSettings>;
 
+/** One AI's default model and effort; either missing means the CLI's own setting. */
+export const SeatDefault = z.object({
+  model: CliValue.optional(),
+  effort: CliValue.optional(),
+});
+export type SeatDefault = z.infer<typeof SeatDefault>;
+
+/** v1.0 F2: what "Default" means for each AI, and which AI new chats start with. */
+export const DefaultSettings = z.object({
+  /** Used wherever a seat leaves the model or effort on "Default": chats, councils, teams. */
+  providers: z.partialRecord(ProviderId, SeatDefault).default({}),
+  /** The AI new chats start with; null means the last one you used. */
+  chat: ProviderId.nullable().default(null),
+});
+export type DefaultSettings = z.infer<typeof DefaultSettings>;
+
+/** v1.0 F3: how the app looks and reads. */
+export const AppearanceSettings = z.object({
+  theme: z.enum(['system', 'light', 'dark']).default('system'),
+  /** Everything scales: text, menus, dialogs (the window's zoom). */
+  textScale: z.union([z.literal(0.9), z.literal(1), z.literal(1.15), z.literal(1.3)]).default(1),
+  /** Follow the system's setting, or always reduce motion. */
+  motion: z.enum(['system', 'reduce']).default('system'),
+  /** Stronger text and borders, solid backgrounds. */
+  contrast: z.enum(['normal', 'high']).default('normal'),
+  /** Focus outlines even after a mouse click, not only for the keyboard. */
+  focusAlways: z.boolean().default(false),
+  /** Screen readers hear when a council answers, a project needs you, a merge lands. */
+  announce: z.boolean().default(true),
+});
+export type AppearanceSettings = z.infer<typeof AppearanceSettings>;
+
 /** App-wide settings, stored in the settings table. Unknown or missing keys get defaults. */
 export const AppSettings = z.object({
   notifications: NotificationSettings.prefault({}),
   limits: LimitSettings.prefault({}),
   local: LocalSettings.prefault({}),
+  defaults: DefaultSettings.prefault({}),
+  appearance: AppearanceSettings.prefault({}),
 });
 export type AppSettings = z.infer<typeof AppSettings>;

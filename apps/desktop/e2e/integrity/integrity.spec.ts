@@ -101,25 +101,62 @@ const SCREENS: Screen[] = [
   { name: 'settings', open: nav(/^Settings/) },
 ];
 
-const CELLS: { data: DataSet; theme: Theme }[] = [
+/** F3: the largest text and higher contrast get their own cells (at the larger size). */
+interface Look {
+  textScale?: number;
+  contrast?: 'normal' | 'high';
+}
+const CELLS: { data: DataSet; theme: Theme; look?: Look; sizes?: typeof SIZES }[] = [
   { data: 'normal', theme: 'light' },
   { data: 'normal', theme: 'dark' },
   { data: 'empty', theme: 'light' },
   { data: 'stress', theme: 'light' },
   { data: 'stress', theme: 'dark' },
+  {
+    data: 'normal',
+    theme: 'light',
+    look: { textScale: 1.3 },
+    sizes: [{ width: 1320, height: 860 }],
+  },
+  {
+    data: 'stress',
+    theme: 'dark',
+    look: { contrast: 'high' },
+    sizes: [{ width: 1320, height: 860 }],
+  },
 ];
+const lookName = (look?: Look) =>
+  look?.textScale
+    ? `, text ${Math.round(look.textScale * 100)}%`
+    : look?.contrast
+      ? ', high contrast'
+      : '';
 
 for (const cell of CELLS) {
-  test.describe(`${cell.data} data, ${cell.theme}`, () => {
+  test.describe(`${cell.data} data, ${cell.theme}${lookName(cell.look)}`, () => {
     let run: Running;
     test.beforeAll(async () => {
       run = await launch(cell.data, cell.theme);
+      if (cell.look) {
+        // Saved like any setting, then reloaded so the window starts with it.
+        await run.page.evaluate(
+          (look) =>
+            (
+              window as unknown as {
+                conclave: { settings: { update: (p: unknown) => Promise<unknown> } };
+              }
+            ).conclave.settings.update({ appearance: look }),
+          cell.look,
+        );
+        await run.page.reload();
+        await run.page.getByRole('button', { name: 'New chat' }).waitFor();
+      }
     });
     test.afterAll(async () => {
       await run?.close();
     });
 
-    for (const size of SIZES) {
+    for (const size of cell.sizes ?? SIZES) {
       test(`every screen at ${size.width}×${size.height}`, async () => {
         test.setTimeout(240_000);
         const { page } = run;
@@ -152,7 +189,7 @@ for (const cell of CELLS) {
           await page.screenshot({
             path: join(
               REPORT,
-              `${cell.data}-${cell.theme}-${size.width}`,
+              `${cell.data}-${cell.theme}${lookName(cell.look).replace(/[^a-z0-9]+/gi, '-')}-${size.width}`,
               `${screen.name.replace(/[^a-z]+/g, '-')}.png`,
             ),
           });
@@ -162,7 +199,10 @@ for (const cell of CELLS) {
         const unique = [...new Set(problems)];
         mkdirSync(REPORT, { recursive: true });
         writeFileSync(
-          join(REPORT, `${cell.data}-${cell.theme}-${size.width}.txt`),
+          join(
+            REPORT,
+            `${cell.data}-${cell.theme}${lookName(cell.look).replace(/[^a-z0-9]+/gi, '-')}-${size.width}.txt`,
+          ),
           unique.join('\n'),
         );
         expect(unique, unique.join('\n')).toEqual([]);

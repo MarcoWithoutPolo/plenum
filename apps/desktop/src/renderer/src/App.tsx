@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Sidebar } from '@/components/Sidebar';
 import { useProjects } from '@/lib/projects';
@@ -12,6 +12,9 @@ import { ProjectsScreen } from '@/screens/ProjectsScreen';
 import { UsageScreen } from '@/screens/UsageScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { settle } from '@/lib/settle';
+import { SHOW_SHORTCUTS } from '@/lib/events';
+import { Shortcuts } from '@/components/Shortcuts';
+import { useAnnouncer } from '@/lib/announce';
 
 export function App() {
   const ready = useApp((s) => s.ready);
@@ -32,15 +35,30 @@ export function App() {
     [open],
   );
 
+  const [shortcuts, setShortcuts] = useState(false);
   useEffect(() => {
+    const typing = (t: EventTarget | null) =>
+      t instanceof HTMLElement &&
+      (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         open({ name: 'chat' });
+      } else if (
+        ((e.ctrlKey || e.metaKey) && e.key === '/') ||
+        (e.key === '?' && !typing(e.target))
+      ) {
+        e.preventDefault();
+        setShortcuts(true);
       }
     };
+    const show = () => setShortcuts(true);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener(SHOW_SHORTCUTS, show);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(SHOW_SHORTCUTS, show);
+    };
   }, [open]);
 
   return (
@@ -78,6 +96,8 @@ export function App() {
         ) : (
           <ChatScreen key={screen.threadId ?? 'new'} threadId={screen.threadId} />
         )}
+        <Shortcuts open={shortcuts} onClose={() => setShortcuts(false)} />
+        <Announcer />
         <Toast />
       </main>
     </div>
@@ -107,5 +127,15 @@ function Toast() {
         <X className="size-3.5" />
       </button>
     </div>
+  );
+}
+
+/** The one live region for announcements (F3). */
+function Announcer() {
+  const text = useAnnouncer((s) => s.text);
+  return (
+    <p className="sr-only" aria-live="polite" role="status">
+      {text}
+    </p>
   );
 }

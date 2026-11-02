@@ -4,6 +4,7 @@ import { newId } from '../store/store.js';
 import { collect, type RunResult } from '../collect.js';
 import { recordUsage, titleFrom, type EngineContext } from '../chat/service.js';
 import { renderTranscript, seatLabels } from '../chat/transcript.js';
+import { seatOptions } from '../seats.js';
 
 export interface CouncilOptions {
   members: Seat[];
@@ -180,8 +181,7 @@ export class Council {
         role: 'chat',
         readOnly: true,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        ...(seat.model && { model: seat.model }),
-        ...(seat.effort && { effort: seat.effort }),
+        ...seatOptions(seat, this.ctx.store.settings),
         ...(opts.signal && { signal: opts.signal }),
       }),
       onEvent,
