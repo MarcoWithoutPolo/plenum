@@ -6,6 +6,7 @@ import type { Store } from '../store/store.js';
 import type { RunSource } from '../store/usage.js';
 import { buildChatPrompt } from './transcript.js';
 import { seatOptions } from '../seats.js';
+import { HARD_CAP } from '../governor/governor.js';
 
 export interface EngineContext {
   store: Store;
@@ -31,6 +32,9 @@ export interface SendResult {
   reply: Message;
   result: RunResult;
 }
+
+/** What a CLI says when the session asked for is gone (expired, deleted, unknown). */
+const RESUME_REFUSED = /session|conversation|resume|no such thread|not found/i;
 
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 
@@ -86,8 +90,18 @@ export class ChatService {
       );
 
     let result = await run(Boolean(session));
-    // A CLI session can expire or be deleted; fall back to replaying the history once.
-    if (!result.ok && session && !result.rateLimited && !opts.signal?.aborted) {
+    // A CLI session can expire or be deleted: then, once, replay the history instead. Only
+    // when the resume itself was refused; a timeout or any other failure would just cost the
+    // same again (E14). The first run's usage counts too.
+    if (
+      !result.ok &&
+      session &&
+      !result.rateLimited &&
+      !opts.signal?.aborted &&
+      RESUME_REFUSED.test(result.errors.join(' ')) &&
+      !/timed out/i.test(result.errors.join(' '))
+    ) {
+      recordUsage(store, { seat, role: 'chat', source: 'chat', refId: thread.id }, result);
       result = await run(false);
     }
 
@@ -172,11 +186,14 @@ export function recordQuotas(store: Store, provider: ProviderId, result: RunResu
     });
   }
   if (result.rateLimited) {
+    // A spend cap or exhausted credits that names no reset still lasts: stored for an hour, so
+    // a restart doesn't knock again in five minutes (E10).
+    const hard = HARD_CAP.test(result.rateLimited.message ?? '');
     store.recordQuota({
       provider,
       window: 'limit',
       utilization: 1,
-      resetsAt: result.rateLimited.resetsAt ?? null,
+      resetsAt: result.rateLimited.resetsAt ?? (hard ? at + 60 * 60_000 : null),
       at,
     });
   }

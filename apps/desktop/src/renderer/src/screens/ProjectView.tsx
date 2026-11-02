@@ -160,20 +160,23 @@ export function ProjectView({ projectId }: { projectId: string }) {
           />
           <PullRequestCard project={project} />
           <NowStrip project={project} running={running} tasks={tasks} events={events} />
-          <div className="mt-6 grid grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)] items-start gap-5">
-            <TaskBoard
-              projectId={project.id}
-              tasks={tasks}
-              onOpen={setSelected}
-              selected={selected}
-            />
-            <SidePanel
-              project={project}
-              events={events}
-              tasks={tasks}
-              decisions={decisions}
-              onOpenTask={setSelected}
-            />
+          {/* Two columns while there's room; stacked (tasks first) on a narrow window (U17). */}
+          <div className="@container">
+            <div className="mt-6 grid grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)] items-start gap-5 @max-[56rem]:grid-cols-1">
+              <TaskBoard
+                projectId={project.id}
+                tasks={tasks}
+                onOpen={setSelected}
+                selected={selected}
+              />
+              <SidePanel
+                project={project}
+                events={events}
+                tasks={tasks}
+                decisions={decisions}
+                onOpenTask={setSelected}
+              />
+            </div>
           </div>
         </div>
       </div>

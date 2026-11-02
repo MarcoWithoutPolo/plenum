@@ -397,6 +397,10 @@ export function demoAdapters(): Adapter[] {
       ].join('\n');
     }
     const question = req.prompt.split('\n').filter(Boolean).at(-1) ?? '';
+    // CONCLAVE_DEMO_SLOW_COUNCIL=1: Antigravity takes its time in a council, so there is a
+    // member to skip (F4).
+    if (process.env.CONCLAVE_DEMO_SLOW_COUNCIL && name === 'Antigravity' && req.role === 'chat')
+      return `Antigravity (demo) is still thinking it through: ${'more detail '.repeat(150)}`;
     return `${name} (demo) here. You asked: "${question}". This is a demo answer that streams in word by word.`;
   };
   const hours = (h: number) => Date.now() + h * 3_600_000;

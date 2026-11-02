@@ -48,6 +48,10 @@ export async function* runCli(
   let stderrTail = '';
   let reportedError = false;
   let escaped: string | undefined;
+  // Our own stop, joined with the caller's: a run that edits outside its folder ends now, not
+  // when its timeout comes (E8).
+  const stop = new AbortController();
+  const signal = process.signal ? AbortSignal.any([process.signal, stop.signal]) : stop.signal;
   const emit = function* (bodies: EventBody[]) {
     for (const body of bodies) {
       if (body.type === 'error' || body.type === 'rate_limit') reportedError = true;
@@ -57,6 +61,7 @@ export async function* runCli(
       if (body.type === 'file.edit' && !escaped && process.cwd && outside(body.path, process.cwd)) {
         escaped = body.path;
         reportedError = true;
+        stop.abort();
         yield stamp({
           type: 'error',
           message: `It edited a file outside its working folder: ${body.path}. The run is stopped and its work is not used.`,
@@ -65,7 +70,7 @@ export async function* runCli(
     }
   };
 
-  for await (const chunk of exec(process)) {
+  for await (const chunk of exec({ ...process, signal })) {
     if (chunk.kind === 'stderr') {
       stderrTail = (stderrTail + chunk.text).slice(-4000);
       continue;

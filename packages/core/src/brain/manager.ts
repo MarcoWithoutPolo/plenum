@@ -259,7 +259,20 @@ export class BrainManager {
 
   /** Projects left "running" by a closed or crashed app are paused, so nothing restarts by surprise. */
   recoverOrphans(): Project[] {
-    const orphans = this.ctx.store.projects
+    const store = this.ctx.store.projects;
+    // Any project no brain runs may hold tasks a crash left mid-step (a paused or stopped one
+    // too): they go back to the queue so they hold no builder lane anywhere (E5).
+    for (const p of store.list()) {
+      if (this.isRunning(p.id) || p.status === 'running' || p.status === 'waiting') continue;
+      const stuck = store.requeueInterrupted(p.id);
+      if (stuck.length)
+        store.log({
+          projectId: p.id,
+          kind: 'stop',
+          message: `${stuck.length} task(s) left mid-step went back to the queue`,
+        });
+    }
+    const orphans = store
       .list()
       .filter((p) => (p.status === 'running' || p.status === 'waiting') && !this.isRunning(p.id));
     for (const p of orphans) {

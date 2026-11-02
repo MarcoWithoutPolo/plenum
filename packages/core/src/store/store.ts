@@ -1,5 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Message, MessageKind, ProviderId, Thread, ThreadMode, Usage } from '@conclave/shared';
+import type {
+  Message,
+  MessageKind,
+  MessageOutcome,
+  ProviderId,
+  Thread,
+  ThreadMode,
+  Usage,
+} from '@conclave/shared';
 import { openDatabase, transaction } from './db.js';
 import { newId } from './ids.js';
 import { ProjectStore } from './projects.js';
@@ -24,6 +32,7 @@ export interface NewMessage {
   usage?: Usage | null;
   durationMs?: number | null;
   groupId?: string | null;
+  outcome?: MessageOutcome | null;
 }
 
 export interface QuotaReading {
@@ -59,6 +68,30 @@ export class Store {
 
   close(): void {
     this.db.close();
+  }
+
+  /**
+   * Trim what only grows (E15): project events older than `eventDays` and agent runs older
+   * than `runDays`. A project's last 200 events always stay, however old, so its log still
+   * says how it ended. Returns how many rows went.
+   */
+  prune(opts: { eventDays?: number; runDays?: number; now?: number } = {}): number {
+    const now = opts.now ?? Date.now();
+    const day = 86_400_000;
+    const events = this.db
+      .prepare(
+        `DELETE FROM brain_events WHERE at < ? AND id NOT IN (
+           SELECT id FROM (
+             SELECT id, ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY id DESC) AS n
+             FROM brain_events
+           ) WHERE n <= 200
+         )`,
+      )
+      .run(now - (opts.eventDays ?? 90) * day);
+    const runs = this.db
+      .prepare('DELETE FROM agent_runs WHERE at < ?')
+      .run(now - (opts.runDays ?? 400) * day);
+    return Number(events.changes) + Number(runs.changes);
   }
 
   createThread(input: {
@@ -157,13 +190,14 @@ export class Store {
         usage: input.usage ?? null,
         durationMs: input.durationMs ?? null,
         groupId: input.groupId ?? null,
+        outcome: input.outcome ?? null,
         createdAt: Date.now(),
       };
       this.db
         .prepare(
           `INSERT INTO messages (id, thread_id, seq, role, kind, provider, model, effort, content, ok, error,
-             usage, duration_ms, group_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             usage, duration_ms, group_id, created_at, outcome)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           message.id,
@@ -181,6 +215,7 @@ export class Store {
           message.durationMs,
           message.groupId,
           message.createdAt,
+          message.outcome,
         );
       this.db
         .prepare('UPDATE threads SET updated_at = ? WHERE id = ?')
@@ -276,6 +311,7 @@ function toMessage(r: Row): Message {
     usage: r.usage ? (JSON.parse(r.usage as string) as Usage) : null,
     durationMs: (r.duration_ms as number | null) ?? null,
     groupId: (r.group_id as string | null) ?? null,
+    outcome: (r.outcome as MessageOutcome | null) ?? null,
     createdAt: r.created_at as number,
   };
 }

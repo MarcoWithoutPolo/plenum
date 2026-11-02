@@ -6,3 +6,4 @@ test/fixtures/
 out/
 test-results/
 playwright-report/
+apps/desktop/e2e/integrity/controls.json

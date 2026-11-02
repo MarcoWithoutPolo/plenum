@@ -95,3 +95,27 @@ describe('Settings survive a bad entry (E12)', () => {
     expect(JSON.parse(raw.value)).toEqual({ done: false, fromANewerVersion: true });
   });
 });
+
+describe('What only grows is trimmed (E15)', () => {
+  it('drops old events and runs, keeping each project’s last 200 events', () => {
+    const db = openDatabase(':memory:');
+    const store = new Store(db);
+    const old = Date.now() - 200 * 86_400_000;
+    db.prepare(
+      "INSERT INTO projects (id, name, repo_path, goal, integration_branch, base_branch, routing, status, created_at, updated_at) VALUES ('p1','x','.','g','i','main','{}','idle',0,0)",
+    ).run();
+    const ins = db.prepare(
+      "INSERT INTO brain_events (project_id, kind, message, at) VALUES ('p1', 'task', 'm', ?)",
+    );
+    for (let i = 0; i < 500; i++) ins.run(old + i);
+    db.prepare(
+      "INSERT INTO agent_runs (provider, role, source, ok, at, duration_ms) VALUES ('codex','chat','chat',1,?,1)",
+    ).run(Date.now() - 500 * 86_400_000);
+    const gone = store.prune();
+    expect(gone).toBe(301);
+    expect((db.prepare('SELECT COUNT(*) AS n FROM brain_events').get() as { n: number }).n).toBe(
+      200,
+    );
+    expect((db.prepare('SELECT COUNT(*) AS n FROM agent_runs').get() as { n: number }).n).toBe(0);
+  });
+});

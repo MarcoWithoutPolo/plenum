@@ -144,3 +144,34 @@ describe('transcripts', () => {
     expect(buildChatPrompt([], 'hello')).toBe('hello');
   });
 });
+
+describe('Resuming a chat that fails (E14)', () => {
+  const run = async (fail: string) => {
+    let calls = 0;
+    const claude = new FakeAdapter(
+      {
+        reply: 'Hi',
+        failWhen: (req) => (req.sessionId && ++calls > 0 ? fail : undefined),
+      },
+      { id: 'claude', resume: true },
+    );
+    const { store, chat } = setup([claude]);
+    const thread = chat.createThread({ provider: 'claude' });
+    await chat.send(thread.id, 'one', { provider: 'claude' });
+    const before = store.usage.runsSince('claude', 0);
+    await chat.send(thread.id, 'two', { provider: 'claude' });
+    return { requests: claude.requests.length, runs: store.usage.runsSince('claude', 0) - before };
+  };
+
+  it('a refused resume is retried once without it, and both runs count', async () => {
+    const r = await run('No conversation found with session ID abc');
+    expect(r.requests).toBe(3);
+    expect(r.runs).toBe(2);
+  });
+
+  it('a timeout is not retried (it would cost the same again)', async () => {
+    const r = await run('Timed out after 600000 ms');
+    expect(r.requests).toBe(2);
+    expect(r.runs).toBe(1);
+  });
+});

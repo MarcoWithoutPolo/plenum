@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -14,6 +14,7 @@ import {
   createProject,
   decideApproval,
   isProjectRunning,
+  lockHolder,
   projectRoot,
   pushBase,
   safeRemoteUrl,
@@ -368,5 +369,36 @@ describe('approving the merge', () => {
     const { ctx, home, store, project } = await finished();
     const [task] = store.projects.listTasks(project.id);
     expect(await taskChanges(ctx, home, task!.id)).toContain('+hello');
+  });
+});
+
+describe('Tasks left mid-step and stale locks (E5, E7)', () => {
+  it('a paused project’s stuck "building" task goes back to the queue and holds no lane', async () => {
+    const { store, project, manager } = await setup();
+    store.projects.setStatus(project.id, 'paused', 'Paused');
+    const [task] = store.projects.addTasks(project.id, [{ title: 'Half built', spec: 'x' }]);
+    store.projects.updateTask(task!.id, { status: 'building', builtBy: 'codex' });
+    // Counting only projects a brain runs, the stuck task holds no lane even before recovery.
+    expect(store.projects.countBuilding('codex', () => false)).toBe(0);
+    expect(store.projects.countBuilding('codex')).toBe(1);
+    manager.recoverOrphans();
+    expect(store.projects.getTask(task!.id)?.status).toBe('queued');
+    expect(store.projects.countBuilding('codex')).toBe(0);
+  });
+
+  it('a lock whose owner stopped touching it is taken over, by exactly one taker', () => {
+    const dir = temp('conclave-lock-');
+    const path = join(dir, 'run.lock');
+    // A lock held by a living process (this one's parent stands in for a reused pid), untouched
+    // for five minutes: its real owner is gone.
+    writeFileSync(path, String(process.ppid));
+    const old = new Date(Date.now() - 5 * 60_000);
+    utimesSync(path, old, old);
+    expect(lockHolder(path)).toBeUndefined();
+    const first = acquireLock(path);
+    expect(lockHolder(path)).toBe(process.pid);
+    expect(() => acquireLock(path)).toThrow(/already running here/);
+    first.release();
+    expect(existsSync(path)).toBe(false);
   });
 });

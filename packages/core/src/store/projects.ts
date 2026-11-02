@@ -330,12 +330,18 @@ export class ProjectStore {
     ).map(toTask);
   }
 
-  /** Tasks building on this provider right now, across every project (shared lane caps). */
-  countBuilding(provider: ProviderId): number {
-    const row = this.db
-      .prepare("SELECT COUNT(*) AS n FROM tasks WHERE status = 'building' AND built_by = ?")
-      .get(provider) as { n: number };
-    return row.n;
+  /**
+   * Tasks building on this provider right now, across every project (shared lane caps). With
+   * `live`, only in projects a brain is running: a task a crash left "building" in a stopped
+   * project holds no lane (E5).
+   */
+  countBuilding(provider: ProviderId, live?: (projectId: string) => boolean): number {
+    const rows = this.db
+      .prepare(
+        "SELECT project_id AS p, COUNT(*) AS n FROM tasks WHERE status = 'building' AND built_by = ? GROUP BY project_id",
+      )
+      .all(provider) as { p: string; n: number }[];
+    return rows.filter((r) => !live || live(r.p)).reduce((sum, r) => sum + r.n, 0);
   }
 
   nextQueued(projectId: string): Task | undefined {

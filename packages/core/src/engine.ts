@@ -36,6 +36,8 @@ export class Engine {
     this.adapters = adapterMap(
       opts.adapters ?? createAdapters({ settings: () => this.store.settings.get() }),
     );
+    // Old project events and run records go once per start (E15).
+    this.store.prune();
     const ctx = { store: this.store, adapters: this.adapters, cwd: this.home };
     this.chat = new ChatService(ctx);
     this.council = new Council(ctx);

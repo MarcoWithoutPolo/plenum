@@ -11,7 +11,10 @@
     "button: Uses the CLI’s own setting, Claude Code default model",
     "button: Uses the CLI’s own setting, OpenAI Codex default model"
   ],
-  "chat": ["button: Claude Default, choose model", "button: Send"],
+  "chat": [
+    "button: Claude Default, choose model",
+    "button: Send"
+  ],
   "council": [
     "button: Antigravity Default, Antigravity model",
     "button: Claude Default, Claude Code model",
@@ -63,17 +66,23 @@
     "radio: Write my own",
     "radio: تطبيق لإدارة المهام مع دعم الكتابة من اليمين إلى اليسار"
   ],
-  "usage": ["button: Refresh usage", "radio: Last # days", "radio: Last # hours"],
+  "usage": [
+    "button: Refresh usage",
+    "radio: Last # days",
+    "radio: Last # hours"
+  ],
   "settings": [
     "button: Add quiet hours",
     "button: Save",
     "button: Show shortcuts",
     "radio: #",
+    "radio: # min",
     "radio: #%",
     "radio: Always",
     "radio: Dark",
     "radio: Follow system",
     "radio: Light",
+    "radio: Off",
     "radio: System",
     "switch: Always show focus outlines",
     "switch: Announce progress to screen readers",

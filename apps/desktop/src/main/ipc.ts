@@ -8,6 +8,7 @@ import {
   type ProviderId,
 } from '@conclave/shared';
 import {
+  CouncilControl,
   INSTALL_PACKAGES,
   LocalAdapter,
   activeLimits,
@@ -49,6 +50,9 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
     if (!found) throw new Error(`Provider not available: ${provider}`);
     return found;
   };
+
+  /** Running council rounds, by request, for Skip and Merge now. */
+  const councils = new Map<string, CouncilControl>();
 
   const track = (requestId: string) => {
     if (typeof requestId !== 'string' || !requestId) throw new Error('Missing request id');
@@ -192,8 +196,11 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
   );
   handle(IPC.threadsRemove, (id: unknown) => engine.store.deleteThread(threadId(id)));
 
-  handle(IPC.chatCreate, (raw: unknown) => {
+  handle(IPC.chatCreate, async (raw: unknown) => {
     const seat = Seat.parse(raw);
+    // The demo can take a moment to create a chat, so a test can press Stop meanwhile (U10).
+    if (demo && process.env.CONCLAVE_DEMO_SLOW_CREATE)
+      await new Promise((r) => setTimeout(r, Number(process.env.CONCLAVE_DEMO_SLOW_CREATE)));
     adapter(seat.provider);
     return engine.chat.createThread(seat);
   });
@@ -220,11 +227,16 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
     const input = CouncilAskInput.parse(raw);
     for (const seat of [...input.members, input.synthesizer]) adapter(seat.provider);
     const run = track(input.requestId);
+    const control = new CouncilControl();
+    councils.set(input.requestId, control);
+    const mergeAfter = engine.store.settings.get().council.mergeAfterMinutes;
     try {
       const result = await engine.council.ask(input.question, {
         members: input.members,
         synthesizer: input.synthesizer,
         signal: run.signal,
+        control,
+        ...(mergeAfter > 0 && { maxWaitMs: mergeAfter * 60_000 }),
         ...(input.threadId && { threadId: input.threadId }),
         onEvent: (u) =>
           update(
@@ -237,7 +249,9 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
                   seat: u.seat,
                   event: u.event,
                 }
-              : { requestId: input.requestId, kind: 'synthesis', seat: u.seat, event: u.event },
+              : u.phase === 'skipped'
+                ? { requestId: input.requestId, kind: 'skipped', index: u.index, reason: u.reason }
+                : { requestId: input.requestId, kind: 'synthesis', seat: u.seat, event: u.event },
           ),
       });
       return {
@@ -253,7 +267,17 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
       };
     } finally {
       run.done();
+      councils.delete(input.requestId);
     }
+  });
+
+  // Skip and Merge now while a round runs (F4); both do nothing once it's over.
+  handle(IPC.councilSkip, (requestId: unknown, index: unknown) => {
+    if (typeof index !== 'number' || !Number.isInteger(index)) throw new Error('Invalid member');
+    councils.get(WireId.parse(requestId))?.skip(index);
+  });
+  handle(IPC.councilMergeNow, (requestId: unknown) => {
+    councils.get(WireId.parse(requestId))?.mergeNow();
   });
 
   handle(IPC.runsCancel, (requestId: string) => {

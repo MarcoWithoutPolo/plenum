@@ -468,6 +468,33 @@ export function SettingsScreen() {
           </Section>
 
           <Section
+            id="council"
+            title="Council"
+            hint="When some members take much longer than the others."
+          >
+            <Row
+              label="Merge after at most"
+              hint="Members still answering by then are skipped and the rest are merged. You can also skip one, or Merge now, during any round."
+            >
+              <Segmented
+                label="Merge after at most"
+                value={settings?.council.mergeAfterMinutes ?? 0}
+                onChange={(mergeAfterMinutes) =>
+                  settle(
+                    save((s) => ({ ...s, council: { ...s.council, mergeAfterMinutes } }), {
+                      council: { mergeAfterMinutes },
+                    }),
+                  )
+                }
+                options={([0, 1, 2, 5, 10] as const).map((n) => ({
+                  value: n,
+                  label: n === 0 ? 'Off' : `${n} min`,
+                }))}
+              />
+            </Row>
+          </Section>
+
+          <Section
             id="appearance"
             title="Appearance and accessibility"
             hint="How Conclave looks and reads. Each change applies at once and is kept."

@@ -269,6 +269,18 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
     addColumn(db, 'tasks', 'kept', 'TEXT');
     addColumn(db, 'projects', 'review_effort', "TEXT NOT NULL DEFAULT 'same'");
   },
+  // v19 (v1.0): a council answer's outcome (answered, failed, skipped, stopped), and indexes for
+  // the lookups that scanned whole tables (E15).
+  (db) => {
+    addColumn(db, 'messages', 'outcome', 'TEXT');
+    db.exec(`
+      UPDATE messages SET outcome = CASE WHEN ok = 1 THEN 'answered' ELSE 'failed' END
+        WHERE kind = 'council_answer' AND outcome IS NULL;
+      CREATE INDEX IF NOT EXISTS agent_runs_provider_ok_at ON agent_runs (provider, ok, at);
+      CREATE INDEX IF NOT EXISTS agent_runs_at ON agent_runs (at);
+      CREATE INDEX IF NOT EXISTS brain_events_at ON brain_events (at);
+    `);
+  },
 ];
 
 /** ALTER TABLE ADD COLUMN that is safe to run again (a restored or rewound database). */
@@ -289,20 +301,31 @@ export function defaultHome(): string {
 export function openDatabase(path = join(defaultHome(), 'conclave.db')): DatabaseSync {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new (sqlite().DatabaseSync)(path);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  // The wait first: switching to WAL needs a moment's lock another process may hold (E11).
+  db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   migrate(db);
   return db;
 }
 
+/**
+ * Bring the schema up to date, one step per transaction. The version is read inside each locked
+ * transaction: when the app and the CLI open an old database at the same moment, the second
+ * waits, sees the step done, and skips it instead of running it twice (E11).
+ */
 function migrate(db: DatabaseSync): void {
-  const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-  for (let v = row.user_version; v < MIGRATIONS.length; v++) {
-    transaction(db, () => {
+  for (;;) {
+    const done = transaction(db, () => {
+      const { user_version: v } = db.prepare('PRAGMA user_version').get() as {
+        user_version: number;
+      };
+      if (v >= MIGRATIONS.length) return true;
       const step = MIGRATIONS[v]!;
       if (typeof step === 'string') db.exec(step);
       else step(db);
       db.exec(`PRAGMA user_version = ${v + 1}`);
+      return false;
     });
+    if (done) return;
   }
 }
 

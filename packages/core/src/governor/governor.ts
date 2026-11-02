@@ -16,7 +16,10 @@ export interface GovernorOptions {
 
 /** Limits that need someone to act (raise a cap, add credits), not just time to pass. */
 export const HARD_CAP =
-  /spend(ing)? (cap|limit)|out of credits|credits? (are |have been )?(exhausted|used up|depleted)|billing|insufficient (quota|credit|balance)/i;
+  /spend(ing)? (cap|limit)|out of credits|credits? (are |have been )?(exhausted|used up|depleted)|billing (hard )?limit|check your billing|payment required|insufficient (quota|credit|balance)/i;
+
+/** How long a usage reading without a reset time counts (E10). */
+const STALE_READING_MS = 60 * 60_000;
 
 export type Availability = { ok: true } | { ok: false; reason: string; until: number | null };
 
@@ -60,6 +63,9 @@ export class Governor {
       // A reading only counts until its window resets.
       if (q.resetsAt !== null && q.resetsAt <= now) continue;
       if (q.window === 'limit' && q.resetsAt === null && now - q.at > this.base) continue;
+      // A usage reading with no reset time can't block for ever: the AI would never run, so no
+      // fresher reading would ever come (E10). After an hour it's tried again.
+      if (q.window !== 'limit' && q.resetsAt === null && now - q.at > STALE_READING_MS) continue;
       if (q.utilization >= ceiling) {
         const pct = Math.round(q.utilization * 100);
         const left = Math.round((1 - ceiling) * 100);

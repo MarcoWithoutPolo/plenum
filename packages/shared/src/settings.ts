@@ -88,6 +88,15 @@ export const AppearanceSettings = z.object({
 });
 export type AppearanceSettings = z.infer<typeof AppearanceSettings>;
 
+/** v1.0 F4: councils. */
+export const CouncilSettings = z.object({
+  /** Members still answering after this many minutes are skipped and the rest merged; 0 = off. */
+  mergeAfterMinutes: z
+    .union([z.literal(0), z.literal(1), z.literal(2), z.literal(5), z.literal(10)])
+    .default(0),
+});
+export type CouncilSettings = z.infer<typeof CouncilSettings>;
+
 /** App-wide settings, stored in the settings table. Unknown or missing keys get defaults. */
 export const AppSettings = z.object({
   notifications: NotificationSettings.prefault({}),
@@ -95,5 +104,6 @@ export const AppSettings = z.object({
   local: LocalSettings.prefault({}),
   defaults: DefaultSettings.prefault({}),
   appearance: AppearanceSettings.prefault({}),
+  council: CouncilSettings.prefault({}),
 });
 export type AppSettings = z.infer<typeof AppSettings>;

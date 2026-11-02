@@ -16,7 +16,7 @@ export type Screen =
   | { name: 'accounts' }
   | { name: 'settings' };
 
-export type RunStatus = 'waiting' | 'thinking' | 'done' | 'failed';
+export type RunStatus = 'waiting' | 'thinking' | 'done' | 'failed' | 'skipped';
 
 export interface LiveChat {
   requestId: string;
@@ -32,6 +32,8 @@ export interface LiveSeat {
   text: string;
   status: RunStatus;
   durationMs?: number;
+  /** Why it was skipped ("Skipped by you", "Skipped after 2 min"). */
+  skipped?: string;
 }
 
 export interface LiveCouncil {
@@ -83,6 +85,9 @@ interface State {
     synthesizer: Seat,
   ): Promise<void>;
   cancel(requestId: string): void;
+  /** Council (F4): stop one member of a running round, or merge what came back now. */
+  skipMember(requestId: string, index: number): void;
+  mergeNow(requestId: string): void;
   removeThread(id: string): Promise<void>;
   renameThread(id: string, title: string): Promise<void>;
   showToast(kind: 'error' | 'info', text: string): void;
@@ -263,6 +268,14 @@ export const useApp = create<State>((set, get) => ({
     set({ chatDefault: saved.defaults.chat });
   },
 
+  skipMember(requestId, index) {
+    settle(api().council.skip(requestId, index));
+  },
+
+  mergeNow(requestId) {
+    settle(api().council.mergeNow(requestId));
+  },
+
   cancel(requestId) {
     stopped.add(requestId);
     settle(api().runs.cancel(requestId));
@@ -301,6 +314,10 @@ async function refreshQuotas(set: (partial: Partial<State>) => void) {
 }
 
 function step(seat: LiveSeat, event: AgentEvent): LiveSeat {
+  // Skipped stays skipped: words still in flight, and the run ending as a failure, change
+  // nothing on its card.
+  if (seat.status === 'skipped')
+    return event.type === 'done' ? { ...seat, durationMs: event.durationMs } : seat;
   switch (event.type) {
     case 'session':
       return { ...seat, status: 'thinking' };
@@ -335,7 +352,14 @@ function applyUpdate(u: RunUpdate, set: (fn: (s: State) => Partial<State>) => vo
     const next =
       u.kind === 'member'
         ? { ...live, members: live.members.map((m, i) => (i === u.index ? step(m, u.event) : m)) }
-        : { ...live, synth: step(live.synth, u.event) };
+        : u.kind === 'skipped'
+          ? {
+              ...live,
+              members: live.members.map((m, i) =>
+                i === u.index ? { ...m, status: 'skipped' as const, skipped: u.reason } : m,
+              ),
+            }
+          : { ...live, synth: step(live.synth, u.event) };
     return { liveCouncils: { ...s.liveCouncils, [key]: next } };
   });
 }

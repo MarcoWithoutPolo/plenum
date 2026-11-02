@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import type { AgentEvent, Message, Seat, Thread } from '@conclave/shared';
+import type { AgentEvent, Message, MessageOutcome, Seat, Thread } from '@conclave/shared';
 import { newId } from '../store/store.js';
 import { collect, type RunResult } from '../collect.js';
 import { recordUsage, titleFrom, type EngineContext } from '../chat/service.js';
@@ -15,17 +15,24 @@ export interface CouncilOptions {
   onEvent?: (update: CouncilUpdate) => void;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Skip a member or merge now while the round runs (v1.0 F4). */
+  control?: CouncilControl;
+  /** Members still answering after this long are skipped and the rest merged (Settings, MCP). */
+  maxWaitMs?: number;
 }
 
 export type CouncilUpdate =
   | { phase: 'member'; index: number; label: string; seat: Seat; event: AgentEvent }
-  | { phase: 'synthesis'; label: string; seat: Seat; event: AgentEvent };
+  | { phase: 'synthesis'; label: string; seat: Seat; event: AgentEvent }
+  /** A member was skipped (by you, or after the wait limit): its card says so at once. */
+  | { phase: 'skipped'; index: number; label: string; seat: Seat; reason: string };
 
 export interface CouncilAnswer {
   seat: Seat;
   label: string;
   message: Message;
   result: RunResult;
+  outcome: MessageOutcome;
 }
 
 export interface CouncilResult {
@@ -36,6 +43,43 @@ export interface CouncilResult {
   merged: Message;
   /** How the merged answer was produced. */
   mergedBy: 'synthesizer' | 'single-answer' | 'none';
+}
+
+/**
+ * The handle the window (or MCP) holds while a round runs. Skipping a member that already
+ * answered does nothing; once the round is over, nothing does.
+ */
+export class CouncilControl {
+  private skipper: ((index: number, reason: string) => void) | undefined;
+  private pending: { index: number; reason: string }[] = [];
+  private merger: (() => void) | undefined;
+  private mergeAsked = false;
+
+  /** Stop this member and leave it out of the merge. */
+  skip(index: number, reason = 'Skipped by you'): void {
+    if (this.skipper) this.skipper(index, reason);
+    else this.pending.push({ index, reason });
+  }
+
+  /** Skip every member still answering and merge what has come back. */
+  mergeNow(): void {
+    if (this.merger) this.merger();
+    else this.mergeAsked = true;
+  }
+
+  /** @internal The round wires itself in when it starts. */
+  attach(skip: (index: number, reason: string) => void, mergeNow: () => void): void {
+    this.skipper = skip;
+    this.merger = mergeNow;
+    for (const p of this.pending.splice(0)) skip(p.index, p.reason);
+    if (this.mergeAsked) mergeNow();
+  }
+
+  /** @internal */
+  detach(): void {
+    this.skipper = undefined;
+    this.merger = undefined;
+  }
 }
 
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
@@ -76,16 +120,71 @@ export class Council {
       ? `Earlier in this conversation:\n\n${renderTranscript(prior)}\n\nNew question:\n\n${question}`
       : question;
 
-    const results = await Promise.all(
-      opts.members.map((seat, index) =>
-        this.run(seat, memberPrompt, opts, (event) =>
-          opts.onEvent?.({ phase: 'member', index, label: labels[index]!, seat, event }),
-        ),
-      ),
-    );
+    // Each member on its own stop, joined with the round's (Stop): a skip ends one member only.
+    const stops = opts.members.map(() => new AbortController());
+    const skipped = new Map<number, string>();
+    const finished = new Set<number>();
+    const skip = (index: number, reason: string) => {
+      if (index < 0 || index >= opts.members.length) return;
+      if (finished.has(index) || skipped.has(index)) return;
+      skipped.set(index, reason);
+      stops[index]!.abort();
+      opts.onEvent?.({
+        phase: 'skipped',
+        index,
+        label: labels[index]!,
+        seat: opts.members[index]!,
+        reason,
+      });
+    };
+    const mergeNow = (reason = 'Skipped so the answers could merge') => {
+      opts.members.forEach((_, i) => skip(i, reason));
+    };
+    opts.control?.attach(skip, mergeNow);
+    const waitLimit =
+      opts.maxWaitMs !== undefined
+        ? setTimeout(
+            () =>
+              mergeNow(`Skipped after ${Math.max(1, Math.round(opts.maxWaitMs! / 60_000))} min`),
+            opts.maxWaitMs,
+          )
+        : undefined;
 
+    let results: RunResult[];
+    try {
+      results = await Promise.all(
+        opts.members.map((seat, index) =>
+          this.run(
+            seat,
+            memberPrompt,
+            opts,
+            (event) => {
+              // Finished the moment it says so: a skip pressed just after can't undo an answer.
+              if (event.type === 'done') finished.add(index);
+              opts.onEvent?.({ phase: 'member', index, label: labels[index]!, seat, event });
+            },
+            stops[index]!.signal,
+          ).then((result) => {
+            finished.add(index);
+            return result;
+          }),
+        ),
+      );
+    } finally {
+      if (waitLimit) clearTimeout(waitLimit);
+      opts.control?.detach();
+    }
+
+    const stopped = opts.signal?.aborted === true;
     const answers: CouncilAnswer[] = opts.members.map((seat, i) => {
       const result = results[i]!;
+      const outcome: MessageOutcome = skipped.has(i)
+        ? 'skipped'
+        : result.ok
+          ? 'answered'
+          : stopped
+            ? 'stopped'
+            : 'failed';
       recordUsage(store, { seat, role: 'chat', source: 'council', refId: thread.id }, result);
       const message = store.addMessage(thread.id, {
         role: 'assistant',
@@ -93,29 +192,57 @@ export class Council {
         provider: seat.provider,
         model: result.model ?? seat.model ?? null,
         effort: seat.effort ?? null,
+        // A skipped or stopped member keeps what it had written so far (shown folded).
         content: result.text,
-        ok: result.ok,
-        error: result.ok ? null : failure(result),
+        ok: outcome === 'answered',
+        error:
+          outcome === 'answered'
+            ? null
+            : outcome === 'skipped'
+              ? skipped.get(i)!
+              : outcome === 'stopped'
+                ? 'Stopped by you'
+                : failure(result),
         usage: result.usage,
         durationMs: result.durationMs,
         groupId,
+        outcome,
       });
-      return { seat, label: labels[i]!, message, result };
+      return { seat, label: labels[i]!, message, result, outcome };
     });
 
-    const good = answers.filter((a) => a.result.ok && a.result.text.trim());
+    const good = answers.filter((a) => a.outcome === 'answered' && a.result.text.trim());
+    const skippedNote = answers
+      .filter((a) => a.outcome === 'skipped')
+      .map((a) => a.label)
+      .join(', ');
     let merged: Message;
     let mergedBy: CouncilResult['mergedBy'];
 
-    if (good.length === 0) {
+    if (stopped) {
+      // Stop keeps what came back, and merges nothing (C1).
       mergedBy = 'none';
       merged = store.addMessage(thread.id, {
         role: 'assistant',
         kind: 'council_merged',
         content: '',
         ok: false,
-        error: 'No council member answered',
+        error: 'Stopped before merging',
         groupId,
+        outcome: 'stopped',
+      });
+    } else if (good.length === 0) {
+      mergedBy = 'none';
+      merged = store.addMessage(thread.id, {
+        role: 'assistant',
+        kind: 'council_merged',
+        content: '',
+        ok: false,
+        error: skippedNote
+          ? 'No member answered: every one was skipped or failed'
+          : 'No council member answered',
+        groupId,
+        outcome: 'failed',
       });
     } else if (good.length === 1) {
       mergedBy = 'single-answer';
@@ -127,33 +254,53 @@ export class Council {
         model: only.message.model,
         content: only.result.text,
         groupId,
+        outcome: 'answered',
+        ...(skippedNote && { error: `Only ${only.label} answered; skipped: ${skippedNote}` }),
       });
     } else {
       mergedBy = 'synthesizer';
       const label = 'Synthesizer';
-      const result = await this.run(
+      // The chosen merger first; if it fails or is at its limit, the next member that answered
+      // merges instead (C2).
+      const mergers = [
         synthesizer,
-        synthesisPrompt(question, good, prior),
-        opts,
-        (event) => opts.onEvent?.({ phase: 'synthesis', label, seat: synthesizer, event }),
-      );
-      recordUsage(
-        store,
-        { seat: synthesizer, role: 'synthesizer', source: 'council', refId: thread.id },
-        result,
-      );
+        ...good.map((a) => a.seat).filter((s) => s.provider !== synthesizer.provider),
+      ];
+      let result: RunResult | undefined;
+      let by = synthesizer;
+      for (const seat of mergers) {
+        by = seat;
+        result = await this.run(seat, synthesisPrompt(question, good, prior), opts, (event) =>
+          opts.onEvent?.({ phase: 'synthesis', label, seat, event }),
+        );
+        recordUsage(
+          store,
+          { seat, role: 'synthesizer', source: 'council', refId: thread.id },
+          result,
+        );
+        if (result.ok && result.text.trim()) break;
+        if (opts.signal?.aborted) break;
+      }
+      const fellBack = by.provider !== synthesizer.provider;
       merged = store.addMessage(thread.id, {
         role: 'assistant',
         kind: 'council_merged',
-        provider: synthesizer.provider,
-        model: result.model ?? synthesizer.model ?? null,
-        effort: synthesizer.effort ?? null,
-        content: result.text,
-        ok: result.ok,
-        error: result.ok ? null : failure(result),
-        usage: result.usage,
-        durationMs: result.durationMs,
+        provider: by.provider,
+        model: result!.model ?? by.model ?? null,
+        effort: by.effort ?? null,
+        content: result!.text,
+        ok: result!.ok,
+        error: result!.ok
+          ? fellBack
+            ? `Merged by ${labels[opts.members.findIndex((m) => m.provider === by.provider)] ?? by.provider}: the chosen merger couldn’t`
+            : null
+          : opts.signal?.aborted
+            ? 'Stopped before merging'
+            : failure(result!),
+        usage: result!.usage,
+        durationMs: result!.durationMs,
         groupId,
+        outcome: result!.ok ? 'answered' : opts.signal?.aborted ? 'stopped' : 'failed',
       });
     }
 
@@ -172,8 +319,10 @@ export class Council {
     prompt: string,
     opts: CouncilOptions,
     onEvent: (event: AgentEvent) => void,
+    own?: AbortSignal,
   ): Promise<RunResult> {
     const adapter = this.ctx.adapters.get(seat.provider)!;
+    const signal = own && opts.signal ? AbortSignal.any([own, opts.signal]) : (own ?? opts.signal);
     return collect(
       adapter.run({
         prompt,
@@ -182,7 +331,7 @@ export class Council {
         readOnly: true,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         ...seatOptions(seat, this.ctx.store.settings),
-        ...(opts.signal && { signal: opts.signal }),
+        ...(signal && { signal }),
       }),
       onEvent,
     );
@@ -195,7 +344,7 @@ function failure(result: RunResult): string {
 
 export function synthesisPrompt(
   question: string,
-  answers: CouncilAnswer[],
+  answers: { label: string; result: RunResult }[],
   prior: Message[] = [],
 ): string {
   const names = answers.map((a) => a.label).join(', ');

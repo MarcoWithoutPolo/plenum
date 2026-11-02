@@ -108,3 +108,28 @@ describe('picker data', () => {
     expect(off!.install!.command).toBe('npm install -g @anthropic-ai/claude-code');
   });
 });
+
+describe('Install help for this computer (U14)', () => {
+  it('shows the Unix script on macOS and Linux, the Windows one on Windows', async () => {
+    const { pickerProviders } = await import('../src/renderer/src/lib/picker');
+    const original = process.platform;
+    const scriptFor = (platform: string) => {
+      Object.defineProperty(process, 'platform', { value: platform });
+      try {
+        const info = {
+          provider: 'grok',
+          displayName: 'Grok Build',
+          installed: false,
+          auth: 'unknown',
+          models: [],
+        } as unknown as Parameters<typeof pickerProviders>[0][number];
+        return pickerProviders([info])[0]!.install!.command;
+      } finally {
+        Object.defineProperty(process, 'platform', { value: original });
+      }
+    };
+    expect(scriptFor('win32')).toMatch(/^irm .*install\.ps1/);
+    expect(scriptFor('darwin')).toMatch(/^curl .*install\.sh \| bash$/);
+    expect(scriptFor('linux')).toMatch(/^curl .*install\.sh \| bash$/);
+  });
+});

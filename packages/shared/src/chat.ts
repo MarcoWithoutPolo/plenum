@@ -22,6 +22,10 @@ export type Thread = z.infer<typeof Thread>;
 export const MessageKind = z.enum(['message', 'council_answer', 'council_merged']);
 export type MessageKind = z.infer<typeof MessageKind>;
 
+/** How a council answer ended (v1.0 F4): a skip isn't a failure, and Stop keeps what came back. */
+export const MessageOutcome = z.enum(['answered', 'failed', 'skipped', 'stopped']);
+export type MessageOutcome = z.infer<typeof MessageOutcome>;
+
 export const Message = z.object({
   id: z.string(),
   threadId: z.string(),
@@ -38,6 +42,8 @@ export const Message = z.object({
   durationMs: z.number().nullable(),
   /** Links the answers and merged result of one council round. */
   groupId: z.string().nullable(),
+  /** Council answers and merges: how it ended. Null for chat messages and older rows. */
+  outcome: MessageOutcome.nullable().default(null),
   createdAt: z.number(),
 });
 export type Message = z.infer<typeof Message>;

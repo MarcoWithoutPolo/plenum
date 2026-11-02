@@ -18,6 +18,9 @@ export interface RunResult {
 }
 
 /** Drain an adapter run into a single result, optionally observing each event as it arrives. */
+/** Word-by-word events a run keeps in its result (the text itself is always whole). */
+const MAX_DELTAS = 2_000;
+
 export async function collect(
   stream: AsyncIterable<AgentEvent>,
   onEvent?: (event: AgentEvent) => void,
@@ -32,8 +35,11 @@ export async function collect(
     events: [],
   };
   let deltas = '';
+  let kept = 0;
   for await (const event of stream) {
-    result.events.push(event);
+    // Every event, but at most the first 2,000 word-by-word pieces: a long run streams them by
+    // the ten thousand, and the text is assembled below anyway (E15).
+    if (event.type !== 'message.delta' || ++kept <= MAX_DELTAS) result.events.push(event);
     onEvent?.(event);
     switch (event.type) {
       case 'session':

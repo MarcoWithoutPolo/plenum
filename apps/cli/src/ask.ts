@@ -94,6 +94,10 @@ class Progress {
   private readonly started = new Set<string>();
 
   update(u: CouncilUpdate): void {
+    if (u.phase === 'skipped') {
+      console.log(`  ${paint('yellow', '–')} ${bold(u.label)} ${dim(u.reason)}`);
+      return;
+    }
     const key = u.phase === 'member' ? `m${u.index}` : 'synth';
     const name = u.phase === 'member' ? u.label : `Merging answers (${seatName(u.seat)})`;
     if (!this.started.has(key) && u.event.type === 'session') {

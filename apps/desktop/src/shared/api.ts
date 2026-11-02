@@ -91,7 +91,9 @@ export type RunUpdate =
       seat: Seat;
       event: AgentEvent;
     }
-  | { requestId: string; kind: 'synthesis'; seat: Seat; event: AgentEvent };
+  | { requestId: string; kind: 'synthesis'; seat: Seat; event: AgentEvent }
+  /** A council member was skipped (by you, or after the wait limit). */
+  | { requestId: string; kind: 'skipped'; index: number; reason: string };
 
 export interface ProjectCounts {
   queued: number;
@@ -289,6 +291,10 @@ export interface ConclaveApi {
       synthesizer: Seat;
       threadId?: string;
     }): Promise<CouncilRoundResult>;
+    /** Stop one member of a running round and leave it out of the merge (F4). */
+    skip(requestId: string, index: number): Promise<void>;
+    /** Skip every member still answering and merge what came back (F4). */
+    mergeNow(requestId: string): Promise<void>;
   };
   runs: {
     cancel(requestId: string): Promise<void>;
@@ -425,6 +431,8 @@ export const IPC = {
   chatCreate: 'chat:create',
   chatSend: 'chat:send',
   councilAsk: 'council:ask',
+  councilSkip: 'council:skip',
+  councilMergeNow: 'council:merge-now',
   runsCancel: 'runs:cancel',
   runUpdate: 'runs:update',
   installLog: 'accounts:install-log',

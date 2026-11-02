@@ -31,6 +31,8 @@ const api: ConclaveApi = {
   },
   council: {
     ask: (input) => invoke(IPC.councilAsk, input),
+    skip: (requestId, index) => invoke(IPC.councilSkip, requestId, index),
+    mergeNow: (requestId) => invoke(IPC.councilMergeNow, requestId),
   },
   runs: {
     cancel: (requestId) => invoke(IPC.runsCancel, requestId),

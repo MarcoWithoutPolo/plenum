@@ -43,7 +43,7 @@ import {
 } from '../preview/shots.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import { extractJson, parsePlan, parseReview } from './json.js';
-import { acquireLock } from './lock.js';
+import { acquireLock, lockHolder } from './lock.js';
 import { builderPrompt, plannerPrompt, reviewerPrompt } from './prompts.js';
 import { calibration, changedLines, shapePlan } from './shape.js';
 import type { PlannedTask } from './json.js';
@@ -534,15 +534,17 @@ export class Brain {
     return true;
   }
 
-  /** Whether `provider` has a free builder lane in this project. */
-  /** Whether `provider` has a free builder lane, counting every project (Settings or LANE_CAPS). */
+  /** Whether `provider` has a free builder lane, counting every running project (Settings or LANE_CAPS). */
   private builderRoom(provider: ProviderId): boolean {
     const cap =
       this.opts.laneCaps?.[provider] ??
       this.ctx.store.settings.get().limits.providers[provider]?.lanes ??
       LANE_CAPS[provider] ??
       1;
-    return this.projects.countBuilding(provider) < cap;
+    const live = (id: string) =>
+      id === this.projectId ||
+      lockHolder(join(this.opts.home, 'projects', id, 'run.lock')) !== undefined;
+    return this.projects.countBuilding(provider, live) < cap;
   }
 
   /**

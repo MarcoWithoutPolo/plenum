@@ -6,6 +6,8 @@ import {
   TypedEventParser,
   WholeTextParser,
   detectVersion,
+  limitResetsAt,
+  looksLikeLimit,
   failure,
   locateCli,
   outside,
@@ -164,5 +166,71 @@ describe('edits outside the working folder', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('runCli stops a run that edits outside its folder (E8)', () => {
+  it('aborts the process at once instead of letting it run on', async () => {
+    let aborted = false;
+    // A CLI that reports an edit outside its folder, then would run until stopped.
+    const exec: Exec = async function* (opts) {
+      yield { kind: 'line', line: JSON.stringify({ edit: '/etc/elsewhere.txt' }) };
+      await new Promise<void>((ok) => {
+        if (opts.signal?.aborted) return ok();
+        opts.signal?.addEventListener('abort', () => ok(), { once: true });
+        setTimeout(ok, 20_000).unref();
+      });
+      aborted = opts.signal?.aborted === true;
+      yield { kind: 'exit', code: null, error: 'Cancelled' };
+    };
+    const parser = {
+      failed: false,
+      parse: (m: unknown): EventBody[] => [
+        { type: 'file.edit', path: (m as { edit: string }).edit } as EventBody,
+      ],
+    };
+    const started = Date.now();
+    const events = [];
+    for await (const e of runCli('codex', exec, { command: 'x', args: [], cwd: tmpdir() }, parser))
+      events.push(e);
+    expect(aborted).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(
+      events.some((e) => e.type === 'error' && /outside its working folder/.test(e.message)),
+    ).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: 'done', ok: false });
+  }, 30_000);
+});
+
+describe('Usage limits are read from what the CLIs say, not from any word (E9)', () => {
+  const limits = [
+    'You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit settings.',
+    'You hit your spend cap set by the owner of your workspace. Ask an owner to increase it.',
+    'Rate limit exceeded (429). Try again in 2 hours.',
+    'Quota exceeded. Try later.',
+    'Usage limit reached, try again in 2 hours',
+    'Too many requests',
+    'HTTP 429 Too Many Requests',
+    'You have exceeded your current quota, please check your billing details.',
+    'Your credit balance is too low to access the API.',
+    'You’ve reached your weekly limit.',
+  ];
+  const ordinary = [
+    "Error: Cannot find module './billing'",
+    'TypeError in src/quota-tracker.ts at line 429',
+    'Failed to compile src/features/billing/invoice.tsx',
+    'expected 429 to equal 430',
+    'Test failed: quota.spec.ts',
+    'ENOENT: no such file or directory, open "credits.json"',
+  ];
+  it.each(limits)('a limit: %s', (m) => expect(looksLikeLimit(m)).toBe(true));
+  it.each(ordinary)('not a limit: %s', (m) => expect(looksLikeLimit(m)).toBe(false));
+
+  it('reads "try again at" as local time, or UTC when it says so', () => {
+    const now = new Date(Date.UTC(2026, 10, 2, 10, 0));
+    const utc = limitResetsAt('Try again at 5:00 PM UTC.', now)!;
+    expect(new Date(utc).getUTCHours()).toBe(17);
+    const local = limitResetsAt('Try again at 5:00 PM.', now)!;
+    expect(new Date(local).getHours()).toBe(17);
   });
 });

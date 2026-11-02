@@ -278,8 +278,8 @@ function StoredRound({ round }: { round: Round }) {
             provider={a.provider!}
             label={labels[i]!}
             model={a.model}
-            status={a.ok ? 'done' : 'failed'}
-            text={a.ok ? a.content : ''}
+            status={a.outcome === 'skipped' ? 'skipped' : a.ok ? 'done' : 'failed'}
+            text={a.ok || a.outcome === 'skipped' ? a.content : ''}
             error={a.error}
             effort={a.effort}
             durationMs={a.durationMs}
@@ -295,7 +295,13 @@ function StoredRound({ round }: { round: Round }) {
 }
 
 function LiveRound({ live }: { live: LiveCouncil }) {
+  const skipMember = useApp((s) => s.skipMember);
+  const mergeNow = useApp((s) => s.mergeNow);
   const synthActive = live.synth.status !== 'waiting';
+  const running = live.members.filter((m) => m.status === 'waiting' || m.status === 'thinking');
+  const answered = live.members.filter((m) => m.status === 'done');
+  // Merge now: once someone has answered while someone else still works (F4).
+  const canMerge = !synthActive && answered.length > 0 && running.length > 0;
   return (
     <section className="flex flex-col gap-4" aria-live="polite">
       <Question text={live.question} />
@@ -308,12 +314,21 @@ function LiveRound({ live }: { live: LiveCouncil }) {
             model={m.seat.model ?? null}
             status={m.status}
             text={m.text}
+            error={m.skipped ?? null}
             effort={m.seat.effort ?? null}
             durationMs={m.durationMs ?? null}
+            {...((m.status === 'waiting' || m.status === 'thinking') && {
+              onSkip: () => skipMember(live.requestId, i),
+            })}
           />
         ))}
       </AnswerGrid>
-      <LiveMerge synth={live.synth} active={synthActive} />
+      <LiveMerge
+        synth={live.synth}
+        active={synthActive}
+        waitingFor={running.length}
+        {...(canMerge && { onMergeNow: () => mergeNow(live.requestId) })}
+      />
     </section>
   );
 }
@@ -334,6 +349,7 @@ function AnswerCard({
   effort,
   durationMs,
   usage,
+  onSkip,
 }: {
   provider: ProviderId;
   label: string;
@@ -344,9 +360,15 @@ function AnswerCard({
   effort?: string | null;
   durationMs?: number | null;
   usage?: Message['usage'];
+  /** While it works: stop it and leave it out of the merge (F4). */
+  onSkip?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 700;
+  if (status === 'skipped')
+    return (
+      <SkippedCard provider={provider} label={label} model={model} text={text} reason={error} />
+    );
   return (
     <article
       aria-label={`${label} answer`}
@@ -368,6 +390,17 @@ function AnswerCard({
             <Badge>Waiting</Badge>
           )}
         </span>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            aria-label={`Skip ${label}`}
+            title="Stop it and merge without it"
+            className="shrink-0 rounded-lg border border-line-strong bg-panel px-2.5 py-1 text-[12px] font-medium hover:bg-sunken"
+          >
+            Skip
+          </button>
+        )}
       </header>
       {status === 'failed' && !text ? (
         <ErrorBox text={error ?? 'No answer'} />
@@ -410,6 +443,63 @@ function MergedShell({ title, children }: { title: React.ReactNode; children: Re
   );
 }
 
+/** A skipped member: said so, with what it had written folded away (F4). */
+function SkippedCard({
+  provider,
+  label,
+  model,
+  text,
+  reason,
+}: {
+  provider: ProviderId;
+  label: string;
+  model: string | null;
+  text: string;
+  reason?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <article
+      aria-label={`${label} answer, skipped`}
+      className="flex min-w-0 flex-col rounded-2xl border border-dashed border-line-strong bg-sunken/40 p-4"
+    >
+      <header className="mb-2 flex items-center gap-2 text-[12.5px]">
+        <ProviderDot provider={provider} />
+        <span className="font-semibold">{label}</span>
+        {model && (
+          <span className="truncate text-faint" title={model}>
+            {model}
+          </span>
+        )}
+        <span className="ml-auto shrink-0">
+          <Badge>{reason ?? 'Skipped'}</Badge>
+        </span>
+      </header>
+      <p className="text-[12.5px] text-muted">
+        Left out of the merge. The tokens it used are counted.
+      </p>
+      {text.trim() && (
+        <>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="mt-2 inline-flex items-center gap-1 self-start text-[12.5px] font-medium text-accent-ink hover:underline"
+          >
+            {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            {open ? 'Hide what it wrote' : 'Show what it wrote'}
+          </button>
+          {open && (
+            <div className="mt-2 text-muted">
+              <Markdown text={text} />
+            </div>
+          )}
+        </>
+      )}
+    </article>
+  );
+}
+
 function MergedCard({ message, answerCount }: { message: Message; answerCount: number }) {
   const by = message.provider ? seatText(seatOf(message)) : '';
   return (
@@ -430,6 +520,10 @@ function MergedCard({ message, answerCount }: { message: Message; answerCount: n
         </>
       }
     >
+      {message.ok && message.error && (
+        // A note on how it was merged: who stepped in, or who was skipped (F4).
+        <p className="mb-2 text-[12.5px] text-muted">{message.error}</p>
+      )}
       {message.ok ? (
         <Markdown text={message.content} />
       ) : (
@@ -439,15 +533,39 @@ function MergedCard({ message, answerCount }: { message: Message; answerCount: n
   );
 }
 
-function LiveMerge({ synth, active }: { synth: LiveSeat; active: boolean }) {
+function LiveMerge({
+  synth,
+  active,
+  waitingFor,
+  onMergeNow,
+}: {
+  synth: LiveSeat;
+  active: boolean;
+  waitingFor: number;
+  onMergeNow?: () => void;
+}) {
   return (
     <MergedShell
       title={
         <>
           <span className="font-semibold">Council answer</span>
           <span className="text-faint">
-            {active ? `merging with ${seatText(synth.seat)}` : 'waits for the members'}
+            {active
+              ? `merging with ${seatText(synth.seat)}`
+              : waitingFor > 0
+                ? `waits for ${waitingFor} member${waitingFor === 1 ? '' : 's'}`
+                : 'waits for the members'}
           </span>
+          {onMergeNow && (
+            <button
+              type="button"
+              onClick={onMergeNow}
+              title="Skip the members still answering and merge what came back"
+              className="ml-auto rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-semibold text-white hover:brightness-110"
+            >
+              Merge now
+            </button>
+          )}
         </>
       }
     >

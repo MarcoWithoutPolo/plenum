@@ -103,12 +103,14 @@ function registerSettings(engine: Engine, brains: BrainManager): void {
     const local = section(patch?.local);
     const defaults = section(patch?.defaults);
     const appearance = section(patch?.appearance);
+    const council = section(patch?.council);
     const next = engine.store.settings.update({
       ...(notifications && { notifications }),
       ...(limits && { limits }),
       ...(local && { local }),
       ...(defaults && { defaults }),
       ...(appearance && { appearance }),
+      ...(council && { council }),
     } as SettingsPatch);
     if (appearance) applyAppearance(next.appearance);
     // Limits changed (Pause everything off, quiet hours, caps): waiting projects look again now.
