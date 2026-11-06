@@ -266,6 +266,8 @@ export interface ConclaveApi {
     signIn(provider: ProviderId): Promise<{ opened: boolean; error?: string }>;
     /** Installs the official CLI with npm after the user confirms in a native dialog. */
     install(provider: ProviderId): Promise<{ ok: boolean; cancelled?: boolean; error?: string }>;
+    /** Whether npm runs here; it comes with Node.js, which a new computer may not have. */
+    hasNpm(): Promise<boolean>;
     quotas(): Promise<QuotaInfo[]>;
   };
   threads: {
@@ -465,6 +467,7 @@ export const IPC = {
   accountsList: 'accounts:list',
   accountsSignIn: 'accounts:sign-in',
   accountsInstall: 'accounts:install',
+  accountsHasNpm: 'accounts:has-npm',
   localPull: 'local:pull',
   accountsQuotas: 'accounts:quotas',
   threadsList: 'threads:list',

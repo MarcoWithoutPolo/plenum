@@ -7,6 +7,7 @@
  *
  *   npx tsx --conditions=development bench/teams.ts --stage 1
  *   npx tsx --conditions=development bench/teams.ts --stage 2 --teams A,B
+ *   npx tsx --conditions=development bench/teams.ts --stage 1 --resume teams-<stamp>
  *
  * Results: bench/results/teams-<stamp>/ (one bench run per team, project and run) and a
  * summary.md there.
@@ -76,6 +77,8 @@ const { values } = parseArgs({
     teams: { type: 'string', default: Object.keys(CANDIDATES).join(',') },
     projects: { type: 'string' },
     runs: { type: 'string' },
+    /** Carry on an interrupted run: its results folder under bench/results. */
+    resume: { type: 'string' },
     /** Print what would run, and run nothing. */
     'dry-run': { type: 'boolean', default: false },
   },
@@ -88,7 +91,7 @@ for (const t of teams) if (!CANDIDATES[t]) throw new Error(`No candidate team ${
 const projects = values.projects?.split(',') ?? stage.projects;
 const runs = values.runs ? Number(values.runs) : stage.runs;
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-const out = join(here, 'results', `teams-${stamp}`);
+const out = join(here, 'results', values.resume ?? `teams-${stamp}`);
 mkdirSync(out, { recursive: true });
 
 interface Row {
@@ -101,7 +104,9 @@ interface Row {
   minutes: number;
   tokens: number;
 }
-const rows: Row[] = [];
+const rows: Row[] = values.resume
+  ? (JSON.parse(readFileSync(join(out, 'rows.json'), 'utf8')) as Row[])
+  : [];
 
 // Interleaved: run 1 of every team on every project, then run 2, and so on.
 for (let run = 1; run <= runs; run++) {
@@ -123,6 +128,7 @@ for (let run = 1; run <= runs; run++) {
         '1',
         ...(c.reviewEffort ? ['--review-effort', c.reviewEffort] : []),
       ];
+      if (rows.some((r) => r.team === t && r.project === project && r.run === run)) continue;
       console.log(`▶ team ${t} · ${project} · run ${run}`);
       if (values['dry-run']) {
         console.log(`  node ${args.join(' ')}`);
@@ -133,7 +139,7 @@ for (let run = 1; run <= runs; run++) {
       if (r.status !== 0) console.log(`  (bench exited ${r.status})`);
       // The bench writes one results folder per call: read its JSON.
       const made = readdirSync(join(here, 'results')).filter(
-        (d) => !before.has(d) && !d.startsWith('teams-'),
+        (d) => !before.has(d) && !d.startsWith('teams-') && !d.startsWith('soak-'),
       );
       for (const dir of made) {
         for (const f of readdirSync(join(here, 'results', dir)).filter((x) =>

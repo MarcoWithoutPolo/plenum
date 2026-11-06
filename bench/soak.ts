@@ -141,11 +141,16 @@ async function worker(): Promise<void> {
     ],
   });
   const memory = join(values.out!, 'memory.jsonl');
-  const sample = () =>
+  // What's still in use after a collection, so a real leak isn't confused with a lazy collector.
+  const sample = () => {
+    (globalThis as { gc?: () => void }).gc?.();
+    const { rss, heapUsed, external } = process.memoryUsage();
+    const tasks = engine.store.projects.listTasks(values.project!).length;
     appendFileSync(
       memory,
-      JSON.stringify({ at: Date.now(), pid: process.pid, rss: process.memoryUsage().rss }) + '\n',
+      JSON.stringify({ at: Date.now(), pid: process.pid, rss, heapUsed, external, tasks }) + '\n',
     );
+  };
   sample();
   setInterval(sample, 30_000).unref();
   const brain = new Brain(engine, values.project!, { home });
@@ -229,6 +234,7 @@ async function orchestrate(): Promise<void> {
       const child = spawn(
         process.execPath,
         [
+          '--expose-gc',
           '--conditions=development',
           '--import',
           'tsx',
@@ -286,12 +292,25 @@ async function orchestrate(): Promise<void> {
     .filter((l) => l.startsWith('worktree ')).length;
   if (worktrees > 2) problems.push(`${worktrees - 1} worktree(s) left over`);
 
-  // Memory stays flat: the last fifth of the samples against the first fifth.
+  // Memory stays flat, within each worker's life (restarts would hide a leak) and overall: the
+  // last fifth of the samples against the first fifth. A power cut can leave a torn last line.
   const samples = (await import('node:fs'))
     .readFileSync(join(out, 'memory.jsonl'), 'utf8')
     .split('\n')
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as { rss: number });
+    .filter((l) => l.startsWith('{') && l.endsWith('}'))
+    .map((l) => JSON.parse(l) as { rss: number; heapUsed: number; pid: number; at: number });
+  for (const pid of new Set(samples.map((s) => s.pid))) {
+    // Settled first: the first ten minutes are start-up.
+    const life = samples.filter((s) => s.pid === pid);
+    const settled = life.filter((s) => s.at - life[0]!.at > 10 * 60_000);
+    if (settled.length < 20) continue;
+    const from = settled[0]!.heapUsed / 1e6;
+    const to = settled.at(-1)!.heapUsed / 1e6;
+    if (to > from * 1.5 + 20)
+      problems.push(
+        `Worker ${pid}: heap in use grew from ${from.toFixed(0)} to ${to.toFixed(0)} MB`,
+      );
+  }
   const fifth = Math.max(1, Math.floor(samples.length / 5));
   const avg = (xs: { rss: number }[]) => xs.reduce((n, s) => n + s.rss, 0) / xs.length / 1e6;
   const early = avg(samples.slice(0, fifth));

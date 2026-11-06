@@ -74,6 +74,9 @@ interface State {
 
   init(): Promise<void>;
   refreshProviders(): Promise<void>;
+  /** npm runs here (null until checked). Without it, npm-based AIs ask for Node.js first. */
+  npmReady: boolean | null;
+  checkNpm(): Promise<void>;
   refreshThreads(): Promise<void>;
   loadThread(id: string): Promise<ThreadDetail | null>;
   /**
@@ -114,6 +117,7 @@ export const useApp = create<State>((set, get) => ({
   details: {},
   screen: { name: 'chat' },
   screenSeq: 0,
+  npmReady: null,
   liveChats: {},
   liveCouncils: {},
   councilSeats: {},
@@ -123,7 +127,11 @@ export const useApp = create<State>((set, get) => ({
     if (!initStarted) {
       initStarted = true;
       api().runs.onUpdate((u) => applyUpdate(u, set));
-      window.addEventListener('focus', () => settle(get().refreshProviders()));
+      window.addEventListener('focus', () => {
+        settle(get().refreshProviders());
+        // Back from installing Node.js: the Install buttons appear by themselves.
+        if (get().npmReady === false) settle(get().checkNpm());
+      });
     }
     // A failure shows with Retry instead of "Loading…" for good (U9).
     try {
@@ -139,6 +147,14 @@ export const useApp = create<State>((set, get) => ({
       set({ loadError: errorText(err) });
       throw err;
     }
+  },
+
+  async checkNpm() {
+    // If the check itself fails, offer Install: its own failure is shown on the row.
+    const npmReady = await api()
+      .accounts.hasNpm()
+      .catch(() => true);
+    set({ npmReady });
   },
 
   async refreshProviders() {

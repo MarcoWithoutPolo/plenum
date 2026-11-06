@@ -103,3 +103,28 @@ test('four AIs: everything works, with a backup at every role', async () => {
     await run.close();
   }
 });
+
+test('a computer without Node.js is told what to do, not shown an npm error', async () => {
+  const run = await launch('empty', 'light', {
+    CONCLAVE_DEMO_FIRST_RUN: '1',
+    CONCLAVE_DEMO_NO_NPM: '1',
+  });
+  try {
+    const page = run.page;
+    await page.setViewportSize({ width: 1320, height: 860 });
+    const add = page.getByRole('region', { name: 'AIs you can add' });
+    await expect(add.getByRole('button', { name: 'Get Node.js for Claude Code' })).toBeVisible();
+    await expect(add.getByText(/isn't on this computer yet/).first()).toBeVisible();
+    // Claude Code and Codex install through npm, so they don't offer Install yet.
+    await expect(add.getByRole('button', { name: 'Install', exact: true })).toHaveCount(0);
+    // Once Node.js is there, Check again brings Install back.
+    await run.app.evaluate(() => {
+      delete process.env.CONCLAVE_DEMO_NO_NPM;
+    });
+    await add.getByRole('button', { name: 'Check again' }).first().click();
+    await expect(add.getByRole('button', { name: 'Install', exact: true }).first()).toBeVisible();
+    expect(run.errors).toEqual([]);
+  } finally {
+    await run.close();
+  }
+});

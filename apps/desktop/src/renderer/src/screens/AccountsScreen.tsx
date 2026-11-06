@@ -549,6 +549,8 @@ function ProviderCard({
 }
 
 /** An AI you could add: what it costs, how to install it on this computer, and Install. */
+const NODE_DOWNLOAD = 'https://nodejs.org/en/download';
+
 export function AddRow({
   info,
   onChanged,
@@ -559,9 +561,26 @@ export function AddRow({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [log, setLog] = useState('');
+  const npmReady = useApp((s) => s.npmReady);
+  const checkNpm = useApp((s) => s.checkNpm);
+  const [checkingNpm, setCheckingNpm] = useState(false);
   const entry = providerEntry(info.provider);
+  const needsNode = Boolean(info.installPackage) && npmReady === false;
   const setup = entry?.install;
   const script = api().platform === 'win32' ? setup?.script?.windows : setup?.script?.unix;
+
+  useEffect(() => {
+    if (info.installPackage && npmReady === null) settle(checkNpm());
+  }, [info.installPackage, npmReady, checkNpm]);
+
+  const checkAgain = async () => {
+    setCheckingNpm(true);
+    try {
+      await checkNpm();
+    } finally {
+      setCheckingNpm(false);
+    }
+  };
 
   useEffect(
     () =>
@@ -595,7 +614,21 @@ export function AddRow({
         <span className="min-w-0 flex-1 text-[12.5px] text-muted">
           {entry ? COST[entry.cost] : ''}
         </span>
-        {info.installPackage ? (
+        {needsNode ? (
+          <>
+            <Button size="sm" onClick={() => settle(checkAgain())} disabled={checkingNpm}>
+              {checkingNpm ? 'Checking…' : 'Check again'}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              aria-label={`Get Node.js for ${info.displayName}`}
+              onClick={() => settle(api().openExternal(NODE_DOWNLOAD))}
+            >
+              <ExternalLink className="size-3.5" /> Get Node.js
+            </Button>
+          </>
+        ) : info.installPackage ? (
           <Button size="sm" variant="primary" onClick={() => settle(install())} disabled={busy}>
             <Download className="size-3.5" />
             {busy ? 'Installing…' : 'Install'}
@@ -609,6 +642,12 @@ export function AddRow({
         )}
       </div>
       {entry?.blurb && <p className="mt-1 text-[12.5px] text-muted">{entry.blurb}</p>}
+      {needsNode && (
+        <p className="mt-1.5 text-[12.5px] text-muted">
+          This one installs with Node.js, which isn't on this computer yet. It's free: install the
+          LTS version, then come back here.
+        </p>
+      )}
       {!info.installPackage && script && (
         <p className="mt-1.5 text-[12.5px] text-muted">
           Install it with{' '}

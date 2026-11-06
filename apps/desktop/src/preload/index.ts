@@ -23,6 +23,7 @@ const api: ConclaveApi = {
     list: () => invoke(IPC.accountsList),
     signIn: (provider) => invoke(IPC.accountsSignIn, provider),
     install: (provider) => invoke(IPC.accountsInstall, provider),
+    hasNpm: () => invoke(IPC.accountsHasNpm),
     quotas: () => invoke(IPC.accountsQuotas),
   },
   threads: {

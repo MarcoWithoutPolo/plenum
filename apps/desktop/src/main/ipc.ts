@@ -12,6 +12,7 @@ import {
   INSTALL_PACKAGES,
   LocalAdapter,
   activeLimits,
+  runCommand,
   streamProcess,
   type Engine,
 } from '@conclave/core';
@@ -19,6 +20,18 @@ import { demoFailure, demoSignIn } from './demo.js';
 
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
 import { openInTerminal } from './terminal.js';
+import { refreshWindowsPath } from './winpath.js';
+
+/** npm comes with Node.js, which a new computer may not have. */
+async function hasNpm(): Promise<boolean> {
+  if (process.env.CONCLAVE_DEMO === '1') return !process.env.CONCLAVE_DEMO_NO_NPM;
+  const works = async () =>
+    (await runCommand('npm', ['--version'], { timeoutMs: 15_000 })).code === 0;
+  if (await works().catch(() => false)) return true;
+  // Installed since Conclave started? Then only the saved PATH knows about it.
+  await refreshWindowsPath();
+  return works().catch(() => false);
+}
 
 /** The demo can make calls fail on purpose (CONCLAVE_DEMO_FAIL), for the tests. */
 const demo = process.env.CONCLAVE_DEMO === '1';
@@ -98,9 +111,12 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
     demo ? demoSignIn(provider) : openInTerminal(adapter(provider).login()),
   );
 
+  handle(IPC.accountsHasNpm, hasNpm);
+
   handle(IPC.accountsInstall, async (provider: ProviderId) => {
     const pkg = INSTALL_PACKAGES[provider];
     if (!pkg) return { ok: false, error: 'No installer for this provider' };
+    if (!(await hasNpm())) return { ok: false, error: 'This install needs Node.js first.' };
     const win = getWindow();
     const options = {
       type: 'question' as const,
@@ -130,6 +146,8 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
         error = chunk.error;
       }
     }
+    // npm's folder may be new to this app's PATH: the CLI should be found straight away.
+    if (code === 0) await refreshWindowsPath();
     return code === 0
       ? { ok: true }
       : { ok: false, error: error ?? `npm exited with code ${code}` };
