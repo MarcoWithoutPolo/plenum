@@ -170,6 +170,7 @@ AFTER YOU FINISH the system runs: ${project.testCommand ?? project.proposedTestC
 Rules:
 - Change only what this task needs, inside this folder. Add or update tests for what you change.
 - Do not run git commit, push, or change branches; the system commits for you.
+- If you start a server or anything else in the background to check your work, stop it and everything it started before you finish.
 ${commandRule(project, extras.allowedCommands ?? [], extras.network ?? false)}
 - Keep the existing code style.
 ${extras.web ? SAMPLE_STATES : ''}

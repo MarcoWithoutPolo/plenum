@@ -12,6 +12,7 @@ import {
   IN_FLIGHT,
   taskProgress,
   type Project,
+  ReviewEffort,
 } from '@conclave/shared';
 import {
   activeLimits,
@@ -323,9 +324,7 @@ export function registerProjectIpc(
       ...(settings.askPolicy && { askPolicy: AskPolicy.parse(settings.askPolicy) }),
       ...(settings.permissions && { permissions: checkPermissions(settings.permissions) }),
       ...(settings.visualReview !== undefined && { visualReview: Boolean(settings.visualReview) }),
-      ...(settings.reviewEffort && {
-        reviewEffort: settings.reviewEffort === 'light' ? 'light' : 'same',
-      }),
+      ...(settings.reviewEffort && { reviewEffort: ReviewEffort.parse(settings.reviewEffort) }),
       // The store keeps up to five, each starting with "/".
       ...(Array.isArray(settings.pages) && {
         pages: settings.pages

@@ -423,6 +423,12 @@ for (const scheme of ['light', 'dark'] as const) {
       await expect(settings.getByText(/reviews take about/)).toBeVisible();
       await settings.getByRole('checkbox', { name: /Adjust the team/ }).scrollIntoViewIfNeeded();
       await shot('project-settings-team');
+      // Review effort: Tests only says what it gives up and what is still reviewed.
+      await settings.getByRole('radio', { name: 'Tests only' }).click();
+      await expect(settings.getByText(/merges without a reviewer/)).toBeVisible();
+      await expect(settings.getByText(/last task is still reviewed/)).toBeVisible();
+      await settings.getByRole('radio', { name: 'Tests only' }).scrollIntoViewIfNeeded();
+      await shot('project-settings-tests-only');
       await page.keyboard.press('Escape');
       await expect(page.getByRole('article', { name: /Ready to merge/ })).toBeVisible({
         timeout: 60_000,

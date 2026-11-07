@@ -24,16 +24,20 @@ export const RANK = {
 } as const;
 
 /**
- * Starting points measured in Conclave's benchmark (bench/RESULTS.md), so a new install
- * doesn't start blind. Each counts as RANK.minRuns runs and fades out as real runs come in.
- * Only reviews: they sit on every task's critical path. A provider with no entry starts unknown.
+ * Starting points measured in Conclave's benchmark and real projects (bench/RESULTS.md, "Team
+ * finder"), so a new install doesn't start blind. Each counts as RANK.minRuns runs and fades out
+ * as real runs come in. Only reviews: they sit on every task's critical path. A provider with no
+ * entry starts unknown.
  */
 export const PRIORS: Partial<
   Record<RankRole, Partial<Record<ProviderId, Omit<SeatStats, 'runs'>>>>
 > = {
   reviewer: {
-    claude: { okRate: 1, medianMs: 18_000 },
-    antigravity: { okRate: 1, medianMs: 170_000 },
+    claude: { okRate: 1, medianMs: 22_000 },
+    codex: { okRate: 1, medianMs: 23_000 },
+    copilot: { okRate: 1, medianMs: 46_000 },
+    antigravity: { okRate: 0.9, medianMs: 65_000 },
+    cursor: { okRate: 1, medianMs: 117_000 },
   },
 };
 

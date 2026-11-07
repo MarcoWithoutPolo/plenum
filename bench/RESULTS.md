@@ -538,3 +538,35 @@ time into AI, waiting for limits, and Conclave's own steps (tests, git, the loop
   T4 used 16.5 and waited 43. Codex was out of usage and Claude was at 90–91% of its weekly allowance, past the 10%
   Conclave leaves for you. With no other builder in the team they waited, as designed, until the 60-minute cap. Conflicts on kept work, stalls and second opinions didn't come up live; the trouble
   suite forces each of them in CI.
+
+## Team finder, stage 1 (2026-11-06 to 11-07, first run of each)
+
+Six candidate teams (`bench/teams.ts`) on calc, inventory, kanban and site. Stage 1 planned two runs each; the first
+run of every row finished, then the run was stopped: Claude was at 89% of its weekly allowance, and the last three site
+rows spent their whole 40 minutes waiting for limits, so a second run would have measured the limits, not the teams.
+
+| Team | Plans              | Builds                           | Reviews                            | calc          | inventory       | kanban          | site                |
+| ---- | ------------------ | -------------------------------- | ---------------------------------- | ------------- | --------------- | --------------- | ------------------- |
+| A    | Claude Opus        | Codex, then Claude               | Claude, then Antigravity           | 7/7 · 11.1    | 7/7 · 2.7 ⚠     | 12/12 · 7.1     | 0/17 · 3.4          |
+| B    | Claude Sonnet, low | Codex medium, then Claude Sonnet | Antigravity Flash low, then Sonnet | 7/7 · **2.5** | 7/7 · **1.5** ⚠ | 12/12 · 4.7     | **17/17 · 14.8** ⚠  |
+| C    | Claude Opus        | Claude Sonnet, then Codex        | Codex low, then Antigravity        | 7/7 · 6.6     | 7/7 · 2.9 ⚠     | 12/12 · **2.6** | 17/17 · 23.7 ⚠      |
+| D    | Codex              | Codex medium, then Claude Sonnet | Claude Sonnet, then Antigravity    | 7/7 · 5.2     | 7/7 · 2.5       | 12/12 · 3.0     | 0/17 · 40.1 ⚠ limit |
+| E    | Claude Sonnet      | Copilot, then Codex              | Claude Sonnet, then Antigravity    | 7/7 · 9.1     | 7/7 · 2.5       | 0/12 · 40.0     | 0/17 · 40.1 ⚠ limit |
+| F    | as A               | as A                             | as A, light                        | 7/7 · 7.3 ⚠   | 7/7 · 3.0       | 12/12 · 5.1 ⚠   | 0/17 · 40.1 ⚠ limit |
+
+Each cell: hidden tests · minutes. ⚠ marks a run a usage limit touched (it still counts when the tests passed).
+
+**What it says.** Fast models win where they ran: team B was fastest on three of four projects and the only team to
+finish the site in under 15 minutes. Codex planning (D) is close behind and never failed. Copilot as first builder (E)
+failed kanban outright. Light reviews (F) saved little. Team A, the old default, was the slowest passing team on calc
+and kanban.
+
+**Real projects agree** (agent runs on this machine, 2026-10-24 to 11-07): as reviewers, Claude 13/13 finished in a
+median 22 s and Codex 3/5 (limits) in 23 s; Copilot 6/6 in 46 s; Antigravity 9/13 in 65 s; Cursor 5/5 in 117 s. As
+builders, Codex averaged 140 s a task, Claude 206 s and Cursor 560 s.
+
+**Decision for v1.0.** The registry's default order is now: plans Claude, Codex, Antigravity, Cursor, Copilot; builds
+Codex, Claude, Antigravity, Copilot, Cursor; reviews Claude, Codex, Copilot, Antigravity, Cursor. The reviewer priors
+in `governor/rank.ts` carry the medians above. Model and effort stay the user's per-AI defaults (Accounts), so the
+"fast models" half of team B is a Fast preset for 1.0.1 rather than a silent change to what each AI runs. Stage 2 and
+the second stage-1 run wait for the allowances to reset.

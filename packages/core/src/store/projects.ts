@@ -577,7 +577,8 @@ function toProject(r: Row): Project {
     previewCommand: (r.preview_command as string | null) ?? null,
     pages: cleanPages((parse(r.pages) as string[] | null) ?? ['/']),
     visualReview: r.visual_review !== 0,
-    reviewEffort: r.review_effort === 'light' ? 'light' : 'same',
+    reviewEffort:
+      r.review_effort === 'light' || r.review_effort === 'none' ? r.review_effort : 'same',
     retryStrategy: ((r.retry_strategy as string | null) ?? 'same') as RetryStrategy,
     askPolicy: ((r.ask_policy as string | null) ?? 'ask') as AskPolicy,
     permissions: {

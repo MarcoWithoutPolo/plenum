@@ -64,6 +64,8 @@ test('a provider that keeps failing is called out, and Retry all hands the work 
     const drawer = page.getByRole('dialog', { name: 'Add a greet() helper' });
     await expect(drawer).toContainText('The AI tool stopped');
     await expect(drawer).toContainText('Attempt 1');
+    // The line is cut to fit; hovering it shows all of it.
+    await expect(drawer.locator('li span.truncate[title]').first()).toHaveAttribute('title', /\S/);
     await expect(drawer.getByRole('button', { name: 'Retry with…' })).toBeVisible();
     // Codex's default here is already its frontier model, so no "stronger model" is offered.
     await expect(drawer.getByRole('button', { name: /^Retry with GPT/ })).toHaveCount(0);

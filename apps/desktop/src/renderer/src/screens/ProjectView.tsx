@@ -574,6 +574,7 @@ function NowStrip({
   let line: React.ReactNode = null;
   let icon: React.ReactNode = null;
   let since: number | undefined;
+  let title: string | undefined;
 
   if (project.status === 'needs_you' && !running) {
     // The Needs you cards above say it all.
@@ -598,7 +599,7 @@ function NowStrip({
       </>
     );
   } else if (running && active) {
-    ({ icon, line, since } = laneLine(active, events));
+    ({ icon, line, since, title } = laneLine(active, events));
   } else if (running) {
     icon = <span className="live-dot size-2 rounded-full bg-ok" aria-hidden />;
     since = last?.at;
@@ -616,7 +617,9 @@ function NowStrip({
       className={`relative mt-5 flex items-center gap-3 overflow-hidden rounded-2xl border border-line bg-panel px-4 py-3 text-[13.5px] shadow-card ${running ? 'sheen' : ''}`}
     >
       <span className="grid size-6 shrink-0 place-items-center">{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{line}</span>
+      <span className="min-w-0 flex-1 truncate" title={title}>
+        {line}
+      </span>
       {since && running && (
         <span className="shrink-0 text-[12px] text-faint tabular-nums">{elapsed(now - since)}</span>
       )}
@@ -645,7 +648,7 @@ function laneLine(task: Task, events: BrainEvent[], queue: Task[] = []) {
         <span className="text-muted">“{task.title}”</span>
       </>
     );
-    return { icon, line, since: task.updatedAt };
+    return { icon, line, since: task.updatedAt, title: task.title };
   }
   const who =
     task.status === 'reviewing' ? (task.reviewedBy ?? lastProvider(events, task.id)) : task.builtBy;
@@ -671,7 +674,7 @@ function laneLine(task: Task, events: BrainEvent[], queue: Task[] = []) {
       <span className="text-muted">“{task.title}”</span>
     </>
   );
-  return { icon, line, since };
+  return { icon, line, since, title: task.title };
 }
 
 /** Lanes: one live card per task in flight, and a dashed slot for each free lane. */
@@ -697,7 +700,7 @@ function LanesStrip({
       </div>
       <ul className="flex flex-col gap-2">
         {tasks.map((task) => {
-          const { icon, line, since } = laneLine(task, events, tasks);
+          const { icon, line, since, title } = laneLine(task, events, tasks);
           return (
             <li
               key={task.id}
@@ -705,7 +708,9 @@ function LanesStrip({
               className="sheen relative flex items-center gap-3 overflow-hidden rounded-2xl border border-line bg-panel px-4 py-3 text-[13.5px] shadow-card"
             >
               <span className="grid size-6 shrink-0 place-items-center">{icon}</span>
-              <span className="min-w-0 flex-1 truncate">{line}</span>
+              <span className="min-w-0 flex-1 truncate" title={title}>
+                {line}
+              </span>
               {since && (
                 <span className="shrink-0 text-[12px] text-faint tabular-nums">
                   {elapsed(now - since)}

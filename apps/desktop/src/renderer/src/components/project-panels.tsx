@@ -758,10 +758,13 @@ export function ProjectSettingsDialog({
           </Field>
           <Field
             label="Review effort"
+            hintBelow
             hint={
-              reviewEffort === 'light'
-                ? 'Reviewers think at their lightest level, or use their fast model: quicker, and lighter on your plan.'
-                : 'Reviewers run at the model and effort set in the team.'
+              reviewEffort === 'none'
+                ? 'A task whose tests pass merges without a reviewer: the quickest, but nothing catches a wrong README or a missed case. The last task is still reviewed against the goal, and a project with no test command is always reviewed.'
+                : reviewEffort === 'light'
+                  ? 'Reviewers think at their lightest level, or use their fast model: quicker, and lighter on your plan.'
+                  : 'Reviewers run at the model and effort set in the team.'
             }
           >
             <Segmented
@@ -772,6 +775,7 @@ export function ProjectSettingsDialog({
               options={[
                 { value: 'same' as const, label: 'As in the team' },
                 { value: 'light' as const, label: 'Light' },
+                { value: 'none' as const, label: 'Tests only' },
               ]}
             />
           </Field>

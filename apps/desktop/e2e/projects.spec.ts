@@ -88,6 +88,12 @@ test('creates a project in three steps, with the test command guessed', async ()
   await page.getByRole('button', { name: 'New project' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'New project' });
+  // A new folder's Location row: the Change button stays on one line beside a long path.
+  await dialog.getByRole('radio', { name: /Create a new folder/ }).click();
+  const change = dialog.getByRole('button', { name: 'Change', exact: true });
+  expect((await change.boundingBox())!.height).toBeLessThan(40);
+  await page.screenshot({ path: join(shots, '4a-new-folder.png') });
+  await dialog.getByRole('radio', { name: /Use a folder/ }).click();
   // Where: a folder is required.
   await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(dialog.getByRole('alert')).toHaveText('Choose a folder and set it up first');
@@ -111,6 +117,20 @@ test('creates a project in three steps, with the test command guessed', async ()
     'aria-checked',
     'true',
   );
+  // A long answer wraps inside its button instead of spilling out of a one-line pill.
+  const long = dialog.getByRole('radio', { name: 'Hi <name>' });
+  await long.evaluate((el) => {
+    el.textContent =
+      'Flappy-style: ball falls under gravity, each click or space gives an upward bounce, and the player steers it into a rim that scrolls or moves along the screen as the run goes on';
+  });
+  const fit = await dialog.getByRole('radio', { name: /^Flappy-style/ }).evaluate((el) => ({
+    height: el.getBoundingClientRect().height,
+    spills: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
+    inside: el.getBoundingClientRect().right <= el.parentElement!.getBoundingClientRect().right + 1,
+  }));
+  await page.screenshot({ path: join(shots, '4b-long-answers.png') });
+  expect(fit).toMatchObject({ spills: false, inside: true });
+  expect(fit.height).toBeGreaterThan(40);
   await dialog.getByRole('radio', { name: 'The README' }).click();
   // A changed answer offers to redo the draft plan around it.
   await dialog.getByRole('button', { name: 'Re-plan with my answers' }).click();

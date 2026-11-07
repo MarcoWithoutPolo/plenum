@@ -37,15 +37,30 @@ const BILLING = {
   'free-local': 'Free, local',
 } as const;
 
-function toPickerModel(info: ProviderInfo, m: ModelOption, makers: number): PickerModel {
+export interface PickerOptions {
+  /** Cursor and Grok share one plan (The X Subscription): Cursor's other makers' models are billed per use. */
+  cursorSharedWithGrok?: boolean;
+}
+
+const PER_USE = 'Billed per use';
+
+function toPickerModel(
+  info: ProviderInfo,
+  m: ModelOption,
+  makers: number,
+  opts: PickerOptions,
+): PickerModel {
   const efforts = m.efforts?.length ? m.efforts : m.variants ? [] : (info.efforts ?? []);
+  const perUse =
+    opts.cursorSharedWithGrok && info.provider === 'cursor' && m.maker && m.maker !== 'Grok';
+  const tags = [...(m.tags ?? []), ...(perUse ? [PER_USE] : [])];
   return {
     id: m.id,
     label: m.label ?? modelLabel(info, m.id),
     ...((m.description ?? (m.label && m.label !== m.id ? m.id : undefined)) && {
       note: m.description ?? m.id,
     }),
-    ...(m.tags?.length && { tags: m.tags }),
+    ...(tags.length && { tags }),
     ...(efforts.length && {
       efforts: efforts.map((e) => ({ id: e, label: effortLabel(e), note: effortNote(e, m) })),
     }),
@@ -57,7 +72,10 @@ function toPickerModel(info: ProviderInfo, m: ModelOption, makers: number): Pick
 }
 
 /** What the picker shows for each provider: its models, status, billing and words. */
-export function pickerProviders(providers: ProviderInfo[]): PickerProvider[] {
+export function pickerProviders(
+  providers: ProviderInfo[],
+  opts: PickerOptions = {},
+): PickerProvider[] {
   return providers.map((info) => {
     const entry = providerEntry(info.provider);
     const connected = info.installed && info.auth === 'signed_in';
@@ -82,7 +100,7 @@ export function pickerProviders(providers: ProviderInfo[]): PickerProvider[] {
       effortName: entry?.effortName ?? 'Effort',
       ...(entry?.effortHint && { effortHint: entry.effortHint }),
       ...(info.defaultModel && { defaultModel: info.defaultModel }),
-      models: info.models.map((m) => toPickerModel(info, m, makers)),
+      models: info.models.map((m) => toPickerModel(info, m, makers, opts)),
       install: {
         command: install?.npm
           ? `npm install -g ${install.npm}`

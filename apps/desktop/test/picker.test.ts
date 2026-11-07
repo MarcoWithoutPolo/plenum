@@ -95,6 +95,14 @@ describe('picker data', () => {
     );
     const [many] = pickerProviders([{ ...cursor, models: long } as ProviderInfo]);
     expect(new Set(many!.models.map((m) => m.group))).toEqual(new Set(['GPT', 'Claude', 'Grok']));
+    // Cursor and Grok on one plan: every model that isn't Grok's is billed per use, and says so.
+    expect(many!.models.some((m) => m.tags?.includes('Billed per use'))).toBe(false);
+    const [shared] = pickerProviders([{ ...cursor, models: long } as ProviderInfo], {
+      cursorSharedWithGrok: true,
+    });
+    const perUse = shared!.models.filter((m) => m.tags?.includes('Billed per use'));
+    expect(new Set(perUse.map((m) => m.group))).toEqual(new Set(['GPT', 'Claude']));
+    expect(perUse).toHaveLength(8);
     expect(c!.models.find((m) => m.id === 'opus')!.efforts!.map((e) => e.label)).toEqual([
       'Low',
       'High',

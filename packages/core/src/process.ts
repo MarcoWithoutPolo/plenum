@@ -15,6 +15,14 @@ export interface ProcessOptions {
   timeoutMs?: number;
 }
 
+/**
+ * Once a process has exited, how long its output may stay silent before we stop waiting for it.
+ * Normally the pipes close at once; they stay open only if something it started still holds them.
+ */
+const PIPE_QUIET_MS = 5_000;
+/** The most we keep reading after the exit, however much that leftover process prints. */
+const PIPE_MAX_MS = 60_000;
+
 export type ProcessChunk =
   | { kind: 'line'; line: string }
   | { kind: 'stderr'; text: string }
@@ -60,9 +68,40 @@ export async function* streamProcess(opts: ProcessOptions): AsyncGenerator<Proce
     ? setTimeout(() => kill(`Timed out after ${opts.timeoutMs} ms`), opts.timeoutMs)
     : undefined;
 
+  // A server the CLI started and failed to stop can hold our pipes for as long as it lives, and
+  // 'close' never comes. The stops above can't help, the CLI being already gone: so the run ends
+  // here, a few seconds after the exit, and takes down whatever can still be traced.
+  let reported = false;
+  let exitedAt: number | undefined;
+  let drain: ReturnType<typeof setTimeout> | undefined;
+  const report = (code: number | null) => {
+    if (reported) return;
+    reported = true;
+    clearTimeout(drain);
+    if (buffered.trim()) push({ kind: 'line', line: buffered.replace(/\r$/, '') });
+    buffered = '';
+    if (timer) clearTimeout(timer);
+    opts.signal?.removeEventListener('abort', onAbort);
+    const error = killedReason ?? spawnError;
+    push({ kind: 'exit', code, ...(error !== undefined && { error }) });
+    finished = true;
+  };
+  const armDrain = () => {
+    if (exitedAt === undefined || reported) return;
+    clearTimeout(drain);
+    const left = Math.min(PIPE_QUIET_MS, exitedAt + PIPE_MAX_MS - Date.now());
+    drain = setTimeout(() => {
+      void killTree(child);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      report(child.exitCode);
+    }, left);
+  };
+
   let buffered = '';
   child.stdout?.setEncoding('utf8');
   child.stdout?.on('data', (data: string) => {
+    armDrain();
     buffered += data;
     let nl: number;
     while ((nl = buffered.indexOf('\n')) >= 0) {
@@ -72,19 +111,18 @@ export async function* streamProcess(opts: ProcessOptions): AsyncGenerator<Proce
     }
   });
   child.stderr?.setEncoding('utf8');
-  child.stderr?.on('data', (text: string) => push({ kind: 'stderr', text }));
+  child.stderr?.on('data', (text: string) => {
+    armDrain();
+    push({ kind: 'stderr', text });
+  });
   child.on('error', (err) => {
     spawnError = err.message;
   });
-  child.on('close', (code) => {
-    if (buffered.trim()) push({ kind: 'line', line: buffered.replace(/\r$/, '') });
-    buffered = '';
-    if (timer) clearTimeout(timer);
-    opts.signal?.removeEventListener('abort', onAbort);
-    const error = killedReason ?? spawnError;
-    push({ kind: 'exit', code, ...(error !== undefined && { error }) });
-    finished = true;
+  child.on('exit', () => {
+    exitedAt = Date.now();
+    armDrain();
   });
+  child.on('close', report);
 
   child.stdin?.on('error', () => {});
   child.stdin?.end(opts.stdin ?? '');

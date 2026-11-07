@@ -165,33 +165,37 @@ export function TaskDrawer({
           {history.length > 1 && (
             <Section title="Attempts">
               <ol className="flex flex-col gap-1">
-                {history.map((h, i) => (
-                  <li key={i} className="flex items-center gap-2.5 text-[12.5px]">
-                    {h.outcome === 'merged' ? (
-                      <CheckCircle2 className="size-3.5 shrink-0 text-ok" aria-hidden />
-                    ) : h.outcome === 'running' ? (
-                      <CircleDot className="size-3.5 shrink-0 text-accent" aria-hidden />
-                    ) : h.counted ? (
-                      <XCircle className="size-3.5 shrink-0 text-danger" aria-hidden />
-                    ) : (
-                      <RotateCcw className="size-3.5 shrink-0 text-faint" aria-hidden />
-                    )}
-                    <span className="w-16 shrink-0 text-faint">Attempt {h.n}</span>
-                    {h.seat && (
-                      <span className="inline-flex shrink-0 items-center gap-1 font-medium">
-                        <ProviderDot provider={h.seat.provider} size={6} />
-                        {seatText(h.seat)}
+                {history.map((h, i) => {
+                  const outcome =
+                    h.outcome === 'merged'
+                      ? 'merged'
+                      : h.outcome === 'running'
+                        ? 'in progress'
+                        : `${h.summary}${h.counted ? '' : ' (not counted)'}`;
+                  return (
+                    <li key={i} className="flex items-center gap-2.5 text-[12.5px]">
+                      {h.outcome === 'merged' ? (
+                        <CheckCircle2 className="size-3.5 shrink-0 text-ok" aria-hidden />
+                      ) : h.outcome === 'running' ? (
+                        <CircleDot className="size-3.5 shrink-0 text-accent" aria-hidden />
+                      ) : h.counted ? (
+                        <XCircle className="size-3.5 shrink-0 text-danger" aria-hidden />
+                      ) : (
+                        <RotateCcw className="size-3.5 shrink-0 text-faint" aria-hidden />
+                      )}
+                      <span className="w-16 shrink-0 text-faint">Attempt {h.n}</span>
+                      {h.seat && (
+                        <span className="inline-flex shrink-0 items-center gap-1 font-medium">
+                          <ProviderDot provider={h.seat.provider} size={6} />
+                          {seatText(h.seat)}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-muted" title={outcome}>
+                        {outcome}
                       </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-muted">
-                      {h.outcome === 'merged'
-                        ? 'merged'
-                        : h.outcome === 'running'
-                          ? 'in progress'
-                          : `${h.summary}${h.counted ? '' : ' (not counted)'}`}
-                    </span>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ol>
             </Section>
           )}

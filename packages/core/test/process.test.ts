@@ -56,6 +56,34 @@ describe('streamProcess', () => {
     expect(exit?.kind === 'exit' && exit.error).toBe('Cancelled');
   });
 
+  // A CLI that started a server and left it running: a README task once sat "building" for 46
+  // minutes after its 44 seconds of work, because the server still held the output open.
+  it('ends soon after the exit when something it started keeps the output open', async () => {
+    const leftover = "setTimeout(()=>console.log('late'),1000);setTimeout(()=>{},30000)";
+    const script = `const c=require('child_process').spawn(process.execPath,['-e',${JSON.stringify(leftover)}],{stdio:'inherit',detached:${process.platform === 'win32'}});console.log(c.pid);c.unref()`;
+    const started = Date.now();
+    const chunks = await all(streamProcess({ command: node, args: ['-e', script] }));
+    expect(Date.now() - started).toBeLessThan(20_000);
+    const lines = chunks.flatMap((c) => (c.kind === 'line' ? [c.line] : []));
+    // What it printed during the wait still counts, and a clean exit stays clean.
+    expect(lines).toContain('late');
+    expect(chunks.at(-1)).toEqual({ kind: 'exit', code: 0 });
+    const pid = Number(lines[0]);
+    const alive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const end = Date.now() + 8000;
+    while (alive() && Date.now() < end) await new Promise((r) => setTimeout(r, 100));
+    const still = alive();
+    if (still) process.kill(pid);
+    expect(still).toBe(false);
+  }, 40_000);
+
   // A CLI started through an npm .cmd shim, running a shell of its own: on Windows, stopping
   // it must take the whole tree down, or the shell keeps the worktree locked (live scenario 9).
   it.skipIf(process.platform !== 'win32')(

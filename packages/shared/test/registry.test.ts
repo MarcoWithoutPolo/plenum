@@ -32,12 +32,14 @@ describe('provider registry', () => {
     expect(ProviderId.safeParse('a b').success).toBe(false);
   });
 
-  it('keeps the default team order Conclave has always used', () => {
+  it('keeps the measured default team order (v1.0 F5)', () => {
     const real = (job: Parameters<typeof preferred>[0]) =>
-      preferred(job).filter((id) => ['claude', 'codex', 'antigravity'].includes(id));
-    expect(real('planner')).toEqual(['claude', 'antigravity', 'codex']);
-    expect(real('builder')).toEqual(['codex', 'claude', 'antigravity']);
-    expect(real('reviewer')).toEqual(['claude', 'antigravity', 'codex']);
+      preferred(job).filter((id) =>
+        ['claude', 'codex', 'antigravity', 'copilot', 'cursor'].includes(id),
+      );
+    expect(real('planner')).toEqual(['claude', 'codex', 'antigravity', 'cursor', 'copilot']);
+    expect(real('builder')).toEqual(['codex', 'claude', 'antigravity', 'copilot', 'cursor']);
+    expect(real('reviewer')).toEqual(['claude', 'codex', 'copilot', 'antigravity', 'cursor']);
     expect(firstPreferred([{ provider: 'codex' }, { provider: 'claude' }])?.provider).toBe(
       'claude',
     );

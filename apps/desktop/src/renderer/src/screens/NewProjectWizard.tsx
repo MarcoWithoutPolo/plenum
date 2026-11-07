@@ -603,8 +603,9 @@ export function NewProjectWizard({
                     value={parent}
                     onChange={(e) => setParent(e.target.value)}
                     aria-label="Location"
+                    title={parent}
                     spellCheck={false}
-                    className={`${inputClass} font-mono text-[12px]`}
+                    className={`${inputClass} min-w-0 font-mono text-[12px]`}
                   />
                   <Button
                     onClick={async () => {
@@ -1203,7 +1204,7 @@ function ClarifyQuestionCard({
               role="radio"
               aria-checked={on}
               onClick={() => onChange({ answer: o })}
-              className={`inline-flex h-7.5 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${
+              className={`inline-flex min-h-7.5 max-w-full items-center gap-1.5 rounded-2xl border px-3 py-1 text-left text-[12.5px] leading-snug font-medium transition ${
                 on
                   ? 'border-accent bg-accent text-white'
                   : 'border-line-strong hover:border-accent/50 hover:bg-accent-soft/50'
@@ -1211,7 +1212,7 @@ function ClarifyQuestionCard({
             >
               {o === question.recommended && (
                 <Star
-                  className={`size-3 ${on ? 'fill-white' : 'fill-warn text-warn'}`}
+                  className={`size-3 shrink-0 ${on ? 'fill-white' : 'fill-warn text-warn'}`}
                   aria-label="Recommended"
                 />
               )}

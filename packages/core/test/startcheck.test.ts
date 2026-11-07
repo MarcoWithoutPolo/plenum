@@ -12,7 +12,7 @@ const at = (h: number, m = 0) => new Date(2026, 9, 24, h, m).getTime();
 const clock = (ms: number) =>
   new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const seats = (...p: ProviderId[]) => p.map((provider) => ({ provider }));
-// The benchmark defaults only: Claude reviews in about 18 s, Antigravity in about 170 s.
+// The benchmark defaults only: Claude reviews in about 22 s, Antigravity in about 65 s.
 const stats = withPriors('reviewer', new Map());
 
 const routing: Routing = {
@@ -63,7 +63,7 @@ describe('Start-up check', () => {
     );
     expect(notes).toHaveLength(1);
     expect(notes[0]!.text).toBe(
-      `Claude is in quiet hours until ${clock(until)}. Planning moves to Antigravity. Reviews move to Antigravity, which is about 9× slower here.`,
+      `Claude is in quiet hours until ${clock(until)}. Planning moves to Antigravity. Reviews move to Antigravity, which is about 3× slower here.`,
     );
   });
 

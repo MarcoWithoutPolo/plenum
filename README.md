@@ -120,6 +120,17 @@ Installed copies update themselves from the releases: a new version downloads qu
 never while a project is building. Your data stays in `~/.conclave` through installs, updates and uninstalls, and the
 database is backed up before any upgrade changes it.
 
+**Known limits in 1.0**
+
+- The installers aren't code-signed, so Windows and macOS warn on first run (see above). Signing needs a certificate
+  Conclave doesn't have yet.
+- 1.0 was tested on Windows. The macOS and Linux builds come from the same code and release workflow but haven't had
+  the same hands-on run; please report what you find.
+- Cursor's CLI can't limit which commands it runs, so Cursor builds at permission levels 1, 2 and 5 only; Conclave
+  says so when you pick it.
+- On Windows, a server an AI started and forgot to stop can outlive its run. Conclave no longer waits for it and stops
+  what it can trace, but a stray `node` process may remain until you close it.
+
 ### Background mode
 
 Closing the window can leave your projects working: Conclave stays in the system tray (the menu bar on a Mac), and the

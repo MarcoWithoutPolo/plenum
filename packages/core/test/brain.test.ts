@@ -763,8 +763,15 @@ describe('Brain', () => {
     const ready = (['antigravity', 'codex', 'claude'] as ProviderId[]).map((provider) => ({
       provider,
     }));
-    const team = defaultRouting(ready).reviewer;
-    expect(team.map((s) => s.provider)).toEqual(['claude', 'antigravity', 'codex']);
+    expect(defaultRouting(ready).reviewer.map((s) => s.provider)).toEqual([
+      'claude',
+      'codex',
+      'antigravity',
+    ]);
+    // A team the user ordered with Antigravity second.
+    const team = (['claude', 'antigravity', 'codex'] as ProviderId[]).map((provider) => ({
+      provider,
+    }));
     const order = (stats: Parameters<typeof rankSeats>[2], used: Record<string, number> = {}) =>
       rankSeats(team, 'reviewer', stats, (p) => used[p] ?? null);
     const stat = (runs: number, okRate: number, medianMs: number) => ({ runs, okRate, medianMs });
@@ -819,7 +826,7 @@ describe('Brain', () => {
     const fresh = rankSeats(rev, 'reviewer', withPriors('reviewer', new Map()), () => null);
     expect(fresh.seats.map((s) => s.provider)).toEqual(['claude', 'codex', 'antigravity']);
     expect(fresh.reasons[0]).toBe(
-      "Antigravity reviews take about 2.8 min (Claude about 18 s) in Conclave's benchmarks, so faster reviewers go first",
+      "Antigravity reviews take about 1.1 min (Claude about 22 s) in Conclave's benchmarks, so faster reviewers go first",
     );
     // Five fast Antigravity reviews here outweigh the prior.
     const fast = new Map([['antigravity' as ProviderId, { runs: 5, okRate: 1, medianMs: 15_000 }]]);
@@ -1830,6 +1837,65 @@ describe('Faster loop (v0.9.1)', () => {
     ).lightSeat({ provider: 'gemini' });
     expect(light).toEqual({ provider: 'gemini', model: 'flash-low' });
     expect(gemini!.requests).toHaveLength(0);
+  });
+
+  describe('Review effort: Tests only', () => {
+    const TWO = JSON.stringify({
+      done: false,
+      tasks: [
+        { title: 'Add sum', spec: 'Create sum.js exporting (a, b) => a + b.' },
+        { title: 'Add a note', spec: 'Create NOTE.md.' },
+      ],
+    });
+    const build = (req: RunRequest) => {
+      if (/Add sum/.test(req.prompt)) writeSum('a + b')(req);
+      else writeFileSync(join(req.cwd, 'NOTE.md'), 'note\n');
+    };
+    const APPROVE_DONE =
+      '{"approve": true, "issues": [], "summary": "Looks right", "goal_met": true}';
+
+    it('merges a tested task without a reviewer, and still reviews the last one against the goal', async () => {
+      let plans = 0;
+      const { store, brain, project, claude } = await setup({
+        claude: {
+          reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? TWO : DONE) : APPROVE_DONE),
+        },
+        codex: { reply: 'built', act: build },
+      });
+      store.projects.update(project.id, { reviewEffort: 'none' });
+      const reviews = () => claude.requests.filter((r) => r.role === 'reviewer').length;
+      const statuses = () => store.projects.listTasks(project.id).map((t) => t.status);
+      for (let i = 0; i < 4 && statuses()[0] !== 'merged'; i++) await brain.round();
+      expect(statuses()).toEqual(['merged', 'queued']);
+      expect(reviews()).toBe(0);
+      expect(store.projects.events(project.id).map((e) => e.message)).toContain(
+        'Tests passed; merged without a review (Review effort: Tests only)',
+      );
+      for (let i = 0; i < 4 && store.projects.get(project.id)?.status !== 'done'; i++)
+        await brain.round();
+      expect(statuses()).toEqual(['merged', 'merged']);
+      expect(reviews()).toBe(1);
+      expect(store.projects.get(project.id)?.status).toBe('done');
+    });
+
+    it('still reviews every task when the project has no test command', async () => {
+      let plans = 0;
+      const { store, brain, project, claude } = await setup({
+        noTests: true,
+        claude: {
+          reply: (req) => (req.role === 'planner' ? (plans++ === 0 ? TWO : DONE) : APPROVE),
+        },
+        codex: { reply: 'built', act: build },
+      });
+      store.projects.update(project.id, { reviewEffort: 'none' });
+      const statuses = () => store.projects.listTasks(project.id).map((t) => t.status);
+      for (let i = 0; i < 4 && statuses()[0] !== 'merged'; i++) await brain.round();
+      expect(statuses()[0]).toBe('merged');
+      expect(claude.requests.filter((r) => r.role === 'reviewer')).toHaveLength(1);
+      expect(store.projects.events(project.id).map((e) => e.message)).toContain(
+        'No test command, so a reviewer checks the diff anyway',
+      );
+    });
   });
 
   /** Codex builds; Claude rejects twice, then Gemini is asked for a second opinion. */

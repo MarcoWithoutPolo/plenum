@@ -29,8 +29,10 @@ export interface ProviderEntry {
   /** Whether the CLI reports plan usage, so "leave some for me" can apply. */
   reportsUsage?: boolean;
   /**
-   * Default team order: lower goes first. Planning and review lean on judgment; building on
-   * fast, careful edits. The brain adjusts this from measured reliability, quota and speed.
+   * Default team order: lower goes first. Set from measured speed and reliability (bench/RESULTS.md,
+   * "Team finder", and real projects): Claude plans and reviews fastest and most reliably, Codex
+   * builds fastest, Copilot reviews reliably in under a minute, Antigravity and Cursor are slower.
+   * The brain adjusts this from measured reliability, quota and speed.
    */
   prefer: { planner: number; builder: number; reviewer: number; chat: number };
   /** Listed only for people who set it up themselves (an API key, a retired CLI). */
@@ -66,7 +68,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     install: { npm: '@openai/codex', docs: 'https://developers.openai.com/codex/cli' },
     laneCap: 2,
     reportsUsage: true,
-    prefer: { planner: 3, builder: 1, reviewer: 3, chat: 2 },
+    prefer: { planner: 2, builder: 1, reviewer: 2, chat: 2 },
     effortName: 'Reasoning',
     blurb: "OpenAI's coding agent; uses your ChatGPT plan.",
   },
@@ -82,7 +84,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
       note: 'Antigravity replaced the Gemini CLI for Google accounts.',
     },
     laneCap: 1,
-    prefer: { planner: 2, builder: 3, reviewer: 2, chat: 3 },
+    prefer: { planner: 3, builder: 3, reviewer: 4, chat: 3 },
     effortName: 'Thinking',
     blurb: "Google's agent CLI; uses your Google account.",
   },
@@ -98,7 +100,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
       note: 'Every GitHub account includes Copilot Free.',
     },
     laneCap: 1,
-    prefer: { planner: 5, builder: 5, reviewer: 5, chat: 5 },
+    prefer: { planner: 5, builder: 4, reviewer: 3, chat: 5 },
     effortName: 'Effort',
     blurb: "GitHub's agent CLI; every GitHub account has Copilot Free.",
   },
@@ -116,7 +118,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
       docs: 'https://cursor.com/docs/cli/installation',
     },
     laneCap: 1,
-    prefer: { planner: 4, builder: 4, reviewer: 4, chat: 4 },
+    prefer: { planner: 4, builder: 5, reviewer: 5, chat: 4 },
     effortName: 'Effort',
     blurb: "Cursor's agent CLI, with many makers' models; Hobby plan is free.",
   },

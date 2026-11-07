@@ -1,5 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -144,12 +144,15 @@ describe('edits outside the working folder', () => {
         }
       }
       const inside = join(dir, 'a.txt');
-      const elsewhere = join(tmpdir(), 'somewhere-else.txt');
+      const elsewhere = join(homedir(), 'conclave-somewhere-else.txt');
+      // A throwaway check script in the system temp folder is allowed.
+      const scratch = join(tmpdir(), 'conclave-check.mjs');
       const events = [];
       for await (const e of runCli(
         'fake',
         lines([
           JSON.stringify({ type: 'e', path: inside }),
+          JSON.stringify({ type: 'e', path: scratch }),
           JSON.stringify({ type: 'e', path: elsewhere }),
         ]),
         { command: 'x', args: [], cwd: dir },
@@ -158,7 +161,7 @@ describe('edits outside the working folder', () => {
         events.push(e);
       expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
       expect(events.find((e) => e.type === 'error')).toMatchObject({
-        message: expect.stringContaining('outside its working folder'),
+        message: expect.stringContaining(`outside its working folder: ${elsewhere}`),
       });
       expect(events.at(-1)).toMatchObject({ type: 'done', ok: false });
       expect(outside('relative/path.txt', dir)).toBe(false);

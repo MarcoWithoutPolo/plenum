@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ProviderId, Seat } from '@conclave/shared';
 import { api } from '@/lib/api';
 import { pickerProviders, recentSeats, rememberSeat, seatToValue, valueToSeat } from '@/lib/picker';
@@ -34,7 +34,22 @@ export function SeatPicker({
     () => (lockProvider ? providers.filter((p) => p.provider === lockProvider) : providers),
     [providers, lockProvider],
   );
-  const options = useMemo(() => pickerProviders(shown), [shown]);
+  // Cursor and Grok on one plan: Cursor's Claude and GPT models get a "Billed per use" tag.
+  const [cursorSharedWithGrok, setShared] = useState(false);
+  useEffect(() => {
+    if (!shown.some((p) => p.provider === 'cursor')) return;
+    settle(
+      api()
+        .settings.get()
+        .then((s) =>
+          setShared(s.limits.sharedPlans.some((g) => g.includes('cursor') && g.includes('grok'))),
+        ),
+    );
+  }, [shown]);
+  const options = useMemo(
+    () => pickerProviders(shown, { cursorSharedWithGrok }),
+    [shown, cursorSharedWithGrok],
+  );
   const infoOf = (id: string) => providers.find((p) => p.provider === id);
   const recent = lockProvider
     ? []

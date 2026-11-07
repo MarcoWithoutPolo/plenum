@@ -1312,9 +1312,32 @@ export class Brain {
   }
 
   private async review(project: Project, task: Task, tests: string): Promise<RoundOutcome> {
+    const goalCheck = this.goalCheck(project, task);
+    // Review effort: Tests only. A tested change merges without a reviewer, except the last
+    // planned task (someone has to judge the whole result against the goal) and a project with
+    // no test command (then the review is the only check there is).
+    if (project.reviewEffort === 'none') {
+      if (!testCommandOf(project)) {
+        this.log('review', 'No test command, so a reviewer checks the diff anyway', { task });
+      } else if (goalCheck) {
+        this.log(
+          'review',
+          'Last planned task: a reviewer checks the whole result against the goal',
+          {
+            task,
+          },
+        );
+      } else {
+        this.log('review', 'Tests passed; merged without a review (Review effort: Tests only)', {
+          task,
+        });
+        const diff = await this.workspace.taskDiff(task.id);
+        return this.merge(project, task, changedLines(diff.stat));
+      }
+    }
     const avoid = task.builtBy ? [task.builtBy] : [];
     let team = reviewTeam(project, task);
-    if (project.reviewEffort === 'light')
+    if (project.reviewEffort !== 'same')
       team = await Promise.all(team.map((s) => this.lightSeat(s)));
     // Visual review: screenshots go to a reviewer that can see; others still review the code.
     let shots = project.visualReview ? this.reviewShots(project, task) : undefined;
@@ -1338,7 +1361,6 @@ export class Brain {
     let verdict: ReturnType<typeof parseReview>;
     let lines = 0;
     let ask!: (seat: Seat, signal: AbortSignal) => Promise<ReviewRun>;
-    const goalCheck = this.goalCheck(project, task);
     for (;;) {
       const seats = this.ranked(
         'reviewer',
@@ -1537,6 +1559,24 @@ export class Brain {
       provider: reviewer.provider,
     });
 
+    return this.merge(project, task, lines, { reviewer, verdict, goalCheck });
+  }
+
+  /**
+   * The approved change (or, with Review effort: Tests only, the tested one) goes into the
+   * integration branch; on the last planned task the reviewer's goal verdict decides whether the
+   * project is done.
+   */
+  private async merge(
+    project: Project,
+    task: Task,
+    lines: number,
+    judged?: {
+      reviewer: Seat;
+      verdict: NonNullable<ReturnType<typeof parseReview>>;
+      goalCheck: { merged: string[]; doneWhen: string | null } | undefined;
+    },
+  ): Promise<RoundOutcome> {
     // Skipped just now? Then it never merges.
     if (this.cut(task)) return this.halt(task);
     // In the merge queue: merges go one at a time, so a lane can wait here for its turn.
@@ -1601,22 +1641,22 @@ export class Brain {
     if (this.interrupted)
       return { kind: 'stopped', reason: this.project().statusReason ?? 'Stopped' };
     await this.adoptProposedTests();
-    if (goalCheck && verdict.goalMet === true) {
+    if (judged?.goalCheck && judged.verdict.goalMet === true) {
       // The reviewer read the whole result against the goal: no separate planner check needed.
       const blocker = await this.testsBlockDone(
         this.project(),
         this.projects.listTasks(this.projectId),
       );
       if (blocker) return blocker;
-      const reason = `${seatLabel(reviewer)} checked the whole result against the goal: ${verdict.summary || 'every requirement is met'}`;
+      const reason = `${seatLabel(judged.reviewer)} checked the whole result against the goal: ${judged.verdict.summary || 'every requirement is met'}`;
       this.finish(reason);
       return { kind: 'done', reason };
     }
-    if (goalCheck && verdict.goalMet === false && verdict.goalGaps?.length) {
-      this.gaps = verdict.goalGaps.slice(0, 10);
+    if (judged?.goalCheck && judged.verdict.goalMet === false && judged.verdict.goalGaps?.length) {
+      this.gaps = judged.verdict.goalGaps.slice(0, 10);
       this.log('review', `The goal isn't met yet: ${this.gaps.length} gap(s) for the next plan`, {
         task: done,
-        provider: reviewer.provider,
+        provider: judged.reviewer.provider,
         data: { gaps: this.gaps },
       });
     }

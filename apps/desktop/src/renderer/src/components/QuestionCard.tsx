@@ -127,7 +127,7 @@ export function QuestionCard({
                           setWriting(false);
                           setChoice(o);
                         }}
-                        className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${
+                        className={`inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-2xl border px-3 py-1 text-left text-[12.5px] leading-snug font-medium transition ${
                           on
                             ? 'border-accent bg-accent text-white'
                             : 'border-line-strong bg-panel hover:border-accent/50 hover:bg-accent-soft/50'
@@ -135,7 +135,7 @@ export function QuestionCard({
                       >
                         {o === q.recommended && (
                           <Star
-                            className={`size-3 ${on ? 'fill-white' : 'fill-warn text-warn'}`}
+                            className={`size-3 shrink-0 ${on ? 'fill-white' : 'fill-warn text-warn'}`}
                             aria-label="Recommended"
                           />
                         )}

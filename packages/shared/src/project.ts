@@ -68,6 +68,9 @@ export const GitHubLink = z.object({
 });
 export type GitHubLink = z.infer<typeof GitHubLink>;
 
+export const ReviewEffort = z.enum(['same', 'light', 'none']);
+export type ReviewEffort = z.infer<typeof ReviewEffort>;
+
 export const Project = z.object({
   id: z.string(),
   name: z.string(),
@@ -92,8 +95,12 @@ export const Project = z.object({
   pages: z.array(z.string()),
   /** An AI with vision reviews the screenshots too (web projects; screenshots themselves are free). */
   visualReview: z.boolean(),
-  /** "light": reviewers run at their lightest thinking level or fast model (v0.9.1 F7). */
-  reviewEffort: z.enum(['same', 'light']),
+  /**
+   * "light": reviewers run at their lightest thinking level or fast model (v0.9.1 F7).
+   * "none": a task whose tests pass merges without a reviewer; the last planned task is still
+   * reviewed against the goal, and a project without a test command is always reviewed (v1.0).
+   */
+  reviewEffort: ReviewEffort,
   retryStrategy: RetryStrategy,
   askPolicy: AskPolicy,
   permissions: Permissions,

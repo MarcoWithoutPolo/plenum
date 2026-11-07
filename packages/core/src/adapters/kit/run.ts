@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentEvent, ProviderId } from '@conclave/shared';
 import { streamProcess, type ProcessChunk, type ProcessOptions } from '../../process.js';
@@ -56,9 +57,16 @@ export async function* runCli(
     for (const body of bodies) {
       if (body.type === 'error' || body.type === 'rate_limit') reportedError = true;
       yield stamp(body);
-      // An agent only ever writes inside its folder. A CLI that wrote elsewhere fails the run, so
-      // the work is never taken as done (OpenCode once followed an inherited PWD out of it).
-      if (body.type === 'file.edit' && !escaped && process.cwd && outside(body.path, process.cwd)) {
+      // An agent only ever writes inside its folder, or scratch files in the system temp folder.
+      // A CLI that wrote elsewhere fails the run, so the work is never taken as done (OpenCode
+      // once followed an inherited PWD out of it).
+      if (
+        body.type === 'file.edit' &&
+        !escaped &&
+        process.cwd &&
+        outside(body.path, process.cwd) &&
+        !inScratch(body.path)
+      ) {
         escaped = body.path;
         reportedError = true;
         stop.abort();
@@ -124,6 +132,16 @@ function real(path: string): string {
     }
   }
   return process.platform === 'win32' ? out.toLowerCase() : out;
+}
+
+/**
+ * The system temp folder, where agents put throwaway check scripts. Stopping a run for one of
+ * those threw away good work and cost minutes each time; nothing there is part of the project.
+ */
+export function inScratch(path: string): boolean {
+  if (!isAbsolute(path)) return false;
+  const dirs = process.platform === 'win32' ? [tmpdir()] : [tmpdir(), '/tmp'];
+  return dirs.some((dir) => !outside(path, dir));
 }
 
 /** Whether an absolute path lies outside `folder`. Relative paths are the CLI's own: inside. */

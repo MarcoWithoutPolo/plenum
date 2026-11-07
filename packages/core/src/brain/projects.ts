@@ -38,7 +38,7 @@ export interface CreateProjectInput {
   /** Reorder the team from measured speed, reliability and quota. On unless set to false. */
   adaptiveTeam?: boolean;
   /** Reviewers at their lightest thinking level ("light") or as set in the team ("same"). */
-  reviewEffort?: 'same' | 'light';
+  reviewEffort?: Project['reviewEffort'];
   retryStrategy?: RetryStrategy;
   askPolicy?: AskPolicy;
   permissions?: Permissions;
