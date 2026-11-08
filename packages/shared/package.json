@@ -1,6 +1,6 @@
 {
   "name": "@conclave/shared",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Schemas and types shared by the Conclave engine, CLI and desktop app.",
   "license": "MIT",

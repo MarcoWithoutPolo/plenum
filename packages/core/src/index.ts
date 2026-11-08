@@ -53,7 +53,7 @@ export * from './brain/clarify.js';
 export * from './github/gh.js';
 export * from './github/flows.js';
 
-export const VERSION = '0.0.0';
+export const VERSION = '1.0.0';
 export * from './crash.js';
 export * from './seats.js';
 export * from './diagnostics.js';
