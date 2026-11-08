@@ -376,8 +376,12 @@ function AnswerCard({
     >
       <header className="mb-2 flex items-center gap-2 text-[12.5px]">
         <ProviderDot provider={provider} />
-        <span className="font-semibold">{label}</span>
-        {model && <span className="truncate text-faint">{model}</span>}
+        <span className="shrink-0 font-semibold whitespace-nowrap">{label}</span>
+        {model && (
+          <span className="min-w-0 truncate text-faint" title={model}>
+            {model}
+          </span>
+        )}
         <EffortTag effort={effort} />
         <span className="ml-auto shrink-0">
           {status === 'done' ? (
@@ -465,9 +469,9 @@ function SkippedCard({
     >
       <header className="mb-2 flex items-center gap-2 text-[12.5px]">
         <ProviderDot provider={provider} />
-        <span className="font-semibold">{label}</span>
+        <span className="shrink-0 font-semibold whitespace-nowrap">{label}</span>
         {model && (
-          <span className="truncate text-faint" title={model}>
+          <span className="min-w-0 truncate text-faint" title={model}>
             {model}
           </span>
         )}

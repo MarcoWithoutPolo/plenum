@@ -65,7 +65,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Resume', exact: true }).click();
       const note = page.getByRole('group', { name: 'Before you start' });
       await expect(note).toContainText(
-        /Codex is at its usage limit until .+\. Building moves to Claude, so reviews of Claude's work go to Antigravity, which is about 9× slower here\./,
+        /Codex is at its usage limit until .+\. Building moves to Claude, so reviews of Claude's work go to Antigravity, which is about 3× slower here\./,
       );
       await shot('start-check');
 

@@ -17,8 +17,8 @@ import {
  * problems, menus that don't fit or can't reach their last row, and console errors.
  *
  * Each push runs the 900×600 and 1320×860 rows; CONCLAVE_FULL_MATRIX=1 adds 1024×700 and
- * 1920×1080. Problems are listed together (and saved to E:/ci-cache/integrity or the temp
- * folder), so one run shows everything wrong.
+ * 1920×1080. Problems are listed together (and saved to test-results/integrity, or
+ * CONCLAVE_INTEGRITY_OUT), so one run shows everything wrong.
  */
 const FULL = process.env.CONCLAVE_FULL_MATRIX === '1';
 const SIZES = [

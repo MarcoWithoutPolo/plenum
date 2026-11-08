@@ -154,13 +154,13 @@ test('council asks every member and shows the merged answer with citations', asy
   await box.press('Enter');
 
   await expect(page.getByRole('article', { name: 'Claude answer' })).toContainText(
-    'Claude (demo) here.',
+    'A single JSON file in the app data folder',
   );
   await expect(page.getByRole('article', { name: 'Codex answer' })).toContainText(
-    'Codex (demo) here.',
+    'with a version field from day one',
   );
   const merged = page.getByRole('article', { name: 'Council answer' });
-  await expect(merged).toContainText('Store settings as a JSON file');
+  await expect(merged).toContainText('Keep small settings in one JSON file');
   await expect(merged).toContainText('Where they differ');
   await expect(merged.getByText('Codex', { exact: true }).first()).toBeVisible(); // citation chip
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();

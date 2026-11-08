@@ -1,6 +1,6 @@
 # Conclave: notes for AI agents working in this repo
 
-- Design and milestones live in `docs/PLAN.md`. Build milestones in order; each one ends with `npm run check` green.
+- How the pieces fit is in the README ("How a project runs") and `docs/ADAPTERS.md`; benchmark evidence is in `bench/RESULTS.md`. Every change ends with `npm run check` green.
 - TypeScript ESM monorepo (npm workspaces). Relative imports use `.js` extensions (NodeNext).
 - Workspace packages export `src/*.ts` under the `development` condition (used by Vitest, tsx and `tsc` via `customConditions`), and `dist/` otherwise.
 - Every adapter maps its CLI output onto `AgentEvent` in `packages/shared/src/events.ts`. Nothing above the adapter layer may depend on a specific CLI's output format.

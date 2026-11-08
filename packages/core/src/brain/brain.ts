@@ -17,6 +17,8 @@ import type {
 import {
   IN_FLIGHT,
   PROVIDERS,
+  counted,
+  counted as countOf,
   findVariant,
   resolveModel,
   sortEfforts,
@@ -283,7 +285,7 @@ export class Brain {
     this.log(
       'start',
       recovered.length
-        ? `Resumed; ${recovered.length} interrupted task(s) back in the queue`
+        ? `Resumed; ${counted(recovered.length, 'interrupted task')} back in the queue`
         : 'Started',
     );
     this.started = true;
@@ -769,7 +771,7 @@ export class Brain {
       return { kind: 'idle', reason };
     }
     if (repeats)
-      this.log('plan', `Skipped ${repeats} task(s) that already failed`, {
+      this.log('plan', `Skipped ${counted(repeats, 'task')} that already failed`, {
         provider: seat.provider,
       });
     // The planner proposes; the brain checks the sizes before anything is queued.
@@ -777,13 +779,13 @@ export class Brain {
     if (shaped.oversized.length && !resize) {
       this.log(
         'plan',
-        `Asking the planner to split ${shaped.oversized.length} task(s) too big to review well`,
+        `Asking the planner to split ${counted(shaped.oversized.length, 'task')} too big to review well`,
         { provider: seat.provider, data: { oversized: shaped.oversized } },
       );
       return this.plan(project, shaped.oversized);
     }
     if (shaped.folded)
-      this.log('plan', `Folded ${shaped.folded} small task(s) into their neighbours`, {
+      this.log('plan', `Folded ${counted(shaped.folded, 'small task')} into their neighbours`, {
         provider: seat.provider,
       });
     this.gaps = [];
@@ -798,7 +800,7 @@ export class Brain {
       shaped.tasks.map((t) => t.replaces),
       seat.provider,
     );
-    this.log('plan', `Planned ${added.length} task(s)`, {
+    this.log('plan', `Planned ${counted(added.length, 'task')}`, {
       provider: seat.provider,
       data: { tasks: added.map((t) => t.title) },
     });
@@ -863,8 +865,8 @@ export class Brain {
         projectId: this.projectId,
         kind: 'merge_base',
         summary: prOpen
-          ? `Push the new work to the pull request (${merged.length} task(s))`
-          : `Merge ${project.integrationBranch} into ${project.baseBranch} (${merged.length} task(s))`,
+          ? `Push the new work to the pull request (${counted(merged.length, 'task')})`
+          : `Merge ${project.integrationBranch} into ${project.baseBranch} (${counted(merged.length, 'task')})`,
         payload: {
           branch: project.integrationBranch,
           base: project.baseBranch,
@@ -1311,7 +1313,7 @@ export class Brain {
     const problems = shots.checks.sendBack.length;
     this.log(
       'verify',
-      `Screenshots: ${n} of ${pages} page${pages === 1 ? '' : 's'}${shots.before ? `, ${changed} changed` : ''}; ${
+      `Screenshots: ${counted(n, 'shot')} of ${counted(pages, 'page')}${shots.before ? `, ${changed} changed` : ''}; ${
         problems ? `${problems} problem${problems === 1 ? '' : 's'} found` : 'no problems found'
       }`,
       {
@@ -1665,11 +1667,15 @@ export class Brain {
     }
     if (judged?.goalCheck && judged.verdict.goalMet === false && judged.verdict.goalGaps?.length) {
       this.gaps = judged.verdict.goalGaps.slice(0, 10);
-      this.log('review', `The goal isn't met yet: ${this.gaps.length} gap(s) for the next plan`, {
-        task: done,
-        provider: judged.reviewer.provider,
-        data: { gaps: this.gaps },
-      });
+      this.log(
+        'review',
+        `The goal isn't met yet: ${counted(this.gaps.length, 'gap')} for the next plan`,
+        {
+          task: done,
+          provider: judged.reviewer.provider,
+          data: { gaps: this.gaps },
+        },
+      );
     }
     return { kind: 'merged', task: done };
   }
@@ -2318,11 +2324,15 @@ export class Brain {
         lastFailure: failure,
         kept: null,
       });
-      this.log('fail', `Gave up after ${attempts} attempt(s): ${task.title}. ${failure.summary}`, {
-        task: failed,
-        ...provider,
-        data,
-      });
+      this.log(
+        'fail',
+        `Gave up after ${countOf(attempts, 'attempt')}: ${task.title}. ${failure.summary}`,
+        {
+          task: failed,
+          ...provider,
+          data,
+        },
+      );
       return { kind: 'failed', task: failed, reason: failure.summary };
     }
     const queued = this.projects.updateTask(task.id, {

@@ -7,3 +7,4 @@ export * from './visual.js';
 export * from './shots.js';
 export * from './registry.js';
 export * from './models.js';
+export * from './text.js';

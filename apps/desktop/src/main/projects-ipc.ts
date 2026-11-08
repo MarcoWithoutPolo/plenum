@@ -10,6 +10,7 @@ import {
   Routing,
   Seat,
   IN_FLIGHT,
+  counted,
   taskProgress,
   type Project,
   ReviewEffort,
@@ -502,7 +503,7 @@ export function registerProjectIpc(
     if (sync.behind > 0) {
       return {
         ok: false,
-        error: `GitHub has ${sync.behind} commit(s) you don't have. Pull first.`,
+        error: `GitHub has ${counted(sync.behind, 'commit')} you don't have. Pull first.`,
       };
     }
     const win = getWindow();
@@ -513,7 +514,7 @@ export function registerProjectIpc(
       cancelId: 1,
       title: 'Push to GitHub',
       message: `Push ${project.baseBranch} to ${sync.remote}?`,
-      detail: `Sends ${sync.ahead} commit(s) from your folder to ${sync.url ?? sync.remote}. Never forced.`,
+      detail: `Sends ${counted(sync.ahead, 'commit')} from your folder to ${sync.url ?? sync.remote}. Never forced.`,
     };
     const choice = win
       ? await dialog.showMessageBox(win, options)

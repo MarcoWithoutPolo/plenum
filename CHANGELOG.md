@@ -28,7 +28,7 @@ Conclave never asks for or stores your passwords or API keys; each CLI signs in 
 
 **Reliability**
 
-- Every P0 and P1 bug on the v1.0 list is fixed with a test (`docs/BUGS-v1.0.md`).
+- Every P0 and P1 bug found while testing 1.0 is fixed with a test.
 - A 24-hour soak: 11,250 tasks with simulated crashes, usage limits and slow answers, and the engine killed outright
   every 2 hours. Every restart recovered. The one task it lost and the leftover folders it found are fixed, and a
   confirmation soak passed 960 of 960 tasks across 11 kills.

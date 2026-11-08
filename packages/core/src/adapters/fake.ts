@@ -65,9 +65,11 @@ export class FakeAdapter implements Adapter {
     if (limits) this.limits = async () => limits;
     this.id = opts.id ?? 'fake';
     this.displayName = opts.displayName ?? 'Fake';
+    // A fake that lists models (the demo's) answers as its default one, like the real CLI would.
+    const fallback = models?.defaultModel ?? models?.models[0]?.id ?? 'fake-1';
     this.capabilities = {
-      models: ['fake-1'],
-      defaultModel: 'fake-1',
+      models: [fallback],
+      defaultModel: fallback,
       readOnly: true,
       resume: opts.resume ?? false,
       streaming: true,
@@ -102,7 +104,7 @@ export class FakeAdapter implements Adapter {
       at: Date.now(),
       type: 'session',
       sessionId: request.sessionId ?? runId,
-      model: request.model ?? 'fake-1',
+      model: request.model ?? this.capabilities.defaultModel,
     };
 
     const limited = this.script.rateLimited ?? this.script.limitWhen?.(request);

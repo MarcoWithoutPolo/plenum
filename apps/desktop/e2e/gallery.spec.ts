@@ -337,11 +337,12 @@ for (const scheme of ['light', 'dark'] as const) {
       await dialog.getByRole('button', { name: 'Start', exact: true }).click();
       const banner = page.getByRole('region', { name: 'Codex is out of usage' });
       await expect(banner).toBeVisible({ timeout: 60_000 });
+      // While the work is moving to Claude, which is when the banner matters.
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: join(out, `${scheme}-usage-limit.png`) });
       await expect(page.getByRole('region', { name: 'Tasks' })).toContainText('2 of 2 merged', {
         timeout: 60_000,
       });
-      await page.waitForTimeout(300);
-      await page.screenshot({ path: join(out, `${scheme}-usage-limit.png`) });
       await page.getByRole('button', { name: /^Accounts/ }).click();
       await expect(page.getByText(/Out of usage since/)).toBeVisible({ timeout: 30_000 });
       await page.waitForTimeout(300);
@@ -420,7 +421,8 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Project actions' }).click();
       await page.getByRole('button', { name: /Team and settings/ }).click();
       const settings = page.getByRole('dialog', { name: 'Project settings' });
-      await expect(settings.getByText(/reviews take about/)).toBeVisible();
+      // The default order already matches the measurements, so there's no reorder note to show.
+      await expect(settings.getByRole('checkbox', { name: /Adjust the team/ })).toBeAttached();
       await settings.getByRole('checkbox', { name: /Adjust the team/ }).scrollIntoViewIfNeeded();
       await shot('project-settings-team');
       // Review effort: Tests only says what it gives up and what is still reviewed.
@@ -487,6 +489,10 @@ for (const scheme of ['light', 'dark'] as const) {
         .getByRole('radiogroup', { name: 'Codex lanes' })
         .getByRole('radio', { name: '3' })
         .click();
+      // From the page's title, not wherever the last click scrolled to.
+      await page
+        .getByRole('heading', { name: 'Settings', exact: true })
+        .evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(out, `${scheme}-settings.png`) });
       await expect(page.getByRole('switch', { name: 'Pause everything' })).toBeEnabled();

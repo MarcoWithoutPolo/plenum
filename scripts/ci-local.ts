@@ -5,8 +5,8 @@
  *
  * - Each target starts from a fresh clone of the committed HEAD, as actions/checkout does, so a
  *   file that only exists in this folder can't make it pass.
- * - Windows uses portable Node from E:\ci-cache (or CI_NODE_DIR), and keeps its clones, npm cache
- *   and temp files there too, off the system drive. Its e2e runs on as many cores as GitHub's
+ * - Windows uses portable Node from CI_NODE_DIR (default ~/.cache/conclave-ci), and keeps its
+ *   clones, npm cache and temp files there too; point it at another drive to keep them off C:. Its e2e runs on as many cores as GitHub's
  *   Windows runners have (4), where the flakes show up.
  * - Linux runs in Docker on Ubuntu 24.04 like ubuntu-latest, 4 CPUs and 16 GB, and also runs the
  *   desktop e2e under a virtual display, which CI skips.
@@ -24,7 +24,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -38,7 +38,7 @@ const { values } = parseArgs({
   },
 });
 const NODE = { 22: 'v22.23.4', 24: 'v24.22.2' } as const;
-const cacheDir = process.env.CI_NODE_DIR ?? 'E:\\ci-cache';
+const cacheDir = process.env.CI_NODE_DIR ?? join(homedir(), '.cache', 'conclave-ci');
 // Clones (each with its own node_modules) go here too, not to the system drive's temp folder.
 const workDir = join(cacheDir, 'work');
 mkdirSync(workDir, { recursive: true });

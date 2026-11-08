@@ -100,6 +100,7 @@ for (const scheme of ['light', 'dark'] as const) {
         .getByRole('radio', { name: '/ (counted)' })
         .click();
       await expect(shots.getByRole('img', { name: '/ (counted), phone, dark' })).toBeVisible();
+      await shots.evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await shot('screenshots-first');
 
       // Retry: the builder centers the count, the reviewer looks again and approves.

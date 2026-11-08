@@ -27,7 +27,7 @@ import {
 } from '../preview/preview.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import type { Governor } from '../governor/governor.js';
-import { IN_FLIGHT } from '@conclave/shared';
+import { IN_FLIGHT, counted } from '@conclave/shared';
 import { seatStats, withPriors } from '../governor/rank.js';
 import { teamCheck, type StartCheck } from '../governor/startcheck.js';
 import { seatLabel } from '../chat/transcript.js';
@@ -269,7 +269,7 @@ export class BrainManager {
         store.log({
           projectId: p.id,
           kind: 'stop',
-          message: `${stuck.length} task(s) left mid-step went back to the queue`,
+          message: `${counted(stuck.length, 'task')} left mid-step went back to the queue`,
         });
     }
     const orphans = store
@@ -287,7 +287,7 @@ export class BrainManager {
         this.ctx.store.projects.log({
           projectId: p.id,
           kind: 'stop',
-          message: `Conclave closed mid-step; ${interrupted.length} interrupted task(s) back in the queue`,
+          message: `Conclave closed mid-step; ${counted(interrupted.length, 'interrupted task')} back in the queue`,
         });
       }
     }

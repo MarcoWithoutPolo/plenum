@@ -425,7 +425,7 @@ describe('Visual checks in a build', () => {
     expect(builds).toBe(2);
     expect(claude.requests.filter((r) => r.role === 'reviewer')).toHaveLength(1);
     const events = store.projects.events(project.id).map((e) => e.message);
-    expect(events).toContain('Screenshots: 4 of 1 page, 0 changed; 2 problems found');
+    expect(events).toContain('Screenshots: 4 shots of 1 page, 0 changed; 2 problems found');
     expect(codex.requests[1]!.prompt).toContain(
       'Low contrast in light mode on /: span.count "1" is 1.5:1, needs 4.5:1 (WCAG AA)',
     );
@@ -667,7 +667,7 @@ describe('Visual review', () => {
     expect(
       store.projects
         .events(project.id)
-        .some((e) => e.message.startsWith('Screenshots: 4 of 1 page')),
+        .some((e) => e.message.startsWith('Screenshots: 4 shots of 1 page')),
     ).toBe(true);
   });
 });

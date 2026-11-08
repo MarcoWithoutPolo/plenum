@@ -6,7 +6,7 @@ import type { RunRequest } from '../src/index.js';
 import { adapterMap, Brain, FakeAdapter, GitError, Store } from '../src/index.js';
 import { git, setUp, TITLES, type CrashProject } from './crash/kit.js';
 
-/** The v1.0 P0 bugs (docs/BUGS-v1.0.md E1, E2, E4); E3 is in crash.test.ts. */
+/** The v1.0 P0 engine bugs (E1, E2, E4); E3 is in crash.test.ts. */
 
 const cleanup: string[] = [];
 afterEach(() => {

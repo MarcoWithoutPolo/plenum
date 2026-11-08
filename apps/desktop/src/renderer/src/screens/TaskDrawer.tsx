@@ -183,7 +183,9 @@ export function TaskDrawer({
                       ) : (
                         <RotateCcw className="size-3.5 shrink-0 text-faint" aria-hidden />
                       )}
-                      <span className="w-16 shrink-0 text-faint">Attempt {h.n}</span>
+                      <span className="w-16 shrink-0 text-faint">
+                        {h.n ? `Attempt ${h.n}` : 'Retry'}
+                      </span>
                       {h.seat && (
                         <span className="inline-flex shrink-0 items-center gap-1 font-medium">
                           <ProviderDot provider={h.seat.provider} size={6} />
@@ -316,13 +318,17 @@ function attemptHistory(events: BrainEvent[], taskId: string): AttemptRow[] {
       last.summary = e.message
         .replace(/^Sent back \(\d+\/\d+\): /, '')
         .replace(/^Trying again, not counted as an attempt: /, '')
-        .replace(/^Gave up after \d+ attempt\(s\): [^.]*\. /, '');
+        // "attempt(s)" is how messages logged before 1.0.0 put it.
+        .replace(/^Gave up after \d+ attempt(?:s|\(s\))?: [^.]*\. /, '');
     } else if (e.kind === 'wait' || e.kind === 'question') {
       last.outcome = 'failed';
       last.counted = false;
       last.summary = e.kind === 'wait' ? 'hit a usage limit' : 'asked a question';
     }
   }
+  // Numbered like the header's "Attempt N of M": only attempts that count get a number.
+  let n = 0;
+  for (const r of rows) r.n = r.counted ? ++n : 0;
   return rows;
 }
 

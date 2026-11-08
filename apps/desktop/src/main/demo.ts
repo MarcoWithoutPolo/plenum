@@ -92,7 +92,7 @@ const GREET_TASKS: DemoTask[] = [
     body: ['module.exports = (name) => `Hello, ${name}!`;', ''].join('\n'),
   },
   {
-    title: 'Document greet() in the README',
+    title: 'Document greet() in USAGE.md',
     spec: 'Add a Usage section showing greet("Ada").',
     file: 'USAGE.md',
     body: [
@@ -412,24 +412,36 @@ function installed(status: { version: string; detail: string }) {
  * Demo providers for CONCLAVE_DEMO=1: the whole app works offline, costs
  * nothing, and end-to-end tests get deterministic answers.
  */
+/** Demo council answers to "Best way to store small settings?", one voice per AI. */
+const SETTINGS_ANSWERS: Record<string, string> = {
+  Claude:
+    'A single JSON file in the app data folder is the simplest thing that works. Write it atomically (write a temporary file, then rename it), and validate it when you load it so a broken file falls back to the defaults instead of crashing the app.',
+  Codex:
+    'Use a JSON file under the app data directory with a `version` field from day one. Write to `settings.json.tmp` and rename, so a crash mid-write never leaves half a file. Skip SQLite until you have more than a handful of keys.',
+  Antigravity:
+    'For a few values, JSON in the per-user app data folder. Keep the defaults in code, store only what the user changed, and check the file against a schema when it loads.',
+};
+
 export function demoAdapters(): Adapter[] {
   const answer = (name: string) => (req: RunRequest) => {
     const work = projectReply(req);
     if (work) return work;
     if (req.prompt.includes('You are the synthesizer')) {
       return [
-        'Store settings as a JSON file in the app data folder [Claude, Codex].',
+        'Keep small settings in one JSON file in the app data folder, and write it atomically: to a temporary file first, then rename it over the old one [Claude, Codex, Antigravity].',
         '',
-        'Use a small library that writes atomically [Codex].',
+        'Validate it on load and fall back to defaults if it is missing or broken [Claude, Antigravity].',
         '',
         '**Where they agree**',
-        '- A JSON file in the user data folder.',
+        '- A JSON file in the app data folder, not the registry or a database.',
         '',
         '**Where they differ**',
-        '- Nothing significant.',
+        '- Codex would add a version number to the file now, to make later changes easy; the others would wait until a change needs it.',
       ].join('\n');
     }
     const question = req.prompt.split('\n').filter(Boolean).at(-1) ?? '';
+    // The README's council screenshot asks this; answer it like the real thing.
+    if (/store small settings/i.test(question)) return SETTINGS_ANSWERS[name] ?? '';
     // CONCLAVE_DEMO_SLOW_COUNCIL=1: Antigravity takes its time in a council, so there is a
     // member to skip (F4).
     if (process.env.CONCLAVE_DEMO_SLOW_COUNCIL && name === 'Antigravity' && req.role === 'chat')
@@ -482,12 +494,12 @@ export function demoAdapters(): Adapter[] {
         reply: answer('Codex'),
         delayMs: 40,
         act: projectAct,
-        // CONCLAVE_DEMO_LIMIT=1: Codex is at its workspace spend cap, to show limit handling.
+        // CONCLAVE_DEMO_LIMIT=1: Codex is out of usage, to show limit handling.
         limitWhen: () =>
           process.env.CONCLAVE_DEMO_LIMIT === '1'
             ? {
                 message:
-                  'You hit your spend cap set by the owner of your workspace. Ask an owner to increase your spend cap to continue.',
+                  "You've reached your usage limit. It resets at the start of your next billing period.",
               }
             : undefined,
         // CONCLAVE_DEMO_BREAK=1: Codex's builds crash, to show failure recovery.

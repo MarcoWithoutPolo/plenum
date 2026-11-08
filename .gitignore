@@ -24,3 +24,8 @@ ci-local/
 # Benchmark runs (summaries are committed by hand)
 bench/results/
 apps/desktop/release/
+*.zip
+
+# Personal agent notes (Claude Code), never committed
+CLAUDE.local.md
+.claude/
