@@ -14,6 +14,7 @@ import {
   createProject,
   defaultRouting,
   plannerPrompt,
+  projectWorkspace,
   shapePlan,
   calibration,
   changedLines,
@@ -713,6 +714,53 @@ describe('Brain', () => {
     expect(store.projects.getTask(task!.id)?.status).toBe('queued');
     expect(store.projects.events(project.id).at(-1)?.message).toContain('1 interrupted task');
     expect((await restarted.round()).kind).toBe('merged');
+  });
+
+  it('builds a task whose worktree checkout was killed half-way', async () => {
+    // Soak, item 7915: the kill landed inside `git worktree add`, which leaves the worktree
+    // locked "initializing". Removing it with one --force failed, prune skips locked ones, so
+    // every new attempt hit "already used by worktree" and the task failed in a second.
+    const { store, brain, project, home } = await setup();
+    await brain.round(); // plan
+    const [task] = store.projects.listTasks(project.id);
+    const workspace = projectWorkspace(home, project);
+    const path = await workspace.createTaskTree(task!.id);
+    const admin = readFileSync(join(path, '.git'), 'utf8')
+      .replace(/^gitdir:\s*/, '')
+      .trim();
+    writeFileSync(join(admin, 'locked'), 'initializing');
+    store.projects.updateTask(task!.id, { status: 'building' });
+
+    const restarted = new Brain(
+      {
+        store,
+        adapters: adapterMap([
+          new FakeAdapter({ reply: APPROVE }, { id: 'claude' }),
+          new FakeAdapter({ reply: 'x', act: writeSum('a + b') }, { id: 'codex' }),
+        ]),
+        cwd: home,
+      },
+      project.id,
+      { home },
+    );
+    expect((await restarted.round()).kind).toBe('merged');
+    expect(store.projects.getTask(task!.id)).toMatchObject({ status: 'merged', attempts: 0 });
+  });
+
+  it('removes a finished task worktree that a restart left behind', async () => {
+    // Soak: killed after a merge but before its cleanup, the worktree stayed for good.
+    const { store, brain, project, home, repo } = await setup();
+    await brain.round(); // plan
+    expect((await brain.round()).kind).toBe('merged');
+    const [task] = store.projects.listTasks(project.id);
+    const workspace = projectWorkspace(home, project);
+    const path = await workspace.createTaskTree(task!.id); // as the crash left it
+    expect(existsSync(path)).toBe(true);
+
+    await new Brain({ store, adapters: adapterMap([]), cwd: home }, project.id, { home }).start();
+    expect(existsSync(path)).toBe(false);
+    expect(git(repo, 'worktree', 'list')).not.toContain(task!.id);
+    expect(git(repo, 'branch', '--list', `conclave/task/${task!.id}`)).toBe('');
   });
 
   it('stops when the project is stopped', async () => {

@@ -570,3 +570,29 @@ Codex, Claude, Antigravity, Copilot, Cursor; reviews Claude, Codex, Copilot, Ant
 in `governor/rank.ts` carry the medians above. Model and effort stay the user's per-AI defaults (Accounts), so the
 "fast models" half of team B is a Fast preset for 1.0.1 rather than a silent change to what each AI runs. Stage 2 and
 the second stage-1 run wait for the allowances to reset.
+
+## Soak, 24 hours (2026-11-07 05:44 to 11-08 09:44)
+
+`bench/soak.ts --minutes 1440 --restart-every 120`, fake AIs with chaos, killed outright every 2 hours (11 times).
+Results: `bench/results/soak-2026-11-07T05-44-25/`.
+
+|                    |                                        |
+| ------------------ | -------------------------------------- |
+| Tasks              | 11,250, merged 11,249                  |
+| Restarts recovered | 11 of 11                               |
+| Memory (RSS)       | 190 MB early, 268 MB late, 300 MB peak |
+| Database           | 22.4 MB                                |
+
+What it flagged, and what each turned out to be:
+
+- **1 task failed (E18, fixed).** The 1:44 AM kill landed inside `git worktree add`, leaving the worktree locked
+  "initializing"; every retry hit "already used by worktree".
+- **"3 worktrees left over" (E19, fixed).** Really 2: the count included the integration worktree. One was E18's, the
+  other a task killed between its merge and its cleanup.
+- **Heap grew 26 → 60-76 MB inside each window: the harness.** The fake AIs kept every request for test assertions,
+  prompts included, and the planner's prompt lists every task, so the cost per task grew with the project (13 KB
+  early, 40-55 KB late). Heap snapshots 200 tasks apart: 1.6 MB of growth with recording, 0.2 MB without. The
+  remainder (about 1 KB per task) is Node keeping each `AbortSignal.any()` made against the run's long-lived signal
+  until that signal aborts; at 100 tasks a day that is about 0.1 MB a day, left for 1.0.1. The soak now runs its fake
+  AIs with `record: false`.
+- Throughput fell from 1,840 tasks in the first window to 700-960 later, as the project grew to 11k tasks and files.

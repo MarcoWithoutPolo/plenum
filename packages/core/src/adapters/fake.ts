@@ -35,6 +35,8 @@ export interface FakeOptions {
   quietMs?: number;
   /** Override what detect() reports, e.g. to show a signed-out provider. */
   status?: Partial<Omit<ProviderStatus, 'provider'>>;
+  /** Keep every request in `requests` (default true). Off for long runs like the soak. */
+  record?: boolean;
 }
 
 let runCounter = 0;
@@ -50,12 +52,14 @@ export class FakeAdapter implements Adapter {
   readonly limits?: () => Promise<{ window: string; utilization: number; resetsAt?: number }[]>;
 
   private readonly status: Partial<Omit<ProviderStatus, 'provider'>>;
+  private readonly record: boolean;
 
   constructor(
     private readonly script: FakeScript,
     opts: FakeOptions = {},
   ) {
     this.status = opts.status ?? {};
+    this.record = opts.record ?? true;
     const { models, limits } = opts;
     if (models) this.models = async () => models;
     if (limits) this.limits = async () => limits;
@@ -88,7 +92,7 @@ export class FakeAdapter implements Adapter {
   }
 
   async *run(request: RunRequest): AsyncIterable<AgentEvent> {
-    this.requests.push(request);
+    if (this.record) this.requests.push(request);
     const runId = `fake-${++runCounter}`;
     const started = Date.now();
     const ev = { provider: this.id, runId };

@@ -147,6 +147,8 @@ const QUIET_REVIEWS = 2;
 const STALL_PAUSE = 60 * 60_000;
 /** Statuses a lane may move its task from. Anything else (skipped elsewhere) stops the lane. */
 const LIVE: readonly TaskStatus[] = ['queued', ...IN_FLIGHT];
+/** Nothing will run in these tasks' worktrees again. */
+const FINISHED: readonly TaskStatus[] = ['merged', 'failed', 'skipped', 'replaced'];
 const seatKey = (s: Seat) => `${s.provider}@${s.model ?? ''}@${s.effort ?? ''}`;
 
 export const LANE_CAPS: Partial<Record<ProviderId, number>> = Object.fromEntries(
@@ -268,6 +270,15 @@ export class Brain {
     const recovered = this.projects.requeueInterrupted(this.projectId);
     // Half-finished work is thrown away; a commit kept from a send-back stays for the retry.
     for (const t of recovered) await this.workspace.removeTaskTree(t.id, Boolean(t.kept));
+    // A restart between a merge (or a give-up) and its cleanup leaves that task's worktree
+    // behind. Nothing runs yet, so only a finished task's folder goes; queued ones are
+    // replaced when they start. A merged task's branch goes too, as it would have.
+    const byId = new Map(this.projects.listTasks(this.projectId).map((t) => [t.id, t]));
+    for (const id of this.workspace.taskTreeIds()) {
+      const t = byId.get(id);
+      if (t && !FINISHED.includes(t.status)) continue;
+      await this.workspace.removeTaskTree(id, t?.status !== 'merged');
+    }
     this.projects.setStatus(this.projectId, 'running');
     this.log(
       'start',

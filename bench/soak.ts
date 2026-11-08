@@ -109,7 +109,9 @@ async function worker(): Promise<void> {
           ? { message: 'Rate limit reached (chaos)', resetsAt: Date.now() + 3000 }
           : undefined,
     },
-    { id: 'codex' },
+    // Not recording requests: a day of prompts held in memory is the harness's growth, not
+    // Conclave's (the 2026-11-07 soak's "heap grew" flags).
+    { id: 'codex', record: false },
   );
   const engine = new Engine({
     home,
@@ -134,10 +136,10 @@ async function worker(): Promise<void> {
           },
           delayMs: 5,
         },
-        { id: 'claude' },
+        { id: 'claude', record: false },
       ),
       builder,
-      new FakeAdapter({ reply: APPROVE, delayMs: 5 }, { id: 'gemini' }),
+      new FakeAdapter({ reply: APPROVE, delayMs: 5 }, { id: 'gemini', record: false }),
     ],
   });
   const memory = join(values.out!, 'memory.jsonl');
@@ -290,7 +292,8 @@ async function orchestrate(): Promise<void> {
   const worktrees = git(repo, 'worktree', 'list', '--porcelain')
     .split('\n')
     .filter((l) => l.startsWith('worktree ')).length;
-  if (worktrees > 2) problems.push(`${worktrees - 1} worktree(s) left over`);
+  // The repo's own checkout and the integration worktree stay; anything else is left over.
+  if (worktrees > 2) problems.push(`${worktrees - 2} worktree(s) left over`);
 
   // Memory stays flat, within each worker's life (restarts would hide a leak) and overall: the
   // last fifth of the samples against the first fifth. A power cut can leave a torn last line.
