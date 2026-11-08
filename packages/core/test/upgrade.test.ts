@@ -1,13 +1,13 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { databaseAtVersion, openDatabase, SCHEMA_VERSION } from '../src/store/db.js';
+import { databaseAtVersion, defaultHome, openDatabase, SCHEMA_VERSION } from '../src/store/db.js';
 import { Store } from '../src/index.js';
 
 /**
- * Upgrades keep your data (v1.0 C8). For every schema version an older Conclave could have left,
+ * Upgrades keep your data (v1.0 C8). For every schema version an older Plenum could have left,
  * build a database at that version, fill every table with rows that fit it, open it with this
  * version (which upgrades it), and check every row is still there and every store reads it.
  */
@@ -115,9 +115,9 @@ function fill(db: DatabaseSync, count: number): Record<string, number> {
 describe('Upgrades keep your data (C8)', () => {
   for (let version = 1; version < SCHEMA_VERSION; version++) {
     it(`a database from schema version ${version} upgrades with every row kept`, () => {
-      const dir = mkdtempSync(join(tmpdir(), 'conclave-upgrade-'));
+      const dir = mkdtempSync(join(tmpdir(), 'plenum-upgrade-'));
       cleanup.push(dir);
-      const path = join(dir, 'conclave.db');
+      const path = join(dir, 'plenum.db');
       const old = databaseAtVersion(path, version);
       const before = fill(old, 3);
       old.close();
@@ -153,9 +153,9 @@ describe('Upgrades keep your data (C8)', () => {
   }
 
   it('keeps only the last three backups', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-upgrade-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-upgrade-'));
     cleanup.push(dir);
-    const path = join(dir, 'conclave.db');
+    const path = join(dir, 'plenum.db');
     for (const v of [14, 15, 16, 17]) {
       rmSync(path, { force: true });
       rmSync(`${path}-wal`, { force: true });
@@ -166,6 +166,35 @@ describe('Upgrades keep your data (C8)', () => {
     const backups = readdirSync(dir)
       .filter((f) => f.includes('.bak-'))
       .sort();
-    expect(backups).toEqual(['conclave.db.bak-15', 'conclave.db.bak-16', 'conclave.db.bak-17']);
+    expect(backups).toEqual(['plenum.db.bak-15', 'plenum.db.bak-16', 'plenum.db.bak-17']);
+  });
+});
+
+describe('The data folder after the rename to Plenum', () => {
+  const saved = {
+    HOME: process.env.HOME,
+    USERPROFILE: process.env.USERPROFILE,
+    PLENUM_HOME: process.env.PLENUM_HOME,
+  };
+  afterEach(() => {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  it('keeps using ~/.conclave when it exists and ~/.plenum does not', () => {
+    const home = mkdtempSync(join(tmpdir(), 'plenum-userhome-'));
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    delete process.env.PLENUM_HOME;
+    expect(defaultHome()).toBe(join(home, '.plenum'));
+    mkdirSync(join(home, '.conclave'));
+    expect(defaultHome()).toBe(join(home, '.conclave'));
+    mkdirSync(join(home, '.plenum'));
+    expect(defaultHome()).toBe(join(home, '.plenum'));
+    process.env.PLENUM_HOME = join(home, 'elsewhere');
+    expect(defaultHome()).toBe(join(home, 'elsewhere'));
+    rmSync(home, { recursive: true, force: true });
   });
 });

@@ -1,4 +1,4 @@
-import { SHOTS_FILE, type Project, type Task } from '@conclave/shared';
+import { SHOTS_FILE, type Project, type Task } from '@plenum/shared';
 import {
   DECIDE_AND_TELL,
   DECIDE_YOURSELF,

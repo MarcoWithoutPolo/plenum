@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { AppearanceSettings, BrainEvent } from '@conclave/shared';
+import type { AppearanceSettings, BrainEvent } from '@plenum/shared';
 import { applyLook } from '../shared/look.js';
 import {
   IPC,
-  type ConclaveApi,
+  type PlenumApi,
   type InstallLog,
   type RunUpdate,
   type UpdateState,
@@ -18,7 +18,7 @@ function listen<T>(channel: string, listener: (payload: T) => void): () => void 
   return () => ipcRenderer.off(channel, wrapped);
 }
 
-const api: ConclaveApi = {
+const api: PlenumApi = {
   accounts: {
     list: () => invoke(IPC.accountsList),
     signIn: (provider) => invoke(IPC.accountsSignIn, provider),
@@ -134,7 +134,7 @@ const api: ConclaveApi = {
   platform: process.platform,
 };
 
-contextBridge.exposeInMainWorld('conclave', api);
+contextBridge.exposeInMainWorld('plenum', api);
 
 // The look (F3) is on the page before it first paints: no flash of the wrong contrast or motion.
 try {

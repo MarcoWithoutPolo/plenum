@@ -1,8 +1,8 @@
-import type { PermissionLevel, Permissions } from '@conclave/shared';
+import type { PermissionLevel, Permissions } from '@plenum/shared';
 
 /**
  * What one agent run may do, resolved from the project's permissions (C6c).
- * Adapters turn this into their CLI's own sandbox flags; Conclave never relies on the model obeying.
+ * Adapters turn this into their CLI's own sandbox flags; Plenum never relies on the model obeying.
  */
 export interface RunPermissions {
   level: PermissionLevel;

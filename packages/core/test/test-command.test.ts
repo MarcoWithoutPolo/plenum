@@ -6,7 +6,7 @@ import { detectTestCommand } from '../src/index.js';
 
 const dirs: string[] = [];
 function folder(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), 'conclave-testcmd-'));
+  const dir = mkdtempSync(join(tmpdir(), 'plenum-testcmd-'));
   dirs.push(dir);
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
   return dir;

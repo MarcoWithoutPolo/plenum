@@ -5,7 +5,7 @@ import {
   type ProviderId,
   type ProviderStatus,
   type Seat,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { adapterMap, createAdapters } from './adapters/registry.js';
 import type { CachedCatalog } from './store/catalogs.js';
 import type { Adapter } from './adapters/types.js';
@@ -15,7 +15,7 @@ import { defaultHome } from './store/db.js';
 import { Store } from './store/store.js';
 
 export interface EngineOptions {
-  /** Data directory; defaults to CONCLAVE_HOME or ~/.conclave. */
+  /** Data directory; defaults to PLENUM_HOME or ~/.plenum. */
   home?: string;
   /** Overrides the real adapters (tests, demos). */
   adapters?: Adapter[];
@@ -32,7 +32,7 @@ export class Engine {
 
   constructor(opts: EngineOptions = {}) {
     this.home = opts.home ?? defaultHome();
-    this.store = opts.store ?? new Store(join(this.home, 'conclave.db'));
+    this.store = opts.store ?? new Store(join(this.home, 'plenum.db'));
     this.adapters = adapterMap(
       opts.adapters ?? createAdapters({ settings: () => this.store.settings.get() }),
     );

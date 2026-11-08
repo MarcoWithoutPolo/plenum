@@ -1,4 +1,4 @@
-import { providerEntry, type ProviderId, type Seat } from '@conclave/shared';
+import { providerEntry, type ProviderId, type Seat } from '@plenum/shared';
 import type { RunResult } from '../collect.js';
 import type { QuotaReading } from '../store/store.js';
 import { ceilingFor, policyBlock, type GovernorPolicy } from './policy.js';

@@ -37,7 +37,7 @@ const git = (cwd: string, ...args: string[]) =>
 const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-trouble-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-trouble-'));
   cleanup.push(repo);
   git(repo, 'init', '-q', '-b', 'main');
   writeFileSync(join(repo, 'legacy.js'), 'module.exports = "old";\n');
@@ -69,14 +69,14 @@ const task = (req: RunRequest) => /^(?:YOUR )?TASK: (.+)$/m.exec(req.prompt)?.[1
 const integrationTree = (repo: string) =>
   git(repo, 'worktree', 'list', '--porcelain')
     .split('\n\n')
-    .find((w) => w.includes('branch refs/heads/conclave/integration'))!
+    .find((w) => w.includes('branch refs/heads/plenum/integration'))!
     .split('\n')[0]!
     .slice('worktree '.length);
 
 describe('Trouble suite (v0.9.2)', () => {
   it('recovers from every kind of trouble within its budget', async () => {
     const repo = makeRepo();
-    const home = mkdtempSync(join(tmpdir(), 'conclave-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-home-'));
     cleanup.push(home);
     const seen = new Map<string, number>();
     const once = (key: string) => {
@@ -187,9 +187,9 @@ describe('Trouble suite (v0.9.2)', () => {
       'Remove legacy: merged',
       'Add notes: merged',
     ]);
-    const files = git(repo, 'ls-tree', '--name-only', 'conclave/integration').split('\n');
+    const files = git(repo, 'ls-tree', '--name-only', 'plenum/integration').split('\n');
     expect(files).not.toContain('legacy.js');
-    expect(git(repo, 'show', 'conclave/integration:notes.txt')).not.toContain('<<<<<<<');
+    expect(git(repo, 'show', 'plenum/integration:notes.txt')).not.toContain('<<<<<<<');
 
     // Every recovery happened, each the cheap way.
     const has = (re: RegExp) =>

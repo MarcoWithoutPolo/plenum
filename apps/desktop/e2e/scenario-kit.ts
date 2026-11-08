@@ -6,10 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 
 // Shared by the private live scenarios (scenario-visual and scenario-more): the real app on your
-// real accounts and Conclave data, driven through its own API and read back from its database.
+// real accounts and Plenum data, driven through its own API and read back from its database.
 export const here = dirname(fileURLToPath(import.meta.url));
 export const sqlite = process.getBuiltinModule('node:sqlite');
-export const DB = join(homedir(), '.conclave', 'conclave.db');
+export const DB = join(homedir(), '.plenum', 'plenum.db');
 export const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 
 export function query<T>(sql: string, ...args: (string | number)[]): T[] {
@@ -22,7 +22,7 @@ export function query<T>(sql: string, ...args: (string | number)[]): T[] {
 }
 
 export function repo(scenario: string, name: string, files: Record<string, string>): string {
-  const dir = join(homedir(), `conclave-scenario-${scenario}`, name);
+  const dir = join(homedir(), `plenum-scenario-${scenario}`, name);
   mkdirSync(dir, { recursive: true });
   const git = (...a: string[]) => execFileSync('git', a, { cwd: dir });
   git('init', '-q', '-b', 'main');
@@ -60,7 +60,7 @@ export function checker() {
 export async function launch(scenario: string, extra: Record<string, string> = {}) {
   const shots = join(here, 'screenshots', `scenario-${scenario}`);
   mkdirSync(shots, { recursive: true });
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...rest } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...rest } = process.env;
   const env = { ...rest, ...extra };
   const app: ElectronApplication = await electron.launch({
     args: [join(here, '../out/main/index.js')],
@@ -76,7 +76,7 @@ export async function launch(scenario: string, extra: Record<string, string> = {
       ([f, a]) => {
         const [group, method] = (f as string).split('.') as [string, string];
         const g = (
-          window.conclave as unknown as Record<string, Record<string, (...x: unknown[]) => unknown>>
+          window.plenum as unknown as Record<string, Record<string, (...x: unknown[]) => unknown>>
         )[group]!;
         return g[method]!(...(a as unknown[]));
       },

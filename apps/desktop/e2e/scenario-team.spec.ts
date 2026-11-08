@@ -5,18 +5,18 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
 
 // Private test, scenario 3: a three-AI team (Claude plans; Codex then Antigravity build;
-// Antigravity then Claude review) on your real accounts and Conclave data. Spends real usage:
-// CONCLAVE_SCENARIO=3 only.
+// Antigravity then Claude review) on your real accounts and Plenum data. Spends real usage:
+// PLENUM_SCENARIO=3 only.
 // It runs until the project needs you, meets its goal, pauses, or 50 minutes pass, and leaves
 // the project in your app. It never answers the agents' mid-run questions for you.
-test.skip(process.env.CONCLAVE_SCENARIO !== '3', 'set CONCLAVE_SCENARIO=3 to run');
+test.skip(process.env.PLENUM_SCENARIO !== '3', 'set PLENUM_SCENARIO=3 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-3');
 const sqlite = process.getBuiltinModule('node:sqlite');
 
 function projectState(name: string) {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -39,7 +39,7 @@ test('scenario 3: a three-AI team builds and cross-reviews', async () => {
   test.setTimeout(55 * 60_000);
   mkdirSync(shots, { recursive: true });
   const name = `slugify-team-${new Date().toISOString().slice(0, 10)}`;
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
     env: env as Record<string, string>,
@@ -57,7 +57,7 @@ test('scenario 3: a three-AI team builds and cross-reviews', async () => {
     await page.getByRole('button', { name: 'New project' }).click();
     const dialog = page.getByRole('dialog', { name: 'New project' });
 
-    // Where: a brand-new folder; Conclave creates it and sets up git.
+    // Where: a brand-new folder; Plenum creates it and sets up git.
     await dialog.getByRole('radio', { name: /Create a new folder/ }).click();
     await dialog.getByRole('textbox', { name: 'Folder name' }).fill(name);
     await shot('where');
@@ -86,9 +86,9 @@ test('scenario 3: a three-AI team builds and cross-reviews', async () => {
     console.log('\n--- CLARIFY ---\n' + clarifyText.slice(0, 4000));
     // The team for this scenario, set on the saved draft through the app's own API.
     const team = await page.evaluate(async (projectName) => {
-      const list = await window.conclave!.projects.list();
+      const list = await window.plenum!.projects.list();
       const draft = list.find((s) => s.project.name === projectName)!.project;
-      const next = await window.conclave!.projects.update(draft.id, {
+      const next = await window.plenum!.projects.update(draft.id, {
         routing: {
           planner: [{ provider: 'claude' }],
           builder: [{ provider: 'codex' }, { provider: 'antigravity' }],

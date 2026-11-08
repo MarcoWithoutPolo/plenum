@@ -7,7 +7,7 @@ import type {
   Thread,
   ThreadMode,
   Usage,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { openDatabase, transaction } from './db.js';
 import { newId } from './ids.js';
 import { ProjectStore } from './projects.js';

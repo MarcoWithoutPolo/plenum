@@ -1,4 +1,4 @@
-import { markOlder, type AgentEvent, type ProviderStatus } from '@conclave/shared';
+import { markOlder, type AgentEvent, type ProviderStatus } from '@plenum/shared';
 import { runCommand } from '../process.js';
 import {
   assertSafeEffort,

@@ -25,7 +25,7 @@ import {
   type Project,
   type Seat,
   type Task,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { providerName, useApp } from '@/lib/store';
 import { ProviderDot } from './bits';
 import { modelLabel } from './SeatPicker';

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Circle, Loader2 } from 'lucide-react';
-import { preferred, type ProviderId, type Routing } from '@conclave/shared';
+import { preferred, type ProviderId, type Routing } from '@plenum/shared';
 import type { ProviderInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
 import { errorText, readyProviders, useApp } from '@/lib/store';
@@ -138,11 +138,11 @@ export function FirstRun({ onClose }: { onClose: () => void }) {
               tabIndex={-1}
               className="mt-1 text-[24px] font-semibold tracking-tight outline-none"
             >
-              Welcome to Conclave. Connect your AIs
+              Welcome to Plenum. Connect your AIs
             </h1>
             <p className="mt-2 text-[13.5px] text-muted">
-              Conclave works with the AI tools you already use, through their own command-line apps.
-              You sign in on each one's own page; Conclave never sees your passwords or keys. One AI
+              Plenum works with the AI tools you already use, through their own command-line apps.
+              You sign in on each one's own page; Plenum never sees your passwords or keys. One AI
               is enough to start; two or more from different companies is much better.
             </p>
 
@@ -313,7 +313,7 @@ export function FirstRun({ onClose }: { onClose: () => void }) {
             <div className="mt-6 flex gap-3">
               <Button onClick={() => setStep(2)}>Back</Button>
               <Button variant="primary" onClick={finish}>
-                Start using Conclave
+                Start using Plenum
               </Button>
             </div>
           </>

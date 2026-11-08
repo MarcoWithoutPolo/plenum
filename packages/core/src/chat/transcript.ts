@@ -1,4 +1,4 @@
-import { shortName, type Message, type ProviderId, type Seat } from '@conclave/shared';
+import { shortName, type Message, type ProviderId, type Seat } from '@plenum/shared';
 
 /** Keep replayed history well under every CLI's context and stdin limits. */
 export const MAX_TRANSCRIPT_CHARS = 60_000;

@@ -1,7 +1,7 @@
-// Starts a Conclave MCP server over stdio and lists its tools, as Claude Code would.
+// Starts a Plenum MCP server over stdio and lists its tools, as Claude Code would.
 //   node scripts/mcp-smoke.mjs <command> [args...]
-// e.g. node scripts/mcp-smoke.mjs npm run -s conclave -- mcp
-//      node scripts/mcp-smoke.mjs apps/desktop/release/win-unpacked/Conclave.exe --mcp
+// e.g. node scripts/mcp-smoke.mjs npm run -s plenum -- mcp
+//      node scripts/mcp-smoke.mjs apps/desktop/release/win-unpacked/Plenum.exe --mcp
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -16,7 +16,7 @@ const transport = new StdioClientTransport({
   env: { ...process.env },
   stderr: 'inherit',
 });
-const client = new Client({ name: 'conclave-smoke', version: '1' });
+const client = new Client({ name: 'plenum-smoke', version: '1' });
 const timer = setTimeout(() => {
   console.error('No answer within 60 s');
   process.exit(1);

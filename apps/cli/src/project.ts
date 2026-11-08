@@ -1,4 +1,4 @@
-import type { BrainEvent, Project, Seat, Task } from '@conclave/shared';
+import type { BrainEvent, Project, Seat, Task } from '@plenum/shared';
 import {
   Brain,
   QUESTION_KINDS,
@@ -14,8 +14,8 @@ import {
   projectWorkspace,
   steer,
   type Engine,
-} from '@conclave/core';
-import { taskProgress, type QuestionPayload } from '@conclave/shared';
+} from '@plenum/core';
+import { taskProgress, type QuestionPayload } from '@plenum/shared';
 import { bold, dim, paint, shortId } from './format.js';
 
 export interface ProjectArgs {
@@ -36,19 +36,19 @@ export interface ProjectArgs {
 }
 
 const USAGE = `Usage:
-  conclave project new <repo> --goal "..." [--test "npm test"] [--done "..."] [--parallel 2]
+  plenum project new <repo> --goal "..." [--test "npm test"] [--done "..."] [--parallel 2]
                        [--planner claude:opus] [--builder codex@low,claude] [--reviewer claude]
-  conclave project list
-  conclave project status <id>
-  conclave project run <id> [--rounds N]     work until the goal is met (Ctrl+C stops)
-  conclave project stop <id>                 stop a running project after its current step
-  conclave project retry <task> [--use claude:opus@high] [--effort-up]
+  plenum project list
+  plenum project status <id>
+  plenum project run <id> [--rounds N]     work until the goal is met (Ctrl+C stops)
+  plenum project stop <id>                 stop a running project after its current step
+  plenum project retry <task> [--use claude:opus@high] [--effort-up]
                                              requeue a failed or skipped task with fresh attempts
-  conclave project skip <task>               leave a task out of the plan
-  conclave project answer <question> "..."   answer an agent's question (or: yes / no for installs)
-  conclave project decisions <id>            what's been decided and assumed
-  conclave project decide <id> "question" "answer"   add a decision
-  conclave project steer <id> "..." [--apply]      tell the project what to change; prints the
+  plenum project skip <task>               leave a task out of the plan
+  plenum project answer <question> "..."   answer an agent's question (or: yes / no for installs)
+  plenum project decisions <id>            what's been decided and assumed
+  plenum project decide <id> "question" "answer"   add a decision
+  plenum project steer <id> "..." [--apply]      tell the project what to change; prints the
                                              planner's proposal, --apply applies all of it`;
 
 export async function projectCommand(engine: Engine, args: ProjectArgs): Promise<number> {
@@ -111,14 +111,14 @@ async function create(engine: Engine, args: ProjectArgs): Promise<number> {
       `\nWork happens on ${project.integrationBranch}; your ${project.baseBranch} branch and files are left alone.`,
     ),
   );
-  console.log(dim(`Start it with: conclave project run ${shortId(project.id)}`));
+  console.log(dim(`Start it with: plenum project run ${shortId(project.id)}`));
   return 0;
 }
 
 function list(engine: Engine): number {
   const projects = engine.store.projects.list();
   if (!projects.length) {
-    console.log('No projects yet. Create one with: conclave project new <repo> --goal "..."');
+    console.log('No projects yet. Create one with: plenum project new <repo> --goal "..."');
     return 0;
   }
   for (const p of projects) {
@@ -132,7 +132,7 @@ function list(engine: Engine): number {
 function find(engine: Engine, id: string | undefined): Project | undefined {
   const project = id ? engine.store.projects.find(id) : undefined;
   if (!project)
-    console.error(id ? `No project found for "${id}". See: conclave project list` : USAGE);
+    console.error(id ? `No project found for "${id}". See: plenum project list` : USAGE);
   return project;
 }
 
@@ -174,7 +174,7 @@ function status(engine: Engine, id: string | undefined): number {
       }
     }
     if (pending.some((a) => QUESTION_KINDS.has(a.kind))) {
-      console.log(dim('  Answer with: conclave project answer <id> "your answer"'));
+      console.log(dim('  Answer with: plenum project answer <id> "your answer"'));
     }
     console.log(
       dim(
@@ -230,9 +230,7 @@ async function run(
     console.log(
       `\n${bold('Finished:')} ${outcome.kind === 'done' ? paint('green', 'goal met') : outcome.kind} ${dim('reason' in outcome ? `· ${outcome.reason}` : '')}`,
     );
-    console.log(
-      dim(`Status: ${statusText(after)} · conclave project status ${shortId(project.id)}`),
-    );
+    console.log(dim(`Status: ${statusText(after)} · plenum project status ${shortId(project.id)}`));
     return outcome.kind === 'done' || outcome.kind === 'stopped' ? 0 : 1;
   } finally {
     process.off('SIGINT', onSigint);
@@ -243,7 +241,7 @@ async function run(
 function findTask(engine: Engine, id: string | undefined) {
   const task = id ? engine.store.projects.findTask(id) : undefined;
   if (!task)
-    console.error(id ? `No task found for "${id}". See: conclave project status <id>` : USAGE);
+    console.error(id ? `No task found for "${id}". See: plenum project status <id>` : USAGE);
   return task;
 }
 
@@ -264,7 +262,7 @@ function retry(engine: Engine, args: ProjectArgs): number {
     engine.store.projects.setStatus(project.id, 'idle', 'Ready to resume');
   }
   console.log(
-    `Queued ${bold(next.title)}${next.pinnedSeat ? ` for ${seatLabel(next.pinnedSeat)}` : ''}. Run it with: conclave project run ${shortId(project.id)}`,
+    `Queued ${bold(next.title)}${next.pinnedSeat ? ` for ${seatLabel(next.pinnedSeat)}` : ''}. Run it with: plenum project run ${shortId(project.id)}`,
   );
   return 0;
 }

@@ -2,10 +2,13 @@
 
 ## 1.0.0 (2026-11-08)
 
-The first public release. Conclave runs the AI coding CLIs you already use and are signed in to (Claude Code, Codex,
+The first public release. Plenum runs the AI coding CLIs you already use and are signed in to (Claude Code, Codex,
 Gemini/Antigravity, Copilot, Cursor and more) as one team: chat with any of them, ask several at once as a council,
 or hand a project to the brain, which plans, builds, tests, reviews and merges on its own branch until the goal is met.
-Conclave never asks for or stores your passwords or API keys; each CLI signs in with its own login.
+Plenum never asks for or stores your passwords or API keys; each CLI signs in with its own login.
+
+Plenum was built under the working name Conclave. If you ran a preview, your projects and settings in
+`~/.conclave` are picked up as they are; uninstall the old "Conclave" app by hand.
 
 **New in 1.0**
 

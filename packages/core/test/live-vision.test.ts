@@ -13,8 +13,8 @@ import {
 
 // Live scenario 14 (v0.8): can each CLI really look at a screenshot? One image, two colours
 // nobody would guess (left half orange, right half teal), and a question only sight answers.
-// Spends real usage, so it only runs when asked: CONCLAVE_LIVE=1 npx vitest run live-vision
-const enabled = process.env.CONCLAVE_LIVE === '1';
+// Spends real usage, so it only runs when asked: PLENUM_LIVE=1 npx vitest run live-vision
+const enabled = process.env.PLENUM_LIVE === '1';
 
 function crc32(buf: Buffer): number {
   let c = ~0;
@@ -77,8 +77,8 @@ describe.skipIf(!enabled)('live: reading a screenshot', () => {
         const status = await adapter.detect();
         if (status.auth !== 'signed_in') ctx.skip();
         // As in a review: the screenshot sits outside the working folder, passed as an image.
-        const dir = mkdtempSync(join(tmpdir(), 'conclave-vision-cwd-'));
-        const file = join(mkdtempSync(join(tmpdir(), 'conclave-vision-shots-')), 'shot.png');
+        const dir = mkdtempSync(join(tmpdir(), 'plenum-vision-cwd-'));
+        const file = join(mkdtempSync(join(tmpdir(), 'plenum-vision-shots-')), 'shot.png');
         writeFileSync(file, twoColours(swap));
         // Attached when the CLI takes images; otherwise named, to open with its own tools.
         const native = adapter.capabilities.vision === 'native';

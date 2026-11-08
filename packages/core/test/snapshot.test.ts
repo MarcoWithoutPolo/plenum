@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
-import { parseShotsFile, parseVisualIssue, visualIssueLine, type ShotStep } from '@conclave/shared';
+import { parseShotsFile, parseVisualIssue, visualIssueLine, type ShotStep } from '@plenum/shared';
 import {
   Brain,
   ChromeSnapshotter,
@@ -39,7 +39,7 @@ afterEach(() => {
     rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 const temp = () => {
-  const d = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+  const d = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
   dirs.push(d);
   return d;
 };
@@ -609,7 +609,7 @@ describe('Visual review', () => {
     expect(review.prompt).toContain('Open each file with your Read tool');
     expect(review.prompt).toMatch(/- after: \/ \(phone, dark\): .+home-phone-dark\.png/);
     // Builders of a web project are told how to show the page in use.
-    expect(codex.requests[0]!.prompt).toContain('conclave.shots.json');
+    expect(codex.requests[0]!.prompt).toContain('plenum.shots.json');
     // The builder got the issue, the region and the file to open.
     expect(codex.requests[1]!.prompt).toMatch(
       /The slider label is dark grey on black \[after: \/ \(phone, dark\) \(region 20, 300, 370, 340\): .+home-phone-dark\.png\]/,
@@ -679,7 +679,7 @@ describe('Visual issue lines', () => {
         issue: 'Text is cut off',
         shot: 'after: /settings (desktop, light)',
         box: [0, 10, 200, 40] as [number, number, number, number],
-        path: 'C:\\Users\\Ana Lee\\.conclave\\projects\\p1\\shots\\s1\\settings-desktop-light.png',
+        path: 'C:\\Users\\Ana Lee\\.plenum\\projects\\p1\\shots\\s1\\settings-desktop-light.png',
       },
       {
         issue: 'Overlaps [the header]',
@@ -704,7 +704,7 @@ describe('Visual issue lines', () => {
   });
 });
 
-describe('Sample states (conclave.shots.json)', () => {
+describe('Sample states (plenum.shots.json)', () => {
   const STATES = {
     states: [
       {
@@ -719,15 +719,15 @@ describe('Sample states (conclave.shots.json)', () => {
     expect(parseShotsFile(JSON.stringify(STATES))).toEqual({
       states: [{ ...STATES.states[0], page: '/' }],
     });
-    expect(parseShotsFile('{oops')).toEqual({ error: "conclave.shots.json isn't valid JSON" });
+    expect(parseShotsFile('{oops')).toEqual({ error: "plenum.shots.json isn't valid JSON" });
     expect(
       parseShotsFile(JSON.stringify({ states: [{ name: 'x', steps: [{ hover: 'a' }] }] })),
     ).toMatchObject({
-      error: expect.stringMatching(/^conclave\.shots\.json: states\.0\.steps\.0/),
+      error: expect.stringMatching(/^plenum\.shots\.json: states\.0\.steps\.0/),
     });
     const twice = { states: [STATES.states[0], { ...STATES.states[0], name: 'With Cards' }] };
     expect(parseShotsFile(JSON.stringify(twice))).toEqual({
-      error: 'conclave.shots.json: two states share a name',
+      error: 'plenum.shots.json: two states share a name',
     });
   });
 
@@ -773,7 +773,7 @@ describe('Sample states (conclave.shots.json)', () => {
   it('replays each state before its shots, and notes a state that could not be replayed', async () => {
     const dir = temp();
     writeFileSync(join(dir, 'index.html'), '<h1>Board</h1>');
-    writeFileSync(join(dir, 'conclave.shots.json'), JSON.stringify(STATES));
+    writeFileSync(join(dir, 'plenum.shots.json'), JSON.stringify(STATES));
     const store = new Store(':memory:');
     execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
     execFileSync(
@@ -813,7 +813,7 @@ describe('Sample states (conclave.shots.json)', () => {
     expect(taken.checks.sendBack).toEqual([]);
 
     // A broken file is said once, and the page is still shot as it loads.
-    writeFileSync(join(dir, 'conclave.shots.json'), '{"states": [{"name": "?!", "steps": []}]}');
+    writeFileSync(join(dir, 'plenum.shots.json'), '{"states": [{"name": "?!", "steps": []}]}');
     const again = await snapshotTask({
       store,
       home: temp(),
@@ -828,7 +828,7 @@ describe('Sample states (conclave.shots.json)', () => {
     if (again.kind !== 'taken') throw new Error(again.reason);
     expect(again.after.shots.some((x) => x.state)).toBe(false);
     expect(again.checks.notes[0]).toMatch(
-      /^conclave\.shots\.json: states\.0\.name: .+; its sample states were left out$/,
+      /^plenum\.shots\.json: states\.0\.name: .+; its sample states were left out$/,
     );
   });
 

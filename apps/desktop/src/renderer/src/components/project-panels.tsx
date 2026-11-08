@@ -21,8 +21,8 @@ import type {
   AskPolicy,
   Routing,
   Task,
-} from '@conclave/shared';
-import type { PullRequestStatus } from '@conclave/core';
+} from '@plenum/shared';
+import type { PullRequestStatus } from '@plenum/core';
 import type { LimitNotice, PermissionGaps, ProviderProblem } from '../../../shared/api';
 import { Dialog } from './Dialog';
 import { QuestionCard } from './QuestionCard';

@@ -8,8 +8,8 @@ import type {
   ProviderId,
   ProviderLimit,
   QuietHours,
-} from '@conclave/shared';
-import { PROVIDERS } from '@conclave/shared';
+} from '@plenum/shared';
+import { PROVIDERS } from '@plenum/shared';
 import { Button, ProviderDot } from '@/components/bits';
 import { Segmented, Switch, inputClass } from '@/components/form';
 import { api } from '@/lib/api';
@@ -207,7 +207,7 @@ export function SettingsScreen() {
         <div className="mx-auto max-w-3xl px-8 pt-4 pb-16">
           <h1 className="text-[22px] font-semibold tracking-tight">Settings</h1>
           <p className="mt-1 text-[13.5px] text-muted">
-            How much of each subscription Conclave may use, and how it keeps you in the loop. These
+            How much of each subscription Plenum may use, and how it keeps you in the loop. These
             apply to every project.
           </p>
 
@@ -469,7 +469,7 @@ export function SettingsScreen() {
           <Section
             id="background"
             title="Background"
-            hint="Projects can keep working with the window closed. Conclave stays in the tray (the menu bar on a Mac)."
+            hint="Projects can keep working with the window closed. Plenum stays in the tray (the menu bar on a Mac)."
           >
             {api().platform !== 'darwin' && (
               <Row
@@ -523,7 +523,7 @@ export function SettingsScreen() {
           <Section
             id="appearance"
             title="Appearance and accessibility"
-            hint="How Conclave looks and reads. Each change applies at once and is kept."
+            hint="How Plenum looks and reads. Each change applies at once and is kept."
           >
             <Row label="Theme" hint="Follows your system unless you pick one.">
               <Segmented
@@ -614,7 +614,7 @@ export function SettingsScreen() {
           <Section
             id="notifications"
             title="Notifications"
-            hint="Shown only while Conclave isn't the window you're using. Clicking one opens the project."
+            hint="Shown only while Plenum isn't the window you're using. Clicking one opens the project."
           >
             {NOTICES.map((n) => (
               <label key={n.key} className="flex cursor-pointer items-center gap-4 px-4 py-3">
@@ -674,7 +674,7 @@ function About() {
       hint="What's installed, and what to send when something goes wrong."
     >
       <Row
-        label={info ? `Conclave ${info.version}` : 'Conclave'}
+        label={info ? `Plenum ${info.version}` : 'Plenum'}
         hint={info ? `Electron ${info.electron} · ${info.platform}` : ' '}
       >
         <span />
@@ -706,14 +706,14 @@ function About() {
         </p>
       )}
       <div className="px-4 py-3">
-        <span className="block text-[13.5px] font-medium">Use Conclave from Claude Code</span>
+        <span className="block text-[13.5px] font-medium">Use Plenum from Claude Code</span>
         <span className="block text-[12px] text-faint">
           Run this once in a terminal. Claude Code can then ask a council, see your projects and the
           Inbox, queue tasks and answer questions. Merges, pushes and installs stay with you.
         </span>
         <div className="mt-2 flex items-start gap-2">
           <code
-            aria-label="Command that adds Conclave to Claude Code"
+            aria-label="Command that adds Plenum to Claude Code"
             className="min-w-0 flex-1 rounded-lg selectable border border-line bg-sunken px-2.5 py-1.5 font-mono text-[12px] [overflow-wrap:anywhere]"
           >
             {info?.mcp ?? '…'}
@@ -757,8 +757,8 @@ function updateText(u: UpdateState | null): string {
       return u.reason;
     case 'idle':
       return u.checkedAt
-        ? `Up to date. Checked ${new Date(u.checkedAt).toLocaleString()}; Conclave checks daily.`
-        : 'Conclave checks for a new version daily and downloads it quietly.';
+        ? `Up to date. Checked ${new Date(u.checkedAt).toLocaleString()}; Plenum checks daily.`
+        : 'Plenum checks for a new version daily and downloads it quietly.';
     case 'checking':
       return 'Checking…';
     case 'downloading':

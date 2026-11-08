@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import type { AgentEvent, ProviderId } from '@conclave/shared';
+import type { AgentEvent, ProviderId } from '@plenum/shared';
 import { streamProcess, type ProcessChunk, type ProcessOptions } from '../../process.js';
 import { limitResetsAt, looksLikeLimit } from './limits.js';
 

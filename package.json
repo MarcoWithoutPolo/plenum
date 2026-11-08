@@ -1,9 +1,9 @@
 {
-  "name": "conclave",
+  "name": "plenum",
   "version": "1.0.0",
   "private": true,
   "description": "A desktop app that runs your AI coding CLIs (Claude Code, Codex, Antigravity, Copilot, Cursor and more) as one team: chat with any of them, ask them all at once, or let them build a project for days.",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "workspaces": [
     "packages/*",
@@ -21,11 +21,11 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
-    "conclave": "tsx --conditions=development apps/cli/src/main.ts",
-    "typecheck": "tsc -b && npm run -s -w @conclave/desktop typecheck",
-    "desktop": "npm run -w @conclave/desktop dev",
-    "desktop:build": "npm run -w @conclave/desktop build",
-    "e2e": "npm run desktop:build && npm run -w @conclave/desktop e2e",
+    "plenum": "tsx --conditions=development apps/cli/src/main.ts",
+    "typecheck": "tsc -b && npm run -s -w @plenum/desktop typecheck",
+    "desktop": "npm run -w @plenum/desktop dev",
+    "desktop:build": "npm run -w @plenum/desktop build",
+    "e2e": "npm run desktop:build && npm run -w @plenum/desktop e2e",
     "ci:local": "tsx scripts/ci-local.ts",
     "record-fixture": "tsx --conditions=development apps/cli/src/record-fixture.ts"
   },

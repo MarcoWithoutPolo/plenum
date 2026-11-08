@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ExternalLink, Monitor, RefreshCw, Smartphone, Tablet, X } from 'lucide-react';
-import type { PreviewResult } from '@conclave/core';
+import type { PreviewResult } from '@plenum/core';
 import { Button } from './bits';
 import { Segmented } from './form';
 import { api } from '@/lib/api';
@@ -175,7 +175,7 @@ export function PreviewPane({
           <p className="flex flex-wrap items-center gap-x-3 border-t border-line px-4 py-2 text-[12px] text-faint">
             <span>
               {state.static
-                ? 'Served by Conclave on this computer. No project code runs outside the page.'
+                ? 'Served by Plenum on this computer. No project code runs outside the page.'
                 : 'Running the project’s own dev server on this computer.'}{' '}
               Light or dark follows your system; the task’s Screenshots show both.
             </span>

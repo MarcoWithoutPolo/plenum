@@ -18,7 +18,7 @@ export function assertSafeSession(sessionId: string | undefined): void {
   if (sessionId !== undefined && !/^[\w-]+$/.test(sessionId)) throw new Error('Invalid session id');
 }
 
-/** An image path from Conclave's own data folder: absolute, a PNG, nothing a shell could misread. */
+/** An image path from Plenum's own data folder: absolute, a PNG, nothing a shell could misread. */
 export function safeImage(path: string): string {
   if (!isAbsolute(path) || !/\.png$/i.test(path) || /[\r\n"]/.test(path)) {
     throw new Error(`Not a screenshot path: ${path}`);

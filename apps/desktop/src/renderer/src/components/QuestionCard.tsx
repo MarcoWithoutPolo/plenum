@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { ChevronDown, Globe, MessageCircleQuestion, Package, Star } from 'lucide-react';
-import type { Approval, QuestionPayload } from '@conclave/shared';
+import type { Approval, QuestionPayload } from '@plenum/shared';
 import { Button, ProviderDot } from './bits';
 import { inputClass } from './form';
 import { relative } from './PlanUsage';
@@ -8,7 +8,7 @@ import { useProjects } from '@/lib/projects';
 import { providerName } from '@/lib/store';
 import { settle } from '@/lib/settle';
 
-/** Install commands Conclave runs itself once approved (mirrors the engine's allow-list). */
+/** Install commands Plenum runs itself once approved (mirrors the engine's allow-list). */
 const RUNNABLE =
   /^(npm|pnpm|yarn|bun) (add|install|i)\b|^(pip|pip3|python -m pip) install\b|^uv add\b|^cargo add\b|^go get\b|^dotnet add package\b/i;
 
@@ -200,7 +200,7 @@ export function QuestionCard({
                   'Gives the builder network access for one attempt of this task.'
                 ) : command && RUNNABLE.test(command.trim()) ? (
                   <>
-                    Conclave runs{' '}
+                    Plenum runs{' '}
                     <code className="selectable rounded bg-sunken px-1.5 py-0.5 font-mono text-[12px] text-ink">
                       {command}
                     </code>{' '}
@@ -208,7 +208,7 @@ export function QuestionCard({
                   </>
                 ) : (
                   <>
-                    Conclave can't run{' '}
+                    Plenum can't run{' '}
                     <code className="selectable rounded bg-sunken px-1.5 py-0.5 font-mono text-[12px] text-ink">
                       {command ?? 'this'}
                     </code>{' '}

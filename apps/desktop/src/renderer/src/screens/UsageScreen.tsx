@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Eye, Gauge, RefreshCw, XCircle } from 'lucide-react';
-import { PROVIDERS, type ProviderId } from '@conclave/shared';
-import type { AgentRun, DailyActivity, ProviderTotals } from '@conclave/core';
+import { PROVIDERS, type ProviderId } from '@plenum/shared';
+import type { AgentRun, DailyActivity, ProviderTotals } from '@plenum/core';
 import type { QuotaInfo } from '../../../shared/api';
 import { Button, ProviderDot } from '@/components/bits';
 import { Meter } from '@/components/PlanUsage';
@@ -50,8 +50,7 @@ export function UsageScreen() {
             <div className="flex-1">
               <h1 className="text-[22px] font-semibold tracking-tight">Usage</h1>
               <p className="mt-1 text-[13.5px] text-muted">
-                How much of each subscription Conclave uses, and how close each one is to its
-                limits.
+                How much of each subscription Plenum uses, and how close each one is to its limits.
               </p>
             </div>
             <div

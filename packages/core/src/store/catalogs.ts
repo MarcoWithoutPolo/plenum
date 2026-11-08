@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { ModelList, ModelOption, ProviderId } from '@conclave/shared';
+import type { ModelList, ModelOption, ProviderId } from '@plenum/shared';
 
 type Row = Record<string, unknown>;
 

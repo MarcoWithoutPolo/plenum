@@ -21,7 +21,7 @@ export type NotificationSettings = z.infer<typeof NotificationSettings>;
 export const ProviderLimit = z.object({
   /** At most this many tasks build on this AI at once, across projects (default: per AI). */
   lanes: z.number().int().min(1).max(8).optional(),
-  /** Share of each plan window Conclave leaves for your own use (where the CLI reports usage). */
+  /** Share of each plan window Plenum leaves for your own use (where the CLI reports usage). */
   leaveForMe: z.number().min(0).max(0.9).default(0.1),
   /** At most this many runs a day, or no cap. */
   dailyCap: z.number().int().positive().nullable().default(null),
@@ -106,7 +106,7 @@ export type CouncilSettings = z.infer<typeof CouncilSettings>;
 export const BackgroundSettings = z.object({
   /** Closing the window while projects run: ask, keep them running (tray), or quit. */
   onClose: z.enum(['ask', 'keep', 'quit']).default('ask'),
-  /** Open Conclave, hidden in the tray, when you sign in to the computer. */
+  /** Open Plenum, hidden in the tray, when you sign in to the computer. */
   openAtLogin: z.boolean().default(false),
 });
 export type BackgroundSettings = z.infer<typeof BackgroundSettings>;

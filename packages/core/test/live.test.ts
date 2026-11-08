@@ -8,8 +8,8 @@ import {
   type Adapter,
 } from '../src/index.js';
 
-// Spends real subscription usage, so it only runs when asked: CONCLAVE_LIVE=1 npm test
-const enabled = process.env.CONCLAVE_LIVE === '1';
+// Spends real subscription usage, so it only runs when asked: PLENUM_LIVE=1 npm test
+const enabled = process.env.PLENUM_LIVE === '1';
 
 const cases: [Adapter, string | undefined][] = [
   [new ClaudeAdapter(), 'haiku'],

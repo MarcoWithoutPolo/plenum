@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Approval, BrainEvent, FailureKind, ProviderId } from '@conclave/shared';
-import type { RetryOptions } from '@conclave/core';
+import type { Approval, BrainEvent, FailureKind, ProviderId } from '@plenum/shared';
+import type { RetryOptions } from '@plenum/core';
 import type {
   ApprovalItem,
   DecideOptions,

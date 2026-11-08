@@ -8,15 +8,15 @@ import { launch, type DataSet, type Running } from './kit';
  * Every control does something (v1.0 Q3, the control inventory).
  *
  * 1. Each screen's controls (role and name) are listed in `controls.json`. A control that
- *    appears or disappears fails the run until the list is updated (CONCLAVE_UPDATE_CONTROLS=1),
+ *    appears or disappears fails the run until the list is updated (PLENUM_UPDATE_CONTROLS=1),
  *    so no control ships without someone looking at it.
- * 2. Each control is clicked while every engine call fails (CONCLAVE_DEMO_FAIL=*): nothing
+ * 2. Each control is clicked while every engine call fails (PLENUM_DEMO_FAIL=*): nothing
  *    can change for real, and the click must still visibly do something: open a layer, change
  *    a value, move focus, change the screen, or show the failure.
  */
 const here = dirname(fileURLToPath(import.meta.url));
 const INVENTORY = join(here, 'controls.json');
-const UPDATE = process.env.CONCLAVE_UPDATE_CONTROLS === '1';
+const UPDATE = process.env.PLENUM_UPDATE_CONTROLS === '1';
 
 interface Screen {
   name: string;
@@ -118,7 +118,7 @@ test.afterAll(async () => {
 const failAll = (on: boolean) =>
   run!.app.evaluate(
     (_e, value) => {
-      process.env.CONCLAVE_DEMO_FAIL = value;
+      process.env.PLENUM_DEMO_FAIL = value;
     },
     on ? '*' : '',
   );
@@ -209,7 +209,7 @@ test('the controls on every screen are the ones in the inventory', () => {
     const removed = [...was].filter((c) => !now.has(c));
     expect(
       { added, removed },
-      `${screen}: controls changed; check them, then run with CONCLAVE_UPDATE_CONTROLS=1`,
+      `${screen}: controls changed; check them, then run with PLENUM_UPDATE_CONTROLS=1`,
     ).toEqual({ added: [], removed: [] });
   }
 });

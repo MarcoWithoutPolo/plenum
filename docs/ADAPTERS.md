@@ -1,6 +1,6 @@
 # Writing an adapter
 
-An adapter puts one AI's official CLI behind Conclave's `Adapter` interface (`packages/core/src/adapters/types.ts`). Everything above the adapter layer sees only `AgentEvent`s (`packages/shared/src/events.ts`), never a CLI's own output. Conclave never handles credentials: the adapter drives the CLI the user installed and signed in to.
+An adapter puts one AI's official CLI behind Plenum's `Adapter` interface (`packages/core/src/adapters/types.ts`). Everything above the adapter layer sees only `AgentEvent`s (`packages/shared/src/events.ts`), never a CLI's own output. Plenum never handles credentials: the adapter drives the CLI the user installed and signed in to.
 
 ## The kit (`packages/core/src/adapters/kit/`)
 
@@ -11,7 +11,7 @@ An adapter puts one AI's official CLI behind Conclave's `Adapter` interface (`pa
 | `TypedEventParser`                            | Base for one-JSON-object-per-line CLIs with a type field (Grok Build, Copilot, OpenCode). Handle the types you need in `on()`.                   |
 | `WholeTextParser`                             | For a CLI with no JSON output: all of stdout is the answer.                                                                                      |
 | `failure(message)`                            | An `error`, or a `rate_limit` with `resetsAt` when the message reads like a usage limit.                                                         |
-| `tokenUsage({input, cached, output})`         | Token counts in Conclave's convention: `inputTokens` is every input token, cache reads included.                                                 |
+| `tokenUsage({input, cached, output})`         | Token counts in Plenum's convention: `inputTokens` is every input token, cache reads included.                                                   |
 | `detectVersion`, `locateCli`                  | "Installed?" and where installers put the CLI, since PATH changes only reach new terminals.                                                      |
 | `assertSafeModel/Effort/Session`, `safeImage` | Everything that goes on a command line is checked first.                                                                                         |
 | `recordingExec`, `scrubLine`                  | Record a real run as a fixture, with paths, the account name and emails taken out.                                                               |

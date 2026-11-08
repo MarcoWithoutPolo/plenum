@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEvent } from '@conclave/shared';
+import { AgentEvent } from '@plenum/shared';
 import { FakeAdapter, collect } from '../src/index.js';
 
 describe('FakeAdapter', () => {

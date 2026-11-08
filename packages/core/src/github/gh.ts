@@ -68,7 +68,7 @@ export class GhError extends Error {
 }
 
 /**
- * GitHub through the official `gh` CLI. Conclave never sees a token: `gh` holds the
+ * GitHub through the official `gh` CLI. Plenum never sees a token: `gh` holds the
  * sign-in, and only `auth status --json` fields without secrets are read.
  */
 export class GitHub {

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { AppSettings } from '@conclave/shared';
+import { AppSettings } from '@plenum/shared';
 
 type Section = keyof AppSettings;
 const SECTIONS = Object.keys(AppSettings.shape) as Section[];

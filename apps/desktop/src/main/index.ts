@@ -3,14 +3,14 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, shell } from 'electron';
-import type { AppSettings, AppearanceSettings, BackgroundSettings } from '@conclave/shared';
+import type { AppSettings, AppearanceSettings, BackgroundSettings } from '@plenum/shared';
 import {
   BrainManager,
   Engine,
   GitHub,
   diagnosticsReport,
   silenceSqliteWarning,
-} from '@conclave/core';
+} from '@plenum/core';
 import {
   demoAdapters,
   demoData,
@@ -29,7 +29,7 @@ import { IPC, type SettingsPatch } from '../shared/api.js';
 
 silenceSqliteWarning();
 const here = fileURLToPath(new URL('.', import.meta.url));
-const demo = process.env.CONCLAVE_DEMO === '1';
+const demo = process.env.PLENUM_DEMO === '1';
 
 let window: BrowserWindow | null = null;
 /** Set once the app is quitting: the window closes for real then. */
@@ -77,7 +77,7 @@ function createWindow(visible = true): BrowserWindow {
     height: 860,
     minWidth: 900,
     minHeight: 600,
-    title: 'Conclave',
+    title: 'Plenum',
     show: false,
     backgroundColor: dark ? '#131416' : '#fafaf9',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
@@ -133,18 +133,18 @@ function registerSettings(engine: Engine, brains: BrainManager): void {
     version: app.getVersion(),
     electron: process.versions.electron,
     platform: process.platform,
-    // The line that adds Conclave to Claude Code as an MCP server (F9).
+    // The line that adds Plenum to Claude Code as an MCP server (F9).
     mcp: app.isPackaged
-      ? `claude mcp add conclave -- "${process.execPath}" --mcp`
-      : `claude mcp add conclave -- npm --prefix "${join(here, '../../../..')}" run -s conclave -- mcp`,
+      ? `claude mcp add plenum -- "${process.execPath}" --mcp`
+      : `claude mcp add plenum -- npm --prefix "${join(here, '../../../..')}" run -s plenum -- mcp`,
   }));
   // Export logs (C9): a redacted report, saved where you choose; nothing is sent anywhere.
   ipcMain.handle(IPC.diagnosticsExport, async () => {
     if (demo) demoFailure(IPC.diagnosticsExport);
-    const name = `conclave-diagnostics-${new Date().toISOString().slice(0, 10)}.txt`;
+    const name = `plenum-diagnostics-${new Date().toISOString().slice(0, 10)}.txt`;
     const target =
-      demo && process.env.CONCLAVE_E2E_SAVE
-        ? process.env.CONCLAVE_E2E_SAVE
+      demo && process.env.PLENUM_E2E_SAVE
+        ? process.env.PLENUM_E2E_SAVE
         : (
             await dialog.showSaveDialog({
               title: 'Save the diagnostics report',
@@ -207,7 +207,7 @@ function watchForNotices(engine: Engine, brains: BrainManager): void {
   const notifier = new Notifier({
     focused: () => Boolean(window && !window.isDestroyed() && window.isFocused()),
     settings: () => engine.store.settings.get().notifications,
-    projectName: (id) => engine.store.projects.get(id)?.name ?? 'Conclave',
+    projectName: (id) => engine.store.projects.get(id)?.name ?? 'Plenum',
     attention: () => {
       if (process.platform === 'win32' && window && !window.isDestroyed()) window.flashFrame(true);
     },
@@ -230,7 +230,7 @@ function watchForNotices(engine: Engine, brains: BrainManager): void {
 }
 
 /**
- * Closing the window (F11). On Windows and Linux, with projects running, Conclave asks whether
+ * Closing the window (F11). On Windows and Linux, with projects running, Plenum asks whether
  * to keep them running from the tray, and remembers the answer if you tick the box. macOS keeps
  * apps running with the window closed anyway, so it just closes there.
  */
@@ -253,14 +253,14 @@ function closeWindow(
   void dialog
     .showMessageBox(win, {
       type: 'question',
-      title: 'Conclave',
+      title: 'Plenum',
       message:
         active.length === 1
           ? `Keep “${active[0]!.name}” running in the background?`
           : `Keep ${active.length} projects running in the background?`,
       detail:
-        'Conclave stays in the system tray and keeps working; open it again from the tray icon. Quitting stops the projects, and their steps go back to the queue.',
-      buttons: ['Keep running', 'Quit Conclave', 'Cancel'],
+        'Plenum stays in the system tray and keeps working; open it again from the tray icon. Quitting stops the projects, and their steps go back to the queue.',
+      buttons: ['Keep running', 'Quit Plenum', 'Cancel'],
       defaultId: 0,
       cancelId: 2,
       checkboxLabel: 'Remember my choice (change it in Settings → Background)',
@@ -275,8 +275,8 @@ function closeWindow(
 }
 
 /**
- * `Conclave --mcp` (F9): no window, just the MCP server on stdio for Claude Code or another
- * client, on the same data as the app; it runs alongside an open Conclave. Electron's main
+ * `Plenum --mcp` (F9): no window, just the MCP server on stdio for Claude Code or another
+ * client, on the same data as the app; it runs alongside an open Plenum. Electron's main
  * process can't read stdin on Windows, so this executable runs mcp.js again as plain Node,
  * handing over its stdin and stdout.
  */
@@ -284,7 +284,7 @@ const mcp = process.argv.includes('--mcp');
 if (mcp) {
   const child = spawn(process.execPath, [join(here, 'mcp.js')], {
     stdio: 'inherit',
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', CONCLAVE_VERSION: app.getVersion() },
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PLENUM_VERSION: app.getVersion() },
     windowsHide: true,
   });
   child.on('exit', (code) => app.exit(code ?? 0));
@@ -301,10 +301,10 @@ if (mcp) {
     const engine = new Engine(demo ? { adapters: demoAdapters() } : {});
     if (demo) demoReadings(engine.store);
     // The demo skips the first run (F7) unless a test asks for it.
-    if (demo && !process.env.CONCLAVE_DEMO_FIRST_RUN)
+    if (demo && !process.env.PLENUM_DEMO_FIRST_RUN)
       engine.store.settings.update({ firstRun: { done: true } });
     if (demo && demoData() === 'stress' && engine.store.listThreads(1).length === 0)
-      await seedStress(engine.store, process.env.CONCLAVE_E2E_REPO);
+      await seedStress(engine.store, process.env.PLENUM_E2E_REPO);
     const brains = new BrainManager(engine, engine.home, {
       snapshotter: new ElectronSnapshotter(),
     });
@@ -346,7 +346,7 @@ if (mcp) {
     } catch {
       // No tray on this desktop (some Linux ones): closing the window quits, as before.
     }
-    if (demo) (globalThis as { conclaveTray?: AppTray | null }).conclaveTray = tray;
+    if (demo) (globalThis as { plenumTray?: AppTray | null }).plenumTray = tray;
     updates.onChange((state) => {
       tray?.refresh();
       if (window && !window.isDestroyed()) window.webContents.send(IPC.updateChanged, state);
@@ -365,7 +365,7 @@ if (mcp) {
       event.preventDefault();
       tray?.destroy();
       void brains
-        .stopAll('Conclave was closed')
+        .stopAll('Plenum was closed')
         .catch(() => {})
         .finally(() => {
           engine.close();

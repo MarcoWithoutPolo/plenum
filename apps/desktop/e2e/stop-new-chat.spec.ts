@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { launch } from './integrity/kit';
 
 test('Stop pressed while a new chat is still being created sends nothing (U10)', async () => {
-  const run = await launch('normal', 'light', { CONCLAVE_DEMO_SLOW_CREATE: '1500' });
+  const run = await launch('normal', 'light', { PLENUM_DEMO_SLOW_CREATE: '1500' });
   try {
     const page = run.page;
     await page.setViewportSize({ width: 1320, height: 860 });

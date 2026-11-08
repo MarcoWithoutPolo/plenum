@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { Gauge } from 'lucide-react';
-import type { Usage } from '@conclave/shared';
+import type { Usage } from '@plenum/shared';
 
 export function compactNumber(n: number): string {
   if (n >= 10_000) return `${Math.round(n / 1000)}k`;

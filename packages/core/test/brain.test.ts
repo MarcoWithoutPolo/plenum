@@ -53,7 +53,7 @@ import {
   sameWork,
   skipTask,
 } from '../src/index.js';
-import { taskProgress, type LimitSettings } from '@conclave/shared';
+import { taskProgress, type LimitSettings } from '@plenum/shared';
 
 const cleanup: string[] = [];
 afterEach(() => {
@@ -81,7 +81,7 @@ const git = (cwd: string, ...args: string[]) =>
 
 /** A tiny repo whose test command checks that sum.js adds numbers. */
 function makeRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-repo-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-repo-'));
   cleanup.push(repo);
   git(repo, 'init', '-q', '-b', 'main');
   writeFileSync(join(repo, 'README.md'), '# demo\n');
@@ -126,7 +126,7 @@ interface Setup {
 
 async function setup(opts: Setup = {}) {
   const repo = makeRepo();
-  const home = mkdtempSync(join(tmpdir(), 'conclave-home-'));
+  const home = mkdtempSync(join(tmpdir(), 'plenum-home-'));
   cleanup.push(home);
   const store = new Store(':memory:');
   let plans = 0;
@@ -175,17 +175,17 @@ describe('Brain', () => {
     ]);
 
     // The work is on the integration branch; the user's checkout is untouched.
-    expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('a + b');
+    expect(git(repo, 'show', 'plenum/integration:sum.js')).toContain('a + b');
     expect(existsSync(join(repo, 'sum.js'))).toBe(false);
     expect(git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
-    expect(git(repo, 'log', '--oneline', 'main')).not.toContain('conclave');
+    expect(git(repo, 'log', '--oneline', 'main')).not.toContain('plenum');
 
     // Roles: Claude planned and reviewed (read-only), Codex built (may write).
     expect(codex.requests.map((r) => [r.role, r.readOnly])).toEqual([['builder', false]]);
     expect(claude.requests.map((r) => r.role)).toEqual(['planner', 'reviewer', 'planner']);
     expect(claude.requests[1]!.prompt).toContain('+module.exports = (a, b) => a + b;');
     // Not a web project (and no screenshots): nothing about sample states.
-    expect(codex.requests[0]!.prompt).not.toContain('conclave.shots.json');
+    expect(codex.requests[0]!.prompt).not.toContain('plenum.shots.json');
 
     expect(store.projects.get(project.id)?.status).toBe('done');
     const approvals = store.projects.approvals(project.id, 'pending');
@@ -281,7 +281,7 @@ describe('Brain', () => {
     const integrationTree = (repo: string) =>
       git(repo, 'worktree', 'list', '--porcelain')
         .split('\n\n')
-        .find((w) => w.includes('branch refs/heads/conclave/integration'))!
+        .find((w) => w.includes('branch refs/heads/plenum/integration'))!
         .split('\n')[0]!
         .slice('worktree '.length);
 
@@ -386,11 +386,11 @@ describe('Brain', () => {
           expect(codex.requests[1]!.prompt).toContain('NEWER WORK CONFLICTS WITH THIS TASK');
         } else {
           expect(messages.some((m) => m.includes('with newer work merged in'))).toBe(true);
-          expect(git(repo, 'show', 'conclave/integration:other.js')).toContain('b + a');
+          expect(git(repo, 'show', 'plenum/integration:other.js')).toContain('b + a');
         }
         // Either way the retry kept its work and the newer work is part of what merged.
-        expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('attempt 2');
-        git(repo, 'merge-base', '--is-ancestor', newer, 'conclave/integration');
+        expect(git(repo, 'show', 'plenum/integration:sum.js')).toContain('attempt 2');
+        git(repo, 'merge-base', '--is-ancestor', newer, 'plenum/integration');
         expect(b.found).toEqual([false, true]);
       }
     });
@@ -408,7 +408,7 @@ describe('Brain', () => {
       expect((await brain.round()).kind).toBe('waiting');
       const [parked] = store.projects.listTasks(project.id);
       expect(parked).toMatchObject({ status: 'queued', kept: { ready: true } });
-      expect(git(repo, 'rev-parse', `conclave/task/${parked!.id}`)).toBe(parked!.kept!.commit);
+      expect(git(repo, 'rev-parse', `plenum/task/${parked!.id}`)).toBe(parked!.kept!.commit);
       expect(codex.requests).toHaveLength(1);
       // A wake-up while the reviewer is still out leaves it parked, without resuming it.
       expect((await brain.round()).kind).toBe('waiting');
@@ -682,7 +682,7 @@ describe('Brain', () => {
       });
     }
     const brain = new Brain({ store, adapters: adapterMap([]), cwd: '.' }, project.id, {
-      home: mkdtempSync(join(tmpdir(), 'conclave-home-')),
+      home: mkdtempSync(join(tmpdir(), 'plenum-home-')),
     });
     const slept: number[] = [];
     const outcome = await brain.run({ maxRounds: 2, sleep: async (ms) => void slept.push(ms) });
@@ -760,7 +760,7 @@ describe('Brain', () => {
     await new Brain({ store, adapters: adapterMap([]), cwd: home }, project.id, { home }).start();
     expect(existsSync(path)).toBe(false);
     expect(git(repo, 'worktree', 'list')).not.toContain(task!.id);
-    expect(git(repo, 'branch', '--list', `conclave/task/${task!.id}`)).toBe('');
+    expect(git(repo, 'branch', '--list', `plenum/task/${task!.id}`)).toBe('');
   });
 
   it('stops when the project is stopped', async () => {
@@ -782,7 +782,7 @@ describe('Brain', () => {
   });
 
   it('refuses a folder that is not a git repository', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-norepo-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-norepo-'));
     cleanup.push(dir);
     await expect(
       createProject(new Store(':memory:'), [{ provider: 'claude' }], { repoPath: dir, goal: 'x' }),
@@ -874,7 +874,7 @@ describe('Brain', () => {
     const fresh = rankSeats(rev, 'reviewer', withPriors('reviewer', new Map()), () => null);
     expect(fresh.seats.map((s) => s.provider)).toEqual(['claude', 'codex', 'antigravity']);
     expect(fresh.reasons[0]).toBe(
-      "Antigravity reviews take about 1.1 min (Claude about 22 s) in Conclave's benchmarks, so faster reviewers go first",
+      "Antigravity reviews take about 1.1 min (Claude about 22 s) in Plenum's benchmarks, so faster reviewers go first",
     );
     // Five fast Antigravity reviews here outweigh the prior.
     const fast = new Map([['antigravity' as ProviderId, { runs: 5, okRate: 1, medianMs: 15_000 }]]);
@@ -1586,7 +1586,7 @@ describe('Installs', () => {
   });
 
   it('keeps package folders out of git after an approved install', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-ignore-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-ignore-'));
     cleanup.push(dir);
     expect(ensureIgnored(dir, 'npm install howler')).toBe('node_modules/');
     expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('node_modules/\n');
@@ -2168,7 +2168,7 @@ describe('Lanes', () => {
     glue?: boolean;
   }) {
     const repo = makeRepo();
-    const home = mkdtempSync(join(tmpdir(), 'conclave-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-home-'));
     cleanup.push(home);
     const store = new Store(':memory:');
     const spans: Span[] = [];
@@ -2247,8 +2247,8 @@ describe('Lanes', () => {
     expect(tasks.map((t) => t.status)).toEqual(['merged', 'merged']);
     expect(spans).toHaveLength(2);
     expect(overlap(spans[0]!, spans[1]!)).toBe(true);
-    expect(git(repo, 'show', 'conclave/integration:a.js')).toContain('Add a');
-    expect(git(repo, 'show', 'conclave/integration:b.js')).toContain('Add b');
+    expect(git(repo, 'show', 'plenum/integration:a.js')).toContain('Add a');
+    expect(git(repo, 'show', 'plenum/integration:b.js')).toContain('Add b');
     expect(events).toContain('Re-tested on top of work merged meanwhile: passed');
   });
 
@@ -2306,7 +2306,7 @@ describe('Lanes', () => {
     const rebuilt = tasks.find((t) => t.freeRetries > 0)!;
     expect(rebuilt.attempts).toBe(0);
     expect(rebuilt.lastFailure?.kind).toBe('combined_tests');
-    expect(git(repo, 'show', 'conclave/integration:glue.js')).toContain('1');
+    expect(git(repo, 'show', 'plenum/integration:glue.js')).toContain('1');
   });
 });
 
@@ -2752,7 +2752,7 @@ describe('Loose ends (v0.9.2)', () => {
   const integrationTree = (repo: string) =>
     git(repo, 'worktree', 'list', '--porcelain')
       .split('\n\n')
-      .find((w) => w.includes('branch refs/heads/conclave/integration'))!
+      .find((w) => w.includes('branch refs/heads/plenum/integration'))!
       .split('\n')[0]!
       .slice('worktree '.length);
   /** Newer work lands on the integration branch while the first review runs. */
@@ -2795,7 +2795,7 @@ describe('Loose ends (v0.9.2)', () => {
       status: 'merged',
       attempts: 0,
     });
-    expect(git(repo, 'show', 'conclave/integration:sum.js')).toContain('build 2');
+    expect(git(repo, 'show', 'plenum/integration:sum.js')).toContain('build 2');
   });
 
   it('moves a reviewer that gives no verdict twice to the back', async () => {
@@ -2841,7 +2841,7 @@ describe('Loose ends (v0.9.2)', () => {
     await s.brain.run({ maxRounds: 10 });
     const messages = s.store.projects.events(s.project.id).map((e) => e.message);
     expect(messages.some((m) => m.includes('Conflict markers left in sum.js'))).toBe(true);
-    expect(git(repo, 'show', 'conclave/integration:sum.js')).not.toContain('<<<<<<<');
+    expect(git(repo, 'show', 'plenum/integration:sum.js')).not.toContain('<<<<<<<');
   });
 
   it('deletes the files a builder lists, only inside its own folder', async () => {
@@ -2853,7 +2853,7 @@ describe('Loose ends (v0.9.2)', () => {
     });
     expect((await brain.run({ maxRounds: 10 })).kind).toBe('done');
     expect(codex.requests[0]!.prompt).toContain('DELETE: path/relative/to/this/folder');
-    const files = git(repo, 'ls-tree', '--name-only', 'conclave/integration').split('\n');
+    const files = git(repo, 'ls-tree', '--name-only', 'plenum/integration').split('\n');
     expect(files).toContain('sum.js');
     expect(files).not.toContain('README.md');
     const messages = store.projects.events(project.id).map((e) => e.message);

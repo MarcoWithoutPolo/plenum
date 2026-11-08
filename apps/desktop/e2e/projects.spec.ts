@@ -40,8 +40,8 @@ const git = (...args: string[]) =>
   ).trim();
 
 test.beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-  repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-repo-'));
+  home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+  repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-repo-'));
   mkdirSync(shots, { recursive: true });
   git('init', '-q', '-b', 'main');
   writeFileSync(join(repo, 'README.md'), '# greeter\n');
@@ -56,7 +56,7 @@ test.beforeAll(async () => {
   git('add', '-A');
   git('commit', '-q', '-m', 'init');
   // A bare repo standing in for GitHub, so finishing can merge here and then push.
-  remote = mkdtempSync(join(tmpdir(), 'conclave-e2e-remote-'));
+  remote = mkdtempSync(join(tmpdir(), 'plenum-e2e-remote-'));
   execFileSync('git', ['init', '-q', '--bare', '-b', 'main'], { cwd: remote });
   git('remote', 'add', 'origin', remote);
   git('push', '-q', '-u', 'origin', 'main');
@@ -65,10 +65,10 @@ test.beforeAll(async () => {
     args: [join(here, '../out/main/index.js')],
     env: {
       ...process.env,
-      CONCLAVE_DEMO: '1',
-      CONCLAVE_DEMO_ASK: '1',
-      CONCLAVE_HOME: home,
-      CONCLAVE_E2E_REPO: repo,
+      PLENUM_DEMO: '1',
+      PLENUM_DEMO_ASK: '1',
+      PLENUM_HOME: home,
+      PLENUM_E2E_REPO: repo,
     },
   });
   page = await app.firstWindow();
@@ -145,7 +145,7 @@ test('creates a project in three steps, with the test command guessed', async ()
 });
 
 test('stops to ask a question, then carries on by itself after the answer', async () => {
-  await expect(page.getByRole('heading', { level: 1 })).toContainText(/conclave-e2e-repo/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(/plenum-e2e-repo/);
   const needsYou = page.getByRole('region', { name: 'Needs you' });
   await expect(needsYou).toContainText('Which tone should the usage notes use?', {
     timeout: 30_000,
@@ -165,12 +165,12 @@ test('runs on its own and asks before merging', async () => {
   await expect(tasks).toContainText('2 of 2 merged');
   const activity = page.getByRole('region', { name: 'Activity' });
   await expect(activity).toContainText('Tests passed');
-  await expect(activity).toContainText(/Merged into conclave\/integration/);
+  await expect(activity).toContainText(/Merged into plenum\/integration/);
   await expect(activity).toContainText('You answered: Which tone should the usage notes use?');
   await page.screenshot({ path: join(shots, '5-project.png') });
 
   // Nothing reached the user's branch yet.
-  expect(git('log', '--oneline', 'main')).not.toContain('conclave');
+  expect(git('log', '--oneline', 'main')).not.toContain('plenum');
 });
 
 test('shows what a task changed', async () => {

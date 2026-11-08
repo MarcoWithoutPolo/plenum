@@ -6,7 +6,7 @@ import {
   Seat,
   WireId,
   type ProviderId,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import {
   CouncilControl,
   INSTALL_PACKAGES,
@@ -15,7 +15,7 @@ import {
   runCommand,
   streamProcess,
   type Engine,
-} from '@conclave/core';
+} from '@plenum/core';
 import { demoFailure, demoSignIn } from './demo.js';
 
 import { IPC, type CouncilRoundResult, type ProviderInfo, type RunUpdate } from '../shared/api.js';
@@ -24,17 +24,17 @@ import { refreshWindowsPath } from './winpath.js';
 
 /** npm comes with Node.js, which a new computer may not have. */
 async function hasNpm(): Promise<boolean> {
-  if (process.env.CONCLAVE_DEMO === '1') return !process.env.CONCLAVE_DEMO_NO_NPM;
+  if (process.env.PLENUM_DEMO === '1') return !process.env.PLENUM_DEMO_NO_NPM;
   const works = async () =>
     (await runCommand('npm', ['--version'], { timeoutMs: 15_000 })).code === 0;
   if (await works().catch(() => false)) return true;
-  // Installed since Conclave started? Then only the saved PATH knows about it.
+  // Installed since Plenum started? Then only the saved PATH knows about it.
   await refreshWindowsPath();
   return works().catch(() => false);
 }
 
-/** The demo can make calls fail on purpose (CONCLAVE_DEMO_FAIL), for the tests. */
-const demo = process.env.CONCLAVE_DEMO === '1';
+/** The demo can make calls fail on purpose (PLENUM_DEMO_FAIL), for the tests. */
+const demo = process.env.PLENUM_DEMO === '1';
 
 /** Real providers from the registry; the demo's fake one never comes from the renderer. */
 const PROVIDERS = new Set<ProviderId>(REGISTRY.filter((p) => p.id !== 'fake').map((p) => p.id));
@@ -125,7 +125,7 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
       cancelId: 1,
       title: 'Install CLI',
       message: `Install ${adapter(provider).displayName}?`,
-      detail: `Conclave will run:\n\nnpm install -g ${pkg}\n\nThis downloads the official package from the npm registry.`,
+      detail: `Plenum will run:\n\nnpm install -g ${pkg}\n\nThis downloads the official package from the npm registry.`,
     };
     const choice = win
       ? await dialog.showMessageBox(win, options)
@@ -220,8 +220,8 @@ export function registerIpc(engine: Engine, getWindow: () => BrowserWindow | nul
   handle(IPC.chatCreate, async (raw: unknown) => {
     const seat = Seat.parse(raw);
     // The demo can take a moment to create a chat, so a test can press Stop meanwhile (U10).
-    if (demo && process.env.CONCLAVE_DEMO_SLOW_CREATE)
-      await new Promise((r) => setTimeout(r, Number(process.env.CONCLAVE_DEMO_SLOW_CREATE)));
+    if (demo && process.env.PLENUM_DEMO_SLOW_CREATE)
+      await new Promise((r) => setTimeout(r, Number(process.env.PLENUM_DEMO_SLOW_CREATE)));
     adapter(seat.provider);
     return engine.chat.createThread(seat);
   });

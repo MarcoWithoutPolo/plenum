@@ -1,6 +1,6 @@
 import { styleText } from 'node:util';
-import type { Message, Seat, Thread, Usage } from '@conclave/shared';
-import { seatLabel } from '@conclave/core';
+import type { Message, Seat, Thread, Usage } from '@plenum/shared';
+import { seatLabel } from '@plenum/core';
 
 const color = process.stdout.isTTY && !process.env.NO_COLOR;
 type Style = Parameters<typeof styleText>[0];

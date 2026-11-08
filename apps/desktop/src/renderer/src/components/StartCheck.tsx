@@ -1,5 +1,5 @@
 import { Clock, Hourglass, Play, Users, X } from 'lucide-react';
-import type { StartCheck } from '@conclave/core';
+import type { StartCheck } from '@plenum/core';
 import { Button } from './bits';
 import { settle } from '@/lib/settle';
 

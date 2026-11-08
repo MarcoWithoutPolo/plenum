@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupVariants } from '@conclave/shared';
+import { groupVariants } from '@plenum/shared';
 import type { ProviderInfo } from '../src/shared/api';
 import {
   modelLabel,

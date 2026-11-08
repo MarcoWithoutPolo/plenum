@@ -1,4 +1,4 @@
-import type { Usage } from '@conclave/shared';
+import type { Usage } from '@plenum/shared';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -13,7 +13,7 @@ export function num(value: unknown): number | undefined {
 }
 
 /**
- * Token counts in Conclave's convention (OpenAI's): `inputTokens` counts every input token,
+ * Token counts in Plenum's convention (OpenAI's): `inputTokens` counts every input token,
  * `cachedInputTokens` the cache reads among them, `outputTokens` includes reasoning.
  * Fields a CLI didn't report stay out instead of becoming zero.
  */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProviderId } from '@conclave/shared';
+import type { ProviderId } from '@plenum/shared';
 import {
   ChatService,
   FakeAdapter,

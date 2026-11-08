@@ -5,16 +5,16 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test, type Page } from '@playwright/test';
 
-// Private test, scenario 8 (v0.7): on your real accounts and Conclave data, two projects at
+// Private test, scenario 8 (v0.7): on your real accounts and Plenum data, two projects at
 // once with lanes, steering from the board and the Chat tab, quiet hours and Pause everything
 // set mid-run, shared lane caps, and a desktop notification while the window is in the
-// background. Spends real usage: CONCLAVE_SCENARIO=8 only. Your settings are put back at the end.
-test.skip(process.env.CONCLAVE_SCENARIO !== '8', 'set CONCLAVE_SCENARIO=8 to run');
+// background. Spends real usage: PLENUM_SCENARIO=8 only. Your settings are put back at the end.
+test.skip(process.env.PLENUM_SCENARIO !== '8', 'set PLENUM_SCENARIO=8 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-8');
 const sqlite = process.getBuiltinModule('node:sqlite');
-const DB = join(homedir(), '.conclave', 'conclave.db');
+const DB = join(homedir(), '.plenum', 'plenum.db');
 const CAPS: Record<string, number> = { claude: 2, codex: 2, antigravity: 1 };
 
 function query<T>(sql: string, ...args: (string | number)[]): T[] {
@@ -27,7 +27,7 @@ function query<T>(sql: string, ...args: (string | number)[]): T[] {
 }
 
 function repo(name: string): string {
-  const dir = join(homedir(), 'conclave-scenario-8', name);
+  const dir = join(homedir(), 'plenum-scenario-8', name);
   mkdirSync(dir, { recursive: true });
   const git = (...a: string[]) => execFileSync('git', a, { cwd: dir });
   git('init', '-q', '-b', 'main');
@@ -69,7 +69,7 @@ test('scenario 8: two projects, lanes, steering, quiet hours, pause, notificatio
   test.setTimeout(80 * 60_000);
   mkdirSync(shots, { recursive: true });
   const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
     env: env as Record<string, string>,
@@ -93,7 +93,7 @@ test('scenario 8: two projects, lanes, steering, quiet hours, pause, notificatio
       ([f, a]) => {
         const [group, method] = (f as string).split('.') as [string, string];
         const g = (
-          window.conclave as unknown as Record<string, Record<string, (...x: unknown[]) => unknown>>
+          window.plenum as unknown as Record<string, Record<string, (...x: unknown[]) => unknown>>
         )[group]!;
         return g[method]!(...(a as unknown[]));
       },
@@ -291,7 +291,7 @@ test('scenario 8: two projects, lanes, steering, quiet hours, pause, notificatio
 
     // ── In the background until both finish; a notification should appear ─
     console.log(
-      '\n>>> The window goes to the background now. Watch for a Conclave notification. <<<\n',
+      '\n>>> The window goes to the background now. Watch for a Plenum notification. <<<\n',
     );
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.minimize());
     const until = Date.now() + 45 * 60_000;

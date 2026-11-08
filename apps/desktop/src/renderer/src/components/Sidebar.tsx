@@ -10,7 +10,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import type { Thread } from '@conclave/shared';
+import type { Thread } from '@plenum/shared';
 import { pendingApprovalCount, useProjects } from '@/lib/projects';
 import { useApp } from '@/lib/store';
 import { api } from '@/lib/api';
@@ -22,7 +22,7 @@ export function Sidebar() {
   const screen = useApp((s) => s.screen);
   const providers = useApp((s) => s.providers);
   const open = useApp((s) => s.open);
-  const platform = window.conclave?.platform;
+  const platform = window.plenum?.platform;
 
   const summaries = useProjects((s) => s.summaries);
   const approvals = useProjects((s) => s.approvals);
@@ -37,7 +37,7 @@ export function Sidebar() {
         className={`drag flex h-10 shrink-0 items-center gap-2 px-4 ${platform === 'darwin' ? 'pl-20' : ''}`}
       >
         <Logo />
-        <span className="text-[13.5px] font-semibold tracking-tight">Conclave</span>
+        <span className="text-[13.5px] font-semibold tracking-tight">Plenum</span>
       </div>
 
       <div className="flex flex-col gap-0.5 px-2.5 pt-2">

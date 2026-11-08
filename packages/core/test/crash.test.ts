@@ -28,7 +28,7 @@ function crashAt(p: CrashProject, point: CrashPoint, mode: 'normal' | 'conflict'
     ['--conditions=development', '--import', 'tsx', child, JSON.stringify(p), mode],
     {
       cwd: root,
-      env: { ...process.env, CONCLAVE_CRASH_AT: point },
+      env: { ...process.env, PLENUM_CRASH_AT: point },
       encoding: 'utf8',
       timeout: 90_000,
     },
@@ -48,7 +48,7 @@ function checkInvariants(p: CrashProject) {
       TITLES.map((t) => `${t}: merged`),
     );
     // Each task merged exactly once: never rebuilt on top of itself.
-    const merges = git(p.repo, 'log', '--merges', '--format=%s', 'conclave/integration')
+    const merges = git(p.repo, 'log', '--merges', '--format=%s', 'plenum/integration')
       .split('\n')
       .filter(Boolean);
     for (const title of TITLES)
@@ -59,10 +59,10 @@ function checkInvariants(p: CrashProject) {
     // The integration folder is clean and at its branch, with no merge in progress.
     const tree = join(p.home, 'projects', p.projectId, 'integration');
     expect(git(tree, 'status', '--porcelain')).toBe('');
-    expect(git(tree, 'rev-parse', 'HEAD')).toBe(git(p.repo, 'rev-parse', 'conclave/integration'));
+    expect(git(tree, 'rev-parse', 'HEAD')).toBe(git(p.repo, 'rev-parse', 'plenum/integration'));
     expect(existsSync(join(p.repo, '.git', 'worktrees', 'integration', 'MERGE_HEAD'))).toBe(false);
     // Nothing left over: no task branches, no task worktrees.
-    expect(git(p.repo, 'branch', '--list', 'conclave/task/*')).toBe('');
+    expect(git(p.repo, 'branch', '--list', 'plenum/task/*')).toBe('');
     const trees = git(p.repo, 'worktree', 'list', '--porcelain')
       .split('\n')
       .filter((l) => l.startsWith('worktree '));
@@ -85,7 +85,7 @@ const POINTS: [CrashPoint, 'normal' | 'conflict'][] = [
 describe('Crash at every step (v1.0)', () => {
   for (const [point, mode] of POINTS) {
     it(`resumes cleanly after a crash ${point}`, async () => {
-      const dir = mkdtempSync(join(tmpdir(), 'conclave-crash-'));
+      const dir = mkdtempSync(join(tmpdir(), 'plenum-crash-'));
       cleanup.push(dir);
       const p = await setUp(dir, mode === 'conflict');
       crashAt(p, point, mode);

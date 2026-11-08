@@ -14,7 +14,7 @@ import {
   taskProgress,
   type Project,
   ReviewEffort,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import {
   activeLimits,
   builderPermissions,
@@ -47,7 +47,7 @@ import {
   routingInsights,
   detectPreview,
   previewAllowed,
-} from '@conclave/core';
+} from '@plenum/core';
 import { demoFailure } from './demo.js';
 
 import {
@@ -78,8 +78,8 @@ function waitingOn(pending: { kind: string }[]): ProjectSummary['waiting'] {
   };
 }
 
-/** The demo can make calls fail on purpose (CONCLAVE_DEMO_FAIL), for the tests. */
-const demo = process.env.CONCLAVE_DEMO === '1';
+/** The demo can make calls fail on purpose (PLENUM_DEMO_FAIL), for the tests. */
+const demo = process.env.PLENUM_DEMO === '1';
 
 export function registerProjectIpc(
   engine: Engine,
@@ -200,7 +200,7 @@ export function registerProjectIpc(
     return { after, before };
   });
 
-  // Screenshots are read only from Conclave's own projects folder, and only PNGs.
+  // Screenshots are read only from Plenum's own projects folder, and only PNGs.
   handle(IPC.projectsShot, (path: unknown): string => {
     const base = realpathSync.native(join(engine.home, 'projects'));
     const file = typeof path === 'string' ? resolve(path) : '';
@@ -213,7 +213,7 @@ export function registerProjectIpc(
 
   handle(IPC.projectsPickRepo, async (): Promise<string | null> => {
     // End-to-end tests can't click a native dialog.
-    if (process.env.CONCLAVE_E2E_REPO) return process.env.CONCLAVE_E2E_REPO;
+    if (process.env.PLENUM_E2E_REPO) return process.env.PLENUM_E2E_REPO;
     const win = getWindow();
     const options = {
       title: 'Choose a project folder',
@@ -279,7 +279,7 @@ export function registerProjectIpc(
     if (total > 3000) {
       const breakdown = steps.map(([l, ms]) => `${l} ${(ms / 1000).toFixed(1)}s`).join(', ');
       console.warn(
-        `[conclave] creating ${project.name} took ${(total / 1000).toFixed(1)}s: ${breakdown}`,
+        `[plenum] creating ${project.name} took ${(total / 1000).toFixed(1)}s: ${breakdown}`,
       );
     }
     const issue = input.github?.issue;
@@ -417,7 +417,7 @@ export function registerProjectIpc(
     manager.preview(mustGet(projectId).id, { ...(optId(taskId) && { taskId: optId(taskId)! }) }),
   );
   handle(IPC.projectsAllowPreview, (projectId: string, command: unknown, taskId?: unknown) =>
-    // Only what Conclave detects in that folder right now can be allowed (the manager checks),
+    // Only what Plenum detects in that folder right now can be allowed (the manager checks),
     // never a command sent from the page.
     manager.allowPreviewCommand(mustGet(projectId).id, text(command, 200), {
       ...(optId(taskId) && { taskId: optId(taskId)! }),
@@ -710,7 +710,7 @@ export function registerProjectIpc(
 
 /** Where new and cloned projects go; tests point it at a temp folder. */
 function projectsFolder(): string {
-  return process.env.CONCLAVE_PROJECTS_DIR ?? defaultProjectsFolder();
+  return process.env.PLENUM_PROJECTS_DIR ?? defaultProjectsFolder();
 }
 
 /** Level 5 always comes with an expiry: 24 hours unless set sooner. */

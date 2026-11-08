@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import type { AgentEvent, Message, MessageOutcome, Seat, Thread } from '@conclave/shared';
+import type { AgentEvent, Message, MessageOutcome, Seat, Thread } from '@plenum/shared';
 import { newId } from '../store/store.js';
 import { collect, type RunResult } from '../collect.js';
 import { recordUsage, titleFrom, type EngineContext } from '../chat/service.js';

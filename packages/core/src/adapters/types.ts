@@ -1,4 +1,4 @@
-import type { AgentEvent, ModelList, ProviderId, ProviderStatus, Role } from '@conclave/shared';
+import type { AgentEvent, ModelList, ProviderId, ProviderStatus, Role } from '@plenum/shared';
 import type { RunPermissions } from './permissions.js';
 
 export interface RunRequest {
@@ -53,7 +53,7 @@ export interface LoginCommand {
 }
 
 /**
- * One AI tool behind a fixed boundary. Conclave never handles credentials:
+ * One AI tool behind a fixed boundary. Plenum never handles credentials:
  * each adapter drives the official CLI the user has installed and signed in to.
  */
 export interface Adapter {
@@ -74,5 +74,5 @@ export interface Adapter {
   limits?(): Promise<{ window: string; utilization: number; resetsAt?: number }[]>;
 }
 
-// Model lists live in @conclave/shared (models.ts), where the picker groups them too.
-export type { ModelList, ModelOption } from '@conclave/shared';
+// Model lists live in @plenum/shared (models.ts), where the picker groups them too.
+export type { ModelList, ModelOption } from '@plenum/shared';

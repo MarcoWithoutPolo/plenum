@@ -16,8 +16,8 @@ import {
   TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
-import type { RetryOptions } from '@conclave/core';
-import type { FailureKind, Project, Seat, Task } from '@conclave/shared';
+import type { RetryOptions } from '@plenum/core';
+import type { FailureKind, Project, Seat, Task } from '@plenum/shared';
 import { Dialog } from './Dialog';
 import { SeatPicker, modelLabel } from './SeatPicker';
 import { strongerModel } from '@/lib/models';

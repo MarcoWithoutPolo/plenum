@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { ProviderId, Role, Seat } from '@conclave/shared';
+import type { ProviderId, Role, Seat } from '@plenum/shared';
 import type { RunResult } from '../collect.js';
 
 export type RunSource = 'chat' | 'council' | 'project';
@@ -45,7 +45,7 @@ export interface DailyActivity {
 
 type Row = Record<string, unknown>;
 
-/** Every agent run Conclave starts, for the Usage screen. Token counts only; no prompts or replies. */
+/** Every agent run Plenum starts, for the Usage screen. Token counts only; no prompts or replies. */
 export class UsageStore {
   constructor(private readonly db: DatabaseSync) {}
 

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Project, Seat } from '@conclave/shared';
+import type { Project, Seat } from '@plenum/shared';
 import { collect } from '../collect.js';
 import { recordUsage, type EngineContext } from '../chat/service.js';
 import { seatLabel } from '../chat/transcript.js';

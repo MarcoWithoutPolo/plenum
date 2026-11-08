@@ -1,4 +1,4 @@
-import type { ProviderId, Routing, Seat } from '@conclave/shared';
+import type { ProviderId, Routing, Seat } from '@plenum/shared';
 import { seatLabel } from '../chat/transcript.js';
 
 /** How a provider has done in one role lately, on this machine. */
@@ -7,7 +7,7 @@ export interface SeatStats {
   /** Share of runs that finished without an error (usage limits not counted). */
   okRate: number;
   medianMs: number;
-  /** Still leaning on Conclave's benchmark defaults: too few runs here yet. */
+  /** Still leaning on Plenum's benchmark defaults: too few runs here yet. */
   prior?: boolean;
 }
 
@@ -24,7 +24,7 @@ export const RANK = {
 } as const;
 
 /**
- * Starting points measured in Conclave's benchmark and real projects (bench/RESULTS.md, "Team
+ * Starting points measured in Plenum's benchmark and real projects (bench/RESULTS.md, "Team
  * finder"), so a new install doesn't start blind. Each counts as RANK.minRuns runs and fades out
  * as real runs come in. Only reviews: they sit on every task's critical path. A provider with no
  * entry starts unknown.
@@ -125,7 +125,7 @@ export function rankSeats(
       fastest.seat.provider !== p &&
       s.medianMs >= RANK.slow * fastest.stats!.medianMs
     ) {
-      const where = s.prior || fastest.stats!.prior ? " in Conclave's benchmarks" : ' here';
+      const where = s.prior || fastest.stats!.prior ? " in Plenum's benchmarks" : ' here';
       reasons.set(
         p,
         `${name} reviews take about ${time(s.medianMs)} (${seatLabel({ provider: fastest.seat.provider })} about ${time(fastest.stats!.medianMs)})${where}, so faster reviewers go first`,

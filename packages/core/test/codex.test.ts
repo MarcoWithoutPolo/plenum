@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentEvent } from '@conclave/shared';
+import { AgentEvent } from '@plenum/shared';
 import {
   CodexAdapter,
   CodexParser,

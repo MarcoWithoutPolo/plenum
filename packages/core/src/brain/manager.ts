@@ -8,7 +8,7 @@ import type {
   ProviderId,
   SteeringMessage,
   Task,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import type { EngineContext } from '../chat/service.js';
 import {
   Workspace,
@@ -27,7 +27,7 @@ import {
 } from '../preview/preview.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import type { Governor } from '../governor/governor.js';
-import { IN_FLIGHT, counted } from '@conclave/shared';
+import { IN_FLIGHT, counted } from '@plenum/shared';
 import { seatStats, withPriors } from '../governor/rank.js';
 import { teamCheck, type StartCheck } from '../governor/startcheck.js';
 import { seatLabel } from '../chat/transcript.js';
@@ -281,13 +281,13 @@ export class BrainManager {
       this.ctx.store.projects.setStatus(
         p.id,
         'paused',
-        'Conclave closed while this was running. Resume to continue.',
+        'Plenum closed while this was running. Resume to continue.',
       );
       if (interrupted.length) {
         this.ctx.store.projects.log({
           projectId: p.id,
           kind: 'stop',
-          message: `Conclave closed mid-step; ${counted(interrupted.length, 'interrupted task')} back in the queue`,
+          message: `Plenum closed mid-step; ${counted(interrupted.length, 'interrupted task')} back in the queue`,
         });
       }
     }
@@ -312,7 +312,7 @@ export class BrainManager {
   start(projectId: string, opts: { at?: number } = {}): void {
     if (this.running.has(projectId)) return;
     if (isProjectRunning(this.home, projectId)) {
-      throw new Error('This project is already running in another Conclave window or terminal.');
+      throw new Error('This project is already running in another Plenum window or terminal.');
     }
     const controller = new AbortController();
     const brain = new Brain(this.ctx, projectId, {
@@ -320,8 +320,8 @@ export class BrainManager {
       governor: this.governor,
       ...(this.opts.snapshotter && { snapshotter: this.opts.snapshotter }),
       // Live scenario 11 forces the backup reviewer with a short review budget.
-      ...(Number(process.env.CONCLAVE_REVIEW_BUDGET_MS) > 0 && {
-        reviewBudgetMs: () => Number(process.env.CONCLAVE_REVIEW_BUDGET_MS),
+      ...(Number(process.env.PLENUM_REVIEW_BUDGET_MS) > 0 && {
+        reviewBudgetMs: () => Number(process.env.PLENUM_REVIEW_BUDGET_MS),
       }),
       onEvent: (event) => {
         for (const l of this.listeners) l(event);

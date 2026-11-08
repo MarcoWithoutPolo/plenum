@@ -6,15 +6,15 @@ import { _electron as electron, expect, test } from '@playwright/test';
 
 // Private test, scenario 2: Codex is at its workspace spend cap. Its work must move to the next
 // AI without using attempts, the project and Accounts must say Codex is out, and "Remove Codex
-// from the team" must stop further tries. Real accounts and data: CONCLAVE_SCENARIO=2.
-test.skip(process.env.CONCLAVE_SCENARIO !== '2', 'set CONCLAVE_SCENARIO=2 to run');
+// from the team" must stop further tries. Real accounts and data: PLENUM_SCENARIO=2.
+test.skip(process.env.PLENUM_SCENARIO !== '2', 'set PLENUM_SCENARIO=2 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-2');
 const sqlite = process.getBuiltinModule('node:sqlite');
 
 function read<T>(fn: (db: InstanceType<typeof sqlite.DatabaseSync>) => T): T {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -28,7 +28,7 @@ test('scenario 2: Codex at its cap hands off, says so, and can leave the team', 
   test.setTimeout(45 * 60_000);
   mkdirSync(shots, { recursive: true });
   const name = `limits-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}`;
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
     env: env as Record<string, string>,

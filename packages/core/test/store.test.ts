@@ -84,7 +84,7 @@ describe('Store', () => {
   });
 
   it('persists to disk and reopens at the same schema version', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-'));
     dirs.push(dir);
     const path = join(dir, 'c.db');
     const first = new Store(path);
@@ -101,9 +101,9 @@ describe('Store', () => {
   });
 
   it('links earlier failed attempts to their newer twins when upgrading to schema 6', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-db-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-db-'));
     dirs.push(dir);
-    const path = join(dir, 'conclave.db');
+    const path = join(dir, 'plenum.db');
     const store = new Store(path);
     const p = store.projects.create({
       name: 'Calc',

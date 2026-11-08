@@ -36,9 +36,9 @@ function opener(path: string): Promise<{ code: number | null; err: string }> {
 
 describe('Migrations with several processes (E11)', () => {
   it('four processes opening a new database at once all succeed, each step once', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-migrate-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-migrate-'));
     cleanup.push(dir);
-    const path = join(dir, 'conclave.db');
+    const path = join(dir, 'plenum.db');
     const results = await Promise.all([1, 2, 3, 4].map(() => opener(path)));
     for (const r of results)
       expect(

@@ -10,8 +10,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { ADAPTER_FACTORIES, defaultExec, recordingExec } from '@conclave/core';
-import type { Role } from '@conclave/shared';
+import { ADAPTER_FACTORIES, defaultExec, recordingExec } from '@plenum/core';
+import type { Role } from '@plenum/shared';
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -32,7 +32,7 @@ if (!make || !name || !/^[\w-]+$/.test(name)) {
   process.exit(2);
 }
 
-const cwd = mkdtempSync(join(tmpdir(), 'conclave-record-'));
+const cwd = mkdtempSync(join(tmpdir(), 'plenum-record-'));
 writeFileSync(join(cwd, 'README.md'), '# Sample\n\nA scratch folder for a recorded run.\n');
 const file = join(process.cwd(), 'test', 'fixtures', provider!, `${name}.jsonl`);
 const adapter = make({ exec: recordingExec(defaultExec, file, cwd) });

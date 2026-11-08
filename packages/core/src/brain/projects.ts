@@ -7,8 +7,8 @@ import type {
   RetryStrategy,
   Routing,
   Seat,
-} from '@conclave/shared';
-import { preferred } from '@conclave/shared';
+} from '@plenum/shared';
+import { preferred } from '@plenum/shared';
 import type { Store } from '../store/store.js';
 import { currentBranch, isRepo, repoRoot } from '../workspace/git.js';
 
@@ -66,7 +66,7 @@ export async function createProject(
   const routing = { ...defaultRouting(ready), ...input.routing };
   for (const role of ['planner', 'builder', 'reviewer'] as const) {
     if (routing[role].length === 0)
-      throw new Error(`No signed-in provider can be the ${role}. Run: conclave doctor`);
+      throw new Error(`No signed-in provider can be the ${role}. Run: plenum doctor`);
   }
   return store.projects.create({
     name: input.name?.trim() || basename(root),

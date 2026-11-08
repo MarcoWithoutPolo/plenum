@@ -8,17 +8,17 @@ import { _electron as electron, expect, test, type Page } from '@playwright/test
 // Private test, scenario 6: GitHub end to end on a PRIVATE scratch repo, with your OK.
 // Publish a seed project (approved in the app) → open an issue → clone it in the wizard and
 // start from the issue → finish with a pull request → follow CI (and Fix it if a check fails).
-// Merging on GitHub is left to you. CONCLAVE_SCENARIO=6 and CONCLAVE_SCRATCH_REPO=<name>.
-test.skip(process.env.CONCLAVE_SCENARIO !== '6', 'set CONCLAVE_SCENARIO=6 to run');
+// Merging on GitHub is left to you. PLENUM_SCENARIO=6 and PLENUM_SCRATCH_REPO=<name>.
+test.skip(process.env.PLENUM_SCENARIO !== '6', 'set PLENUM_SCENARIO=6 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-6');
-const repoName = process.env.CONCLAVE_SCRATCH_REPO ?? 'conclave-scratch';
+const repoName = process.env.PLENUM_SCRATCH_REPO ?? 'plenum-scratch';
 const sqlite = process.getBuiltinModule('node:sqlite');
 const gh = (...a: string[]) => execFileSync('gh', a, { encoding: 'utf8' }).trim();
 
 function project(name: string) {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -111,7 +111,7 @@ test('scenario 6: publish, issue, clone, pull request, CI', async () => {
   const full = `${login}/${repoName}`;
 
   // A small seed project with CI.
-  const seed = join(mkdtempSync(join(tmpdir(), 'conclave-seed-')), repoName);
+  const seed = join(mkdtempSync(join(tmpdir(), 'plenum-seed-')), repoName);
   mkdirSync(join(seed, 'test'), { recursive: true });
   mkdirSync(join(seed, '.github', 'workflows'), { recursive: true });
   writeFileSync(
@@ -132,19 +132,17 @@ test('scenario 6: publish, issue, clone, pull request, CI', async () => {
   );
   writeFileSync(join(seed, '.gitignore'), 'node_modules/\n');
   const git = (...a: string[]) =>
-    execFileSync(
-      'git',
-      ['-c', 'user.name=Conclave Test', '-c', 'user.email=test@localhost', ...a],
-      { cwd: seed },
-    );
+    execFileSync('git', ['-c', 'user.name=Plenum Test', '-c', 'user.email=test@localhost', ...a], {
+      cwd: seed,
+    });
   git('init', '-q', '-b', 'main');
   git('add', '-A');
   git('commit', '-q', '-m', 'Seed with CI');
 
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
-    env: { ...env, CONCLAVE_E2E_REPO: seed } as Record<string, string>,
+    env: { ...env, PLENUM_E2E_REPO: seed } as Record<string, string>,
   });
   let n = 0;
   const page = await app.firstWindow();

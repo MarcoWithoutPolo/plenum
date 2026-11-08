@@ -294,11 +294,16 @@ function addColumn(db: DatabaseSync, table: string, column: string, type: string
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
 export function defaultHome(): string {
-  return process.env.CONCLAVE_HOME ?? join(homedir(), '.conclave');
+  if (process.env.PLENUM_HOME) return process.env.PLENUM_HOME;
+  const home = join(homedir(), '.plenum');
+  // Before 1.0 the app was called Conclave and kept its data in ~/.conclave: keep using that
+  // folder where it exists, so nothing has to move.
+  const before = join(homedir(), '.conclave');
+  return !existsSync(home) && existsSync(before) ? before : home;
 }
 
-/** Open (and migrate) the Conclave database. Pass ':memory:' for tests. */
-export function openDatabase(path = join(defaultHome(), 'conclave.db')): DatabaseSync {
+/** Open (and migrate) the Plenum database. Pass ':memory:' for tests. */
+export function openDatabase(path = join(defaultHome(), 'plenum.db')): DatabaseSync {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new (sqlite().DatabaseSync)(path);
   // The wait first: switching to WAL needs a moment's lock another process may hold (E11).
@@ -312,7 +317,7 @@ export function openDatabase(path = join(defaultHome(), 'conclave.db')): Databas
 const KEEP_BACKUPS = 3;
 
 /**
- * Before an upgrade changes the database, copy it to `conclave.db.bak-<version>` (v1.0 C8), and
+ * Before an upgrade changes the database, copy it to `plenum.db.bak-<version>` (v1.0 C8), and
  * keep the last three. VACUUM INTO writes a consistent copy even while the database is open.
  */
 function backupBeforeMigrating(db: DatabaseSync, path: string): void {

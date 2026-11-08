@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { ProjectDecision, ProviderId } from '@conclave/shared';
+import type { ProjectDecision, ProviderId } from '@plenum/shared';
 import { newId } from './ids.js';
 
 type Row = Record<string, unknown>;

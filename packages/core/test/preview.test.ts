@@ -27,7 +27,7 @@ afterEach(async () => {
 });
 
 function folder(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), 'conclave-preview-'));
+  const dir = mkdtempSync(join(tmpdir(), 'plenum-preview-'));
   dirs.push(dir);
   for (const [path, body] of Object.entries(files)) {
     mkdirSync(join(dir, path, '..'), { recursive: true });

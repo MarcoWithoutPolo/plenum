@@ -7,8 +7,8 @@ import type {
   RetryStrategy,
   Routing,
   Seat,
-} from '@conclave/shared';
-import { effortLabel, preferred } from '@conclave/shared';
+} from '@plenum/shared';
+import { effortLabel, preferred } from '@plenum/shared';
 import type {
   PermissionGaps,
   ProviderInfo,
@@ -337,7 +337,7 @@ export const LEVELS: { level: PermissionLevel; label: string; text: string }[] =
   {
     level: 2,
     label: '2',
-    text: 'Edit files inside the task’s worktree, offline; Conclave runs your tests. Codex can still run commands, but only inside its sandbox.',
+    text: 'Edit files inside the task’s worktree, offline; Plenum runs your tests. Codex can still run commands, but only inside its sandbox.',
   },
   {
     level: 3,
@@ -657,7 +657,7 @@ export function TestCommandField({
       </div>
       <p className="mt-1.5 text-[12px] text-faint">
         {cmd
-          ? 'The command that checks the project works. Conclave runs it after every change; a change merges only if it passes.'
+          ? 'The command that checks the project works. Plenum runs it after every change; a change merges only if it passes.'
           : "No tests yet? The first task writes some and sets this up. You'll see it before it's used."}
       </p>
       {result &&

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { killTree, removeDir } from '../process.js';
 import { delimiter, join } from 'node:path';
-import type { ShotStep } from '@conclave/shared';
+import type { ShotStep } from '@plenum/shared';
 import {
   captureWithCdp,
   type CdpSession,
@@ -12,9 +12,9 @@ import {
   type View,
 } from './snapshot.js';
 
-/** A Chrome, Edge or Chromium on this computer, or null. CONCLAVE_CHROME picks one explicitly. */
+/** A Chrome, Edge or Chromium on this computer, or null. PLENUM_CHROME picks one explicitly. */
 export function findChrome(env: NodeJS.ProcessEnv = process.env): string | null {
-  if (env.CONCLAVE_CHROME && existsSync(env.CONCLAVE_CHROME)) return env.CONCLAVE_CHROME;
+  if (env.PLENUM_CHROME && existsSync(env.PLENUM_CHROME)) return env.PLENUM_CHROME;
   const candidates: string[] = [];
   if (process.platform === 'win32') {
     for (const base of [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA]) {
@@ -109,7 +109,7 @@ export class ChromeSnapshotter implements Snapshotter {
 
   private start(): Promise<{ session: CdpSession; close: () => void }> {
     this.page ??= new Promise((ok, fail) => {
-      this.profile = mkdtempSync(join(tmpdir(), 'conclave-chrome-'));
+      this.profile = mkdtempSync(join(tmpdir(), 'plenum-chrome-'));
       const child = spawn(
         this.executable,
         [

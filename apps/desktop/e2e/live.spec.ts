@@ -4,18 +4,18 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
 
-// The real app against the real, signed-in Claude CLI. Spends a little usage: CONCLAVE_LIVE=1 only.
-test.skip(process.env.CONCLAVE_LIVE !== '1', 'set CONCLAVE_LIVE=1 to run');
+// The real app against the real, signed-in Claude CLI. Spends a little usage: PLENUM_LIVE=1 only.
+test.skip(process.env.PLENUM_LIVE !== '1', 'set PLENUM_LIVE=1 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 
 test('chats with the real Claude CLI', async () => {
   test.setTimeout(180_000);
-  const home = mkdtempSync(join(tmpdir(), 'conclave-live-'));
-  const { CONCLAVE_DEMO: _demo, ...env } = process.env;
+  const home = mkdtempSync(join(tmpdir(), 'plenum-live-'));
+  const { PLENUM_DEMO: _demo, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
-    env: { ...env, CONCLAVE_HOME: home } as Record<string, string>,
+    env: { ...env, PLENUM_HOME: home } as Record<string, string>,
   });
   try {
     const page = await app.firstWindow();

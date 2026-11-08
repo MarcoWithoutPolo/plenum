@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
-import type { ProviderStatus } from '@conclave/shared';
-import { GitHub, collect, createAdapters, type Adapter } from '@conclave/core';
+import type { ProviderStatus } from '@plenum/shared';
+import { GitHub, collect, createAdapters, type Adapter } from '@plenum/core';
 
 /** Cheapest model per provider for the live check. */
 const LIVE_MODEL: Partial<Record<string, string>> = {
@@ -34,7 +34,7 @@ export async function doctor(opts: { live?: boolean; json?: boolean } = {}): Pro
       ),
     );
   } else {
-    console.log('Conclave doctor\n');
+    console.log('Plenum doctor\n');
     statuses.forEach((s, i) => console.log(formatRow(adapters[i]!, s, live[i])));
     const ready = statuses.filter((s) => s.auth === 'signed_in').length;
     console.log(`\n${ready} of ${statuses.length} providers ready.`);

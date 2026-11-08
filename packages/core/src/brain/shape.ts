@@ -1,4 +1,4 @@
-import type { Task, TaskEstimate } from '@conclave/shared';
+import type { Task, TaskEstimate } from '@plenum/shared';
 import type { PlannedTask } from './json.js';
 
 /**

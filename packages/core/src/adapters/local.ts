@@ -8,7 +8,7 @@ import {
   type ModelOption,
   type ProviderStatus,
   type Role,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import type { ProcessChunk, ProcessOptions } from '../process.js';
 import { runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
@@ -34,11 +34,11 @@ import { QUIET_MS } from './types.js';
 
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 
-/** Context Conclave asks for, per job: enough for the CLI's instructions plus the work. */
+/** Context Plenum asks for, per job: enough for the CLI's instructions plus the work. */
 const CONTEXT = { chat: 8192, review: 16384, build: 32768 } as const;
 
-/** Aliases Conclave makes so OpenCode gets a usable context; hidden from the model list. */
-const ALIAS_PREFIX = 'conclave/';
+/** Aliases Plenum makes so OpenCode gets a usable context; hidden from the model list. */
+const ALIAS_PREFIX = 'plenum/';
 
 export interface Hardware {
   gpu?: string;
@@ -127,7 +127,7 @@ export interface LocalAdapterOptions {
 /**
  * Local models through Ollama, one provider with two engines. Answers (chat, councils, plans,
  * reviews) go to Ollama's own API, which takes a context size per request and reports token
- * counts. Building goes through OpenCode with a config Conclave writes for each run: the chosen
+ * counts. Building goes through OpenCode with a config Plenum writes for each run: the chosen
  * model, edits allowed, shell and web denied. Without OpenCode, local models still answer.
  */
 export class LocalAdapter implements Adapter {
@@ -292,10 +292,10 @@ export class LocalAdapter implements Adapter {
     assertSafeModel(request.model);
     // "Default" is the biggest downloaded model that fits this machine.
     const model = request.model ?? (await this.defaultModel());
-    // CONCLAVE_LOCAL_REVIEWS=opencode sends reviews through OpenCode, read-only: for the
+    // PLENUM_LOCAL_REVIEWS=opencode sends reviews through OpenCode, read-only: for the
     // benchmark that compares the two engines (v0.9 C11). Ollama is faster for answers.
     const engine =
-      request.role === 'reviewer' && process.env.CONCLAVE_LOCAL_REVIEWS === 'opencode'
+      request.role === 'reviewer' && process.env.PLENUM_LOCAL_REVIEWS === 'opencode'
         ? 'opencode'
         : localEngine(request.role, request.readOnly, request.permissions?.level);
     const stream = engine === 'opencode' ? this.build(request, model) : this.answer(request, model);
@@ -356,7 +356,7 @@ export class LocalAdapter implements Adapter {
   /** Builds with OpenCode on the chosen model, given a context it can work in. */
   private async *build(request: RunRequest, model: string): AsyncGenerator<AgentEvent> {
     const alias = await this.ensureContext(model, CONTEXT.build);
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-opencode-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-opencode-'));
     try {
       const config = join(dir, 'opencode.json');
       writeFileSync(
@@ -378,7 +378,7 @@ export class LocalAdapter implements Adapter {
           // An open stdin makes `opencode run` wait for more input.
           stdin: '',
           // OpenCode takes its folder from PWD when it's set, not from the process: an inherited
-          // PWD once pointed it at the folder Conclave was started from. Both name the worktree.
+          // PWD once pointed it at the folder Plenum was started from. Both name the worktree.
           env: { ...process.env, PWD: request.cwd, OPENCODE_CONFIG: config },
           ...(request.signal && { signal: request.signal }),
           ...(request.timeoutMs && { timeoutMs: request.timeoutMs }),
@@ -422,7 +422,7 @@ export class LocalAdapter implements Adapter {
 
   /**
    * A model whose default context is too small for OpenCode's instructions gets a same-weights
-   * alias with a bigger one (`conclave/<model>-32k`): Ollama's OpenAI-style endpoint, which
+   * alias with a bigger one (`plenum/<model>-32k`): Ollama's OpenAI-style endpoint, which
    * OpenCode uses, can't set the context per request.
    */
   private async ensureContext(model: string, want: number): Promise<string> {

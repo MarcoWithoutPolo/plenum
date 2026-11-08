@@ -91,7 +91,7 @@ describe('streamProcess', () => {
     async () => {
       const controller = new AbortController();
       // Like an npm-installed CLI: a .cmd shim (cmd.exe) that runs node, which prints its pid.
-      const dir = mkdtempSync(join(tmpdir(), 'conclave-shim-'));
+      const dir = mkdtempSync(join(tmpdir(), 'plenum-shim-'));
       writeFileSync(join(dir, 'cli.js'), 'console.log(process.pid);setTimeout(()=>{},60000)');
       writeFileSync(join(dir, 'cli.cmd'), `@"${node}" "%~dp0cli.js" %*\r\n`);
       let grandchild = 0;
@@ -123,7 +123,7 @@ describe('streamProcess', () => {
 
 describe('runCommand', () => {
   it('detects a missing executable', async () => {
-    const result = await runCommand('conclave-definitely-not-installed', ['--version']);
+    const result = await runCommand('plenum-definitely-not-installed', ['--version']);
     expect(result.code).not.toBe(0);
     expect(isNotFound(result)).toBe(true);
   });

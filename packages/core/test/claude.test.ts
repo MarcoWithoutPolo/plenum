@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { AgentEvent } from '@conclave/shared';
+import { AgentEvent } from '@plenum/shared';
 import { ClaudeAdapter, claudeArgs, collect, parseClaudeModels } from '../src/index.js';
 import { fixturePath, replay } from './helpers.js';
 

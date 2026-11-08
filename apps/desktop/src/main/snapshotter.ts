@@ -1,12 +1,12 @@
 import { BrowserWindow } from 'electron';
-import type { ShotStep } from '@conclave/shared';
+import type { ShotStep } from '@plenum/shared';
 import {
   captureWithCdp,
   type CdpSession,
   type Snapshot,
   type Snapshotter,
   type View,
-} from '@conclave/core';
+} from '@plenum/core';
 
 /**
  * Screenshots in Electron's own Chromium: one hidden, off-screen, sandboxed window per shot, in its own
@@ -27,7 +27,7 @@ export class ElectronSnapshotter implements Snapshotter {
       width: view.width,
       height: view.height,
       webPreferences: {
-        partition: 'conclave-shots',
+        partition: 'plenum-shots',
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,

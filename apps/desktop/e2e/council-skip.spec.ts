@@ -4,7 +4,7 @@ import { launch, type Running } from './integrity/kit';
 // v1.0 F4: skip a council member, and Merge now, in the real window (demo, a slow member).
 let run: Running;
 test.beforeAll(async () => {
-  run = await launch('normal', 'light', { CONCLAVE_DEMO_SLOW_COUNCIL: '1' });
+  run = await launch('normal', 'light', { PLENUM_DEMO_SLOW_COUNCIL: '1' });
   await run.page.setViewportSize({ width: 1320, height: 860 });
 });
 test.afterAll(async () => {

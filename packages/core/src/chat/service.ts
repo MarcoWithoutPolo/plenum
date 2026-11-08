@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import type { AgentEvent, Message, ProviderId, Role, Seat, Thread } from '@conclave/shared';
+import type { AgentEvent, Message, ProviderId, Role, Seat, Thread } from '@plenum/shared';
 import type { Adapter } from '../adapters/types.js';
 import { collect, type RunResult } from '../collect.js';
 import type { Store } from '../store/store.js';

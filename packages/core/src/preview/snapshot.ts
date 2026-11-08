@@ -5,7 +5,7 @@
  */
 
 import { inflateSync } from 'node:zlib';
-import type { ShotStep } from '@conclave/shared';
+import type { ShotStep } from '@plenum/shared';
 
 export interface View {
   width: number;
@@ -38,7 +38,7 @@ export interface Snapshot {
 }
 
 export interface Snapshotter {
-  /** `steps`: a sample state to replay after the page loads (conclave.shots.json). */
+  /** `steps`: a sample state to replay after the page loads (plenum.shots.json). */
   capture(url: string, view: View, steps?: ShotStep[]): Promise<Snapshot>;
   close?(): Promise<void>;
 }
@@ -255,12 +255,12 @@ export async function captureWithCdp(
 
 /* ── Sets of shots, compared and checked ─────────────────────────────── */
 
-/** One screenshot in a set, saved as a PNG under Conclave's data folder (never in your repo). */
+/** One screenshot in a set, saved as a PNG under Plenum's data folder (never in your repo). */
 export interface Shot {
   /** e.g. "home-phone-dark", or "home-with-cards-phone-dark" for a sample state. */
   name: string;
   page: string;
-  /** The sample state it shows (conclave.shots.json); none for the page as it loads. */
+  /** The sample state it shows (plenum.shots.json); none for the page as it loads. */
   state?: string;
   /** Why the state couldn't be fully replayed, if it couldn't. */
   stateError?: string;

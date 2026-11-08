@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
-import type { LoginCommand } from '@conclave/core';
+import type { LoginCommand } from '@plenum/core';
 
 /**
  * Open the provider's own sign-in command in a real terminal window. The CLI
- * opens the browser and stores its credentials itself; Conclave never sees them.
+ * opens the browser and stores its credentials itself; Plenum never sees them.
  * Commands come from the adapters (fixed strings), never from user input.
  */
 export function openInTerminal(login: LoginCommand): Promise<{ opened: boolean; error?: string }> {
@@ -46,7 +46,7 @@ export function terminalCommands(line: string, platform = process.platform): Att
     return [
       {
         command: 'cmd.exe',
-        args: ['/d', '/s', '/c', `"start "Conclave sign-in" cmd.exe /k ${line}"`],
+        args: ['/d', '/s', '/c', `"start "Plenum sign-in" cmd.exe /k ${line}"`],
         verbatim: true,
       },
     ];

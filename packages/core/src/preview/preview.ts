@@ -166,7 +166,7 @@ export async function reachableUrl(url: string): Promise<string> {
 }
 
 /**
- * A live preview of one folder. Static previews are served by Conclave itself on 127.0.0.1 and run
+ * A live preview of one folder. Static previews are served by Plenum itself on 127.0.0.1 and run
  * no project code. Command previews run the project's own dev server, which you allowed first.
  */
 export class PreviewServer {

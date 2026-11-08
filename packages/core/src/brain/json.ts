@@ -1,4 +1,4 @@
-import type { TaskEstimate } from '@conclave/shared';
+import type { TaskEstimate } from '@plenum/shared';
 
 /**
  * Pull the JSON object out of a model reply: a ```json fence, a bare object,

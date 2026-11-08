@@ -2,18 +2,18 @@
 
 Same goal, same seed repo, scored by hidden acceptance tests no agent ever sees (`projects/<name>/hidden/`).
 Each contender works alone with no human: the single tools get one "do the whole goal" prompt (plus up to two
-nudges if their own `npm test` is missing or failing), and Conclave runs its brain with decide-and-tell and
+nudges if their own `npm test` is missing or failing), and Plenum runs its brain with decide-and-tell and
 permission level 3.
 
 ```bash
-npx tsx --conditions=development bench/run.ts --projects textkit,calc,inventory --contenders claude,codex,antigravity,conclave --runs 1
+npx tsx --conditions=development bench/run.ts --projects textkit,calc,inventory --contenders claude,codex,antigravity,plenum --runs 1
 ```
 
 `bench/validate.sh` checks the hidden tests themselves: every project passes 7/7 on its reference solution and fails on its seed.
 
 ## Baseline: v0.6 (2026-10-23, one run each)
 
-| Project                                    | Claude alone             | Codex alone               | Antigravity alone               | Conclave v0.6             |
+| Project                                    | Claude alone             | Codex alone               | Antigravity alone               | Plenum v0.6               |
 | ------------------------------------------ | ------------------------ | ------------------------- | ------------------------------- | ------------------------- |
 | textkit (small library + CLI)              | **7/7** · 1.0 min · 197k | **7/7** · 3.2 min · 121k  | **7/7** · 8.8 min · 1.2M        | **7/7** · 10.1 min · 1.4M |
 | calc (parser + formatter + state machine)  | **7/7** · 1.2 min · 341k | **7/7** · 4.9 min · n/a ⚠ | 6/7 · 20.3 min · 3.1M · 1 nudge | **7/7** · 19.7 min · 2.6M |
@@ -22,10 +22,10 @@ npx tsx --conditions=development bench/run.ts --projects textkit,calc,inventory 
 Each cell: hidden tests · wall time · tokens (input + output, cached context included). No contender asked a question or needed a human.
 
 ⚠ Codex hit the workspace spend cap during calc (the work finished, but its usage wasn't reported) and was turned
-away before starting inventory. Conclave's Codex builder seat was turned away the same way on inventory, and the brain
+away before starting inventory. Plenum's Codex builder seat was turned away the same way on inventory, and the brain
 fell back to Claude as designed.
 
-### Who did what inside Conclave
+### Who did what inside Plenum
 
 | Project   | Planner        | Builder                 | Reviewer                 | Tasks    |
 | --------- | -------------- | ----------------------- | ------------------------ | -------- |
@@ -36,14 +36,14 @@ fell back to Claude as designed.
 ## What this says
 
 1. **Quality: there's no gap to win on these projects.** Every contender except Antigravity on calc got 7/7.
-   Conclave never regressed and fixed what Antigravity alone missed, but Claude alone already solves goals of this size
+   Plenum never regressed and fixed what Antigravity alone missed, but Claude alone already solves goals of this size
    in one go.
-2. **Speed and usage: Conclave v0.6 costs about 10× the time and 4–8× the tokens of Claude alone.** That cost goes to
+2. **Speed and usage: Plenum v0.6 costs about 10× the time and 4–8× the tokens of Claude alone.** That cost goes to
    splitting a small goal into 5–7 tasks and paying a full build → test → cross-AI review cycle for each one, in
    series. When Claude builds, the reviewer must be another AI, so slow Antigravity reviews (~1 min each) sit on the
    critical path.
 3. **Limits are real, and failover works.** Codex ran out mid-benchmark. The single-tool Codex run just stopped, while
-   Conclave carried on with Claude without anyone stepping in. That is the clearest win for Conclave today.
+   Plenum carried on with Claude without anyone stepping in. That is the clearest win for Plenum today.
 
 ## Changes to v0.7 because of this
 
@@ -55,7 +55,7 @@ fell back to Claude as designed.
   fewer, cheaper round trips first, then runs them in parallel.
 - **Harder benchmark projects.** Add multi-module goals that run past a single agent's context or attention (a
   service + client + migrations, or a large refactor), where planning and review should pay off. Without them the
-  benchmark can only show Conclave's overhead, not its value.
+  benchmark can only show Plenum's overhead, not its value.
 - **Scoring tweaks.** Record which hidden tests fail, and report cached and fresh input tokens separately.
 
 Re-run after v0.7 with `--runs 3` per cell to smooth out variance.
@@ -65,7 +65,7 @@ Re-run after v0.7 with `--runs 3` per cell to smooth out variance.
 The planner now plans as few tasks as the work allows, and test setup rides along with the first task. Review stays
 required on every change. Codex was still at its spend cap, so Claude built in every run (marked "limited").
 
-| Project   | Conclave v0.6                   | Conclave, right-sized         | Change                         |
+| Project   | Plenum v0.6                     | Plenum, right-sized           | Change                         |
 | --------- | ------------------------------- | ----------------------------- | ------------------------------ |
 | textkit   | 7/7 · 10.1 min · 1.4M · 5 tasks | 7/7 · 4.6 min · 376k · 1 task | 2.2× faster, 3.7× fewer tokens |
 | calc      | 7/7 · 19.7 min · 2.6M · 7 tasks | 7/7 · 6.1 min · 331k · 1 task | 3.2× faster, 7.9× fewer tokens |
@@ -82,22 +82,22 @@ multi-module project, where splitting should pay off.
 ## Ledger: a large multi-module project (2026-10-23, one run each)
 
 Money, a journal, reports, a query language, a file parser and a CLI, scored by 12 hidden tests. Codex was at its spend
-cap the whole time, so Conclave's builds fell back to Claude, and Claude-built work was reviewed by Antigravity.
+cap the whole time, so Plenum's builds fell back to Claude, and Claude-built work was reviewed by Antigravity.
 
-| Contender                                | Hidden tests | Time     | Tokens | Tasks |
-| ---------------------------------------- | ------------ | -------- | ------ | ----- |
-| Claude alone                             | 12/12        | 3.3 min  | 472k   | n/a   |
-| Codex alone                              | not scored ⚠ | n/a      | n/a    | n/a   |
-| Antigravity alone                        | 12/12        | 40.1 min | 2.8M   | n/a   |
-| Conclave, 1 lane (estimates, goal check) | 12/12        | 16.5 min | 2.5M   | 3     |
-| Conclave, 2 lanes                        | 12/12        | 19.9 min | 2.8M   | 4     |
+| Contender                              | Hidden tests | Time     | Tokens | Tasks |
+| -------------------------------------- | ------------ | -------- | ------ | ----- |
+| Claude alone                           | 12/12        | 3.3 min  | 472k   | n/a   |
+| Codex alone                            | not scored ⚠ | n/a      | n/a    | n/a   |
+| Antigravity alone                      | 12/12        | 40.1 min | 2.8M   | n/a   |
+| Plenum, 1 lane (estimates, goal check) | 12/12        | 16.5 min | 2.5M   | 3     |
+| Plenum, 2 lanes                        | 12/12        | 19.9 min | 2.8M   | 4     |
 
 What this says:
 
 1. **Quality holds on the large project too:** 12/12 every time. But Claude alone also gets 12/12, in a fifth of the
    time. On well-specified work of this size, one strong agent is enough.
 2. **Reviews are now the cost.** Antigravity's reviews took several minutes and about 360–470k tokens each (it reads
-   the whole project), over half of Conclave's tokens. The measured ranking that would move a slow reviewer back
+   the whole project), over half of Plenum's tokens. The measured ranking that would move a slow reviewer back
    only kicks in after 5 runs of history; every benchmark run starts with an empty history, so it never kicked in.
 3. **Lanes didn't help here.** With Codex capped, only Claude could build, every review went to Antigravity, and
    Antigravity's solo benchmark ran at the same time. Lanes can't beat a bottleneck shared by every lane. The runner
@@ -111,10 +111,10 @@ Next: re-run with Codex back, with the timeline, and with `--runs 3`; give the r
 
 Everything in v0.7: right-sized plans checked by the brain, the goal check on the last review, AI ranking from
 measured data seeded with benchmark priors, diff-first reviews, verified first tasks, decide-and-tell builds, lanes (2
-by default) and the tested merge queue. Codex alone ran on a second, uncapped account; during Conclave's runs that
-account hit its usage limit too, so Conclave's builds fell back to Claude (marked ⚠).
+by default) and the tested merge queue. Codex alone ran on a second, uncapped account; during Plenum's runs that
+account hit its usage limit too, so Plenum's builds fell back to Claude (marked ⚠).
 
-| Project   | Claude alone           | Codex alone            | Antigravity alone       | Conclave v0.6         | Conclave v0.7                 |
+| Project   | Claude alone           | Codex alone            | Antigravity alone       | Plenum v0.6           | Plenum v0.7                   |
 | --------- | ---------------------- | ---------------------- | ----------------------- | --------------------- | ----------------------------- |
 | textkit   | 7/7 · 1.0 min · 197k   | 7/7 · 3.0 min · 134k   | 7/7 · 8.8 min · 1.2M    | 7/7 · 10.1 min · 1.4M | **7/7 · 3.0 min · 422k**      |
 | calc      | 7/7 · 1.2 min · 341k   | 7/7 · 4.2 min · 178k   | 6/7 · 20.3 min · 3.1M   | 7/7 · 19.7 min · 2.6M | **7/7 · 5.4 min · 435k** ⚠    |
@@ -133,7 +133,7 @@ account hit its usage limit too, so Conclave's builds fell back to Claude (marke
 ### What this says
 
 1. **Quality held everywhere:** 7/7 and 12/12 on every project. Codex alone missed one hidden test on ledger,
-   Antigravity alone one on calc; Conclave missed none.
+   Antigravity alone one on calc; Plenum missed none.
 2. **Small projects are 3–4× faster than v0.6** and now match Codex alone (3.0 vs 3.0 and 2.5 min), with a cross-AI
    review. When Codex builds and Claude reviews, a review takes about 15 seconds.
 3. **Ledger: 15.2 min, lanes working.** Two tasks built at once and their reviews ran side by side; it was 21.3 min
@@ -153,26 +153,26 @@ account hit its usage limit too, so Conclave's builds fell back to Claude (marke
 
 ## v0.7 final (2026-10-24, two runs each)
 
-Conclave and Claude alone: two runs per project, averaged. Codex's account hit its usage limit early in this run,
+Plenum and Claude alone: two runs per project, averaged. Codex's account hit its usage limit early in this run,
 so Codex alone is yesterday's uncapped single run (textkit: today's two runs). Antigravity alone is the average of
-yesterday's and today's runs. During Conclave's runs Codex was mostly at its limit too, so Claude built and
+yesterday's and today's runs. During Plenum's runs Codex was mostly at its limit too, so Claude built and
 Antigravity reviewed much of the time: the slowest pairing.
 
-| Project   | Conclave v0.6         | Conclave v0.7                  | Claude alone    | Codex alone         | Antigravity alone              |
+| Project   | Plenum v0.6           | Plenum v0.7                    | Claude alone    | Codex alone         | Antigravity alone              |
 | --------- | --------------------- | ------------------------------ | --------------- | ------------------- | ------------------------------ |
 | textkit   | 7/7 · 10.1 min · 1.4M | **7/7 ×2 · 2.7 min · 412k**    | 7/7 · 1.1 min   | 7/7 · 2.7 min       | 7/7 · 7.8 min                  |
 | inventory | 7/7 · 12.6 min · 2.1M | **7/7 ×2 · 3.3 min · 383k**    | 7/7 · 1.3 min   | 7/7 · 2.5 min       | 7/7 · 6.7 min                  |
 | calc      | 7/7 · 19.7 min · 2.6M | **7/7 ×2 · 6.3 min · 433k**    | 7/7 · 1.5 min   | 7/7 · 4.2 min       | 6/7 and 7/7 · 16.8 min         |
 | ledger    | n/a                   | **12/12 ×2 · 15.3 min · 2.7M** | 12/12 · 2.8 min | **11/12** · 9.4 min | 12/12 · 36.0 min · up to 19.9M |
 
-- **Quality:** Conclave got every hidden test in all 8 runs. Codex alone missed one on ledger and Antigravity alone one
+- **Quality:** Plenum got every hidden test in all 8 runs. Codex alone missed one on ledger and Antigravity alone one
   on calc. Claude alone was perfect too, and remains the fastest single tool on well-specified work.
 - **Speed:** 3–4× faster than v0.6, with tokens down 3–6×. The two runs agree closely (2.6/2.7, 5.6/6.9, 3.9/2.7,
   15.9/14.6 min).
 - **Against one AI alone:** on par with Codex alone on small projects, 2.5–5× Claude alone. The gap is the second
   AI's review, and most of it is Antigravity reviewing when Codex is out of usage. With Codex building and Claude
   reviewing, a small project took 2.6 minutes.
-- **Limits:** Codex ran out mid-benchmark. Codex alone stopped; Conclave carried on with Claude and lost nothing.
+- **Limits:** Codex ran out mid-benchmark. Codex alone stopped; Plenum carried on with Claude and lost nothing.
 
 ## v0.8 P0: kanban baseline (2026-10-24)
 
@@ -183,12 +183,12 @@ in both themes, 44 × 44 px touch targets, no sideways scrolling at 390 px, no c
 
 | Contender         | Runs | Hidden checks   | Missed                       | Time    |
 | ----------------- | ---- | --------------- | ---------------------------- | ------- |
-| Conclave v0.7     | 2    | 11/12 and 12/12 | text contrast (once)         | 5.5 min |
+| Plenum v0.7       | 2    | 11/12 and 12/12 | text contrast (once)         | 5.5 min |
 | Claude alone      | 2    | 12/12 and 11/12 | text contrast (once)         | 1.7 min |
 | Codex alone       | 1    | 12/12           | none                         | 4.9 min |
 | Antigravity alone | 1    | 10/12           | text contrast, touch targets | 7.7 min |
 
-- **Behavior is solved; looks are where everyone slips.** Text contrast was missed by Conclave, Claude and
+- **Behavior is solved; looks are where everyone slips.** Text contrast was missed by Plenum, Claude and
   Antigravity. No one missed a behavior check.
 - A first version of the goal spelled out the numbers (4.5:1, 44 px, 390 px). Then every contender passed everything,
   so the goal now asks the way a person would.
@@ -207,7 +207,7 @@ in both themes, 44 × 44 px touch targets, no sideways scrolling at 390 px, no c
 >
 > | Contender         | Was             | Now                                           |
 > | ----------------- | --------------- | --------------------------------------------- |
-> | Conclave v0.7     | 11/12 and 12/12 | 12/12 and 12/12                               |
+> | Plenum v0.7       | 11/12 and 12/12 | 12/12 and 12/12                               |
 > | Claude alone      | 12/12 and 11/12 | 12/12 and 12/12                               |
 > | Codex alone       | 12/12           | 12/12                                         |
 > | Antigravity alone | 10/12           | 10/12 (contrast and touch targets, both real) |
@@ -223,7 +223,7 @@ in both themes, 44 × 44 px touch targets, no sideways scrolling at 390 px, no c
 Two runs each, 2026-10-25. Codex was at its usage limit for most of it (⚠ in the raw results), so Claude and
 Antigravity did most of the building and reviewing: the slowest pairing, as in v0.7's final runs.
 
-| Project   | Conclave v0.7    | Conclave v0.8                |
+| Project   | Plenum v0.7      | Plenum v0.8                  |
 | --------- | ---------------- | ---------------------------- |
 | textkit   | 7/7 · 2.7 min    | 7/7 ×2 · 3.1 and 2.9 min     |
 | calc      | 7/7 · 6.3 min    | 7/7 ×2 · 3.2 and 5.5 min     |
@@ -248,9 +248,9 @@ who had usage left, not from v0.8. Ledger was slow because Antigravity reviewed 
 
 - **The free checks caught a real problem once.** In the Antigravity run that took 30.7 minutes, the tests passed on
   the second attempt, but the free checks found 2 problems in its screenshots and sent it back. That attempt scores
-  11/12 on the hidden checks (text contrast below 4.5:1); the fixed one scores 12/12. Without the checks, Conclave
+  11/12 on the hidden checks (text contrast below 4.5:1); the fixed one scores 12/12. Without the checks, Plenum
   would have merged it. This is what v0.8 is for, and it cost no tokens: just a 7-minute third attempt.
-- **Antigravity inside Conclave doesn't repeat its solo mistakes.** Alone it scored 10/12. Inside Conclave, with
+- **Antigravity inside Plenum doesn't repeat its solo mistakes.** Alone it scored 10/12. Inside Plenum, with
   Claude planning and reviewing, all 4 runs got 12/12, screenshots or not. The plan and the review already ask for
   the things it forgot alone; the checks are the safety net for when it still gets them wrong.
 - **Visual review is cheap:** about 3,000–3,700 image tokens per project, 0.1–0.8% of the input tokens. It found
@@ -279,8 +279,8 @@ v0.7 on kanban because, once the hidden check was fixed, almost everyone already
 
 ## v0.9 (2026-10-30, one run each)
 
-The four new AIs alone, each at permission level 2 (edits only: the strongest level Conclave can enforce for all of
-them), and Conclave with two new teams. All on free plans except Claude and Codex.
+The four new AIs alone, each at permission level 2 (edits only: the strongest level Plenum can enforce for all of
+them), and Plenum with two new teams. All on free plans except Claude and Codex.
 
 ```bash
 npx tsx --conditions=development bench/run.ts --projects textkit,calc,inventory,ledger,kanban --contenders cursor,copilot,grok,local
@@ -307,7 +307,7 @@ limit", "You've reached your free Grok Build usage limit"). Copilot doesn't repo
 - **A 20B local model can't do these goals alone.** It edits files, but its code fails most hidden tests, and its own
   tests fail too. It is free and private, not a builder you leave alone.
 
-### Conclave with the new AIs
+### Plenum with the new AIs
 
 | Project   | Five-AI team¹        | Local model first in line² |
 | --------- | -------------------- | -------------------------- |
@@ -327,7 +327,7 @@ limit", "You've reached your free Grok Build usage limit"). Copilot doesn't repo
   line to review and never reached, and both were out of free usage anyway. Codex and Claude built and Claude and
   Antigravity reviewed, as before. Codex then ran out during kanban, and Claude took over without anyone stepping in.
   (Corrected 2026-10-31: this first said only the free plans kept them out.)
-- **A local builder costs time, not quality, once Conclave works around it.** Its attempts fail the tests, and the
+- **A local builder costs time, not quality, once Plenum works around it.** Its attempts fail the tests, and the
   task moves on to the next builder. The first run found two bugs in that hand-off, both fixed in v0.9:
   - a builder turned away by a usage limit counted as "the one who failed", so escalation went back to the local
     model instead of on to Claude (calc and inventory first scored 4/7 and 0/7 this way, and 7/7 each after the fix);
@@ -339,16 +339,16 @@ limit", "You've reached your free Grok Build usage limit"). Copilot doesn't repo
 
 ### Live scenarios 15–21 (in the real app, real CLIs)
 
-| #   | Scenario                                                                   | Result                                                                                                                                                                                                                                                            |
-| --- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 15  | Each new AI chats, then joins a council with Claude, Codex and Antigravity | 12/12: seven AIs answered one council round and the answers merged                                                                                                                                                                                                |
-| 16  | Cursor builds at level 2, a different AI reviews; no shell or network use  | passed (with 18 and 20: 7/7)                                                                                                                                                                                                                                      |
-| 17  | A local model builds through OpenCode; never paused for usage              | 2/2                                                                                                                                                                                                                                                               |
-| 18  | Local model chats and reviews through Ollama; a model too big says so      | passed                                                                                                                                                                                                                                                            |
-| 19  | The picker's model and effort reach each CLI as flags                      | 5/5; a model Cursor's free plan refused is now hidden from the picker                                                                                                                                                                                             |
-| 20  | "Merge here, then push"; a second run behind the remote is refused         | passed, against a bare local repository standing in for GitHub                                                                                                                                                                                                    |
-| 21  | A new AI at its usage limit hands off and says when it's back              | 6/6 live (2026-10-31), with Cursor and Grok out of free usage: both were turned away, Claude built, Antigravity reviewed, no attempt used; the start-up check then said when each is tried again (Conclave's own back-off: neither CLI says when its limit lifts) |
-| 11  | (again) A short review budget asks a backup reviewer and stops the loser   | 4/4, forced with a 20-second budget                                                                                                                                                                                                                               |
+| #   | Scenario                                                                   | Result                                                                                                                                                                                                                                                          |
+| --- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15  | Each new AI chats, then joins a council with Claude, Codex and Antigravity | 12/12: seven AIs answered one council round and the answers merged                                                                                                                                                                                              |
+| 16  | Cursor builds at level 2, a different AI reviews; no shell or network use  | passed (with 18 and 20: 7/7)                                                                                                                                                                                                                                    |
+| 17  | A local model builds through OpenCode; never paused for usage              | 2/2                                                                                                                                                                                                                                                             |
+| 18  | Local model chats and reviews through Ollama; a model too big says so      | passed                                                                                                                                                                                                                                                          |
+| 19  | The picker's model and effort reach each CLI as flags                      | 5/5; a model Cursor's free plan refused is now hidden from the picker                                                                                                                                                                                           |
+| 20  | "Merge here, then push"; a second run behind the remote is refused         | passed, against a bare local repository standing in for GitHub                                                                                                                                                                                                  |
+| 21  | A new AI at its usage limit hands off and says when it's back              | 6/6 live (2026-10-31), with Cursor and Grok out of free usage: both were turned away, Claude built, Antigravity reviewed, no attempt used; the start-up check then said when each is tried again (Plenum's own back-off: neither CLI says when its limit lifts) |
+| 11  | (again) A short review budget asks a backup reviewer and stops the loser   | 4/4, forced with a 20-second budget                                                                                                                                                                                                                             |
 
 ## v0.9 final (2026-10-31 to 11-01, the second run of each)
 
@@ -418,7 +418,7 @@ the cap cut off again. Medians leave capped runs out.
   versions, except one before run (T3 inventory, 0/7) and one light-review run (T5 ledger, 11/12).
 - **Faster where the loop does work.** Summing each suite's per-project medians: T2 −12%, T3 −25% (without ledger,
   which is capped on both), T5 (light reviews) −36% against T2 after. T1 +6% and T4 +5% are runs whose steps were
-  identical in both versions (one build, one review): AI response time, not Conclave.
+  identical in both versions (one build, one review): AI response time, not Plenum.
 - **Kept work pays off.** 22 of 24 send-backs continued from the kept attempt; the fixes took 0.5 to 5 minutes
   instead of a full rebuild. Parking, planner failover, stalls and second opinions never triggered in the
   benchmark (no limit hit during a review, no planner failed, nothing hung); scenarios 22–23 and the unit tests
@@ -518,17 +518,17 @@ the cap cut off again. Medians leave capped runs out.
 
 v0.9.2 (`05062e2`) with the default team (T1) and the local reviewer (T4), on inventory and ledger. This check only
 had to show nothing breaks with real AIs; the before/after comparison is v0.9.1's above. Each run now splits its
-time into AI, waiting for limits, and Conclave's own steps (tests, git, the loop).
+time into AI, waiting for limits, and Plenum's own steps (tests, git, the loop).
 
-| Suite | Project   | Hidden                      | Minutes          | Median | v0.9.1 median | AI / waiting / Conclave (median run) |
-| ----- | --------- | --------------------------- | ---------------- | ------ | ------------- | ------------------------------------ |
-| T1    | inventory | 7/7, 7/7, 7/7               | 4.0, 2.6, 2.1    | 2.6    | 2.7           | 2.5 / 0 / 0.0                        |
-| T1    | ledger    | 12/12, 12/12, 5/12 (limits) | 18.8, 24.0, 60.1 | 21.4   | 18.4          | 18.6–23.9 / 0 / 0.1                  |
-| T4    | inventory | 7/7, 7/7, 7/7               | 4.0, 2.2, 2.9    | 2.9    | 5.6 (rerun)   | 2.7 / 0 / 0.0                        |
-| T4    | ledger    | 12/12, 12/12, 4/12 (limits) | 23.7, 20.5, 60.1 | 22.1   | 26.5          | 20.3–23.5 / 0 / 0.1–0.2              |
+| Suite | Project   | Hidden                      | Minutes          | Median | v0.9.1 median | AI / waiting / Plenum (median run) |
+| ----- | --------- | --------------------------- | ---------------- | ------ | ------------- | ---------------------------------- |
+| T1    | inventory | 7/7, 7/7, 7/7               | 4.0, 2.6, 2.1    | 2.6    | 2.7           | 2.5 / 0 / 0.0                      |
+| T1    | ledger    | 12/12, 12/12, 5/12 (limits) | 18.8, 24.0, 60.1 | 21.4   | 18.4          | 18.6–23.9 / 0 / 0.1                |
+| T4    | inventory | 7/7, 7/7, 7/7               | 4.0, 2.2, 2.9    | 2.9    | 5.6 (rerun)   | 2.7 / 0 / 0.0                      |
+| T4    | ledger    | 12/12, 12/12, 4/12 (limits) | 23.7, 20.5, 60.1 | 22.1   | 26.5          | 20.3–23.5 / 0 / 0.1–0.2            |
 
 - **Nothing broke.** Every run that a limit didn't cut off passed every hidden test.
-- **Conclave's own time is 0.0–0.2 minutes a run.** Everything else is the AIs working or waiting, so differences
+- **Plenum's own time is 0.0–0.2 minutes a run.** Everything else is the AIs working or waiting, so differences
   between runs and versions here are AI response time. T1 ledger's 18.8 vs 24.0 minutes took the same steps.
 - **Deleting files works.** All six inventory runs deleted `inventory.js` with a `DELETE:` line (the T4 churn in
   v0.9.1 started there); T4 inventory is back under v0.9.0's 3.8 minutes.
@@ -536,7 +536,7 @@ time into AI, waiting for limits, and Conclave's own steps (tests, git, the loop
   last from then on.
 - **Real limits, not a fault.** Both third ledger runs ran out of builders: T1 used 12.9 minutes of AI and waited 47,
   T4 used 16.5 and waited 43. Codex was out of usage and Claude was at 90–91% of its weekly allowance, past the 10%
-  Conclave leaves for you. With no other builder in the team they waited, as designed, until the 60-minute cap. Conflicts on kept work, stalls and second opinions didn't come up live; the trouble
+  Plenum leaves for you. With no other builder in the team they waited, as designed, until the 60-minute cap. Conflicts on kept work, stalls and second opinions didn't come up live; the trouble
   suite forces each of them in CI.
 
 ## Team finder, stage 1 (2026-11-06 to 11-07, first run of each)

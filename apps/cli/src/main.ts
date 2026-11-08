@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 import './quiet.js';
 import { parseArgs } from 'node:util';
-import { Engine, VERSION, parseSeat, serveMcp } from '@conclave/core';
+import { Engine, VERSION, parseSeat, serveMcp } from '@plenum/core';
 import { askCommand } from './ask.js';
 import { chatCommand } from './chat.js';
 import { projectCommand } from './project.js';
 import { doctor } from './doctor.js';
 import { showCommand, threadsCommand } from './threads.js';
 
-const HELP = `conclave ${VERSION}
+const HELP = `plenum ${VERSION}
 
-Usage: conclave <command> [options]
+Usage: plenum <command> [options]
 
 Commands:
   doctor                 Check which AI CLIs are installed and signed in
@@ -38,15 +38,15 @@ Commands:
   project decisions <id> List what's been decided and assumed
   project decide <id> "question" "answer"   Add a decision
   project steer <id> "..." [--apply]        Tell a project what to change
-  mcp                    Serve Conclave to Claude Code or any MCP client over stdio:
-                         claude mcp add conclave -- npm --prefix <this folder> run -s conclave -- mcp
+  mcp                    Serve Plenum to Claude Code or any MCP client over stdio:
+                         claude mcp add plenum -- npm --prefix <this folder> run -s plenum -- mcp
 
 Options:
   --json         Machine-readable output (doctor, ask)
   -h, --help     Show this help
   -v, --version  Show the version
 
-Data lives in ~/.conclave (override with CONCLAVE_HOME).
+Data lives in ~/.plenum (override with PLENUM_HOME).
 `;
 
 export async function main(argv: string[]): Promise<number> {
@@ -102,7 +102,7 @@ export async function main(argv: string[]): Promise<number> {
         });
       case 'ask':
         if (!text) {
-          console.error('Usage: conclave ask "your question"');
+          console.error('Usage: plenum ask "your question"');
           return 1;
         }
         return await askCommand(engine, {

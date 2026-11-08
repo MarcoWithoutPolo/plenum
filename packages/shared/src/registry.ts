@@ -1,5 +1,5 @@
 /**
- * Every AI Conclave knows about, as data. Display names, colours, install and sign-in steps,
+ * Every AI Plenum knows about, as data. Display names, colours, install and sign-in steps,
  * default lanes and the default team order all come from here, so adding a provider means one
  * entry and one adapter, never a switch on its id elsewhere. An entry without an adapter in
  * core simply isn't offered yet.
@@ -166,7 +166,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     prefer: { planner: 7, builder: 7, reviewer: 7, chat: 7 },
     effortName: 'Context',
     effortHint:
-      'No effort setting: Conclave gives each job the context it needs (8k to chat, 16k to review, 32k to build).',
+      'No effort setting: Plenum gives each job the context it needs (8k to chat, 16k to review, 32k to build).',
     blurb: 'Models on your own computer through Ollama: free, private, offline.',
   },
   {

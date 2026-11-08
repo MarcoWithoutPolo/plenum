@@ -11,8 +11,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 test('a provider that keeps failing is called out, and Retry all hands the work to another AI', async () => {
   test.setTimeout(120_000);
-  const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-broken-'));
+  const home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-broken-'));
   const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
       cwd: repo,
@@ -27,10 +27,10 @@ test('a provider that keeps failing is called out, and Retry all hands the work 
     args: [join(here, '../out/main/index.js')],
     env: {
       ...process.env,
-      CONCLAVE_DEMO: '1',
-      CONCLAVE_DEMO_BREAK: '1',
-      CONCLAVE_HOME: home,
-      CONCLAVE_E2E_REPO: repo,
+      PLENUM_DEMO: '1',
+      PLENUM_DEMO_BREAK: '1',
+      PLENUM_HOME: home,
+      PLENUM_E2E_REPO: repo,
     },
   });
   try {
@@ -91,8 +91,8 @@ test('a provider that keeps failing is called out, and Retry all hands the work 
 
 test('review issues are a checklist; an unticked one becomes a decision', async () => {
   test.setTimeout(120_000);
-  const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-review-'));
+  const home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-review-'));
   const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
       cwd: repo,
@@ -106,10 +106,10 @@ test('review issues are a checklist; an unticked one becomes a decision', async 
     args: [join(here, '../out/main/index.js')],
     env: {
       ...process.env,
-      CONCLAVE_DEMO: '1',
-      CONCLAVE_DEMO_REJECT: '1',
-      CONCLAVE_HOME: home,
-      CONCLAVE_E2E_REPO: repo,
+      PLENUM_DEMO: '1',
+      PLENUM_DEMO_REJECT: '1',
+      PLENUM_HOME: home,
+      PLENUM_E2E_REPO: repo,
     },
   });
   try {

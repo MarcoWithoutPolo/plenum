@@ -27,7 +27,7 @@ const PLAN = JSON.stringify({
 
 /** The crash-test project with hooks: `onBuild` runs inside each build, before it writes. */
 async function project(onBuild?: (title: string) => void) {
-  const dir = mkdtempSync(join(tmpdir(), 'conclave-p0-'));
+  const dir = mkdtempSync(join(tmpdir(), 'plenum-p0-'));
   cleanup.push(dir);
   const p: CrashProject = await setUp(dir);
   const store = new Store(p.db);
@@ -64,7 +64,7 @@ async function project(onBuild?: (title: string) => void) {
 }
 
 const merges = (p: CrashProject) =>
-  git(p.repo, 'log', '--merges', '--format=%s', 'conclave/integration').split('\n').filter(Boolean);
+  git(p.repo, 'log', '--merges', '--format=%s', 'plenum/integration').split('\n').filter(Boolean);
 
 describe('v1.0 P0 bugs', () => {
   it('E1: a merge that lands while you press Stop counts as merged, not requeued', async () => {
@@ -137,7 +137,7 @@ describe('v1.0 P0 bugs', () => {
     const beta = store.projects.listTasks(p.projectId).find((t) => t.title === 'Add beta')!;
     expect(beta.status).toBe('skipped');
     expect(merges(p).some((m) => m.includes('"Add beta"'))).toBe(false);
-    expect(git(p.repo, 'ls-tree', '--name-only', 'conclave/integration')).not.toContain('beta.js');
+    expect(git(p.repo, 'ls-tree', '--name-only', 'plenum/integration')).not.toContain('beta.js');
     expect(log).toContain('Stopped work on Add beta: it is skipped now');
     store.close();
   }, 120_000);

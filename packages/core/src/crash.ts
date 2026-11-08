@@ -1,6 +1,6 @@
 /**
  * Named points where the crash tests end the process, as a power cut would: no `finally`, no
- * cleanup. Does nothing unless CONCLAVE_CRASH_AT names the point.
+ * cleanup. Does nothing unless PLENUM_CRASH_AT names the point.
  */
 export type CrashPoint =
   | 'after-plan'
@@ -15,5 +15,5 @@ export type CrashPoint =
 export const CRASH_EXIT = 86;
 
 export function crashPoint(point: CrashPoint): void {
-  if (process.env.CONCLAVE_CRASH_AT === point) process.exit(CRASH_EXIT);
+  if (process.env.PLENUM_CRASH_AT === point) process.exit(CRASH_EXIT);
 }

@@ -1,5 +1,5 @@
-import type { AppSettings, SteeringMessage } from '@conclave/shared';
-import type { PreviewResult, SnapshotSet, StartCheck, SyncState } from '@conclave/core';
+import type { AppSettings, SteeringMessage } from '@plenum/shared';
+import type { PreviewResult, SnapshotSet, StartCheck, SyncState } from '@plenum/core';
 import type {
   AgentRun,
   ClarifyResult,
@@ -15,7 +15,7 @@ import type {
   ProviderTotals,
   PullRequestStatus,
   RetryOptions,
-} from '@conclave/core';
+} from '@plenum/core';
 import type {
   AgentEvent,
   Approval,
@@ -34,7 +34,7 @@ import type {
   ProviderStatus,
   Seat,
   Thread,
-} from '@conclave/shared';
+} from '@plenum/shared';
 
 /** What the Accounts screen and model pickers need to know about each provider. */
 export interface ProviderInfo extends ProviderStatus {
@@ -124,7 +124,7 @@ export interface ProjectDetail {
   problems: ProviderProblem[];
   /** AIs on this team that are out of usage right now (limits never fail tasks). */
   limits: LimitNotice[];
-  /** How the project can be previewed: Conclave serves it (static), or its own dev server. */
+  /** How the project can be previewed: Plenum serves it (static), or its own dev server. */
   preview: { kind: 'static' } | { kind: 'command'; command: string; allowed: boolean } | null;
 }
 
@@ -258,8 +258,8 @@ export interface InstallLog {
   text: string;
 }
 
-/** The whole surface the renderer may call. Exposed as window.conclave by the preload. */
-export interface ConclaveApi {
+/** The whole surface the renderer may call. Exposed as window.plenum by the preload. */
+export interface PlenumApi {
   accounts: {
     list(): Promise<ProviderInfo[]>;
     /** Opens the provider's official sign-in in a terminal window. */
@@ -310,7 +310,7 @@ export interface ConclaveApi {
     inspectRepo(path: string): Promise<RepoInfo>;
     inspectFolder(path: string): Promise<FolderState>;
     setUpGit(path: string, confirmLarge?: boolean): Promise<GitSetup>;
-    /** Make a new empty folder under `parent` (default: Documents/Conclave Projects). */
+    /** Make a new empty folder under `parent` (default: Documents/Plenum Projects). */
     createFolder(name: string, parent?: string): Promise<string>;
     defaultFolder(): Promise<string>;
     create(input: NewProjectInput): Promise<Project>;
@@ -342,7 +342,7 @@ export interface ConclaveApi {
     stopPreview(projectId: string, taskId?: string): Promise<void>;
     previewLogs(projectId: string, taskId?: string): Promise<string>;
     snapshots(projectId: string, taskId: string): Promise<TaskSnapshots>;
-    /** One screenshot as a data URL (only files from Conclave's own screenshot folders). */
+    /** One screenshot as a data URL (only files from Plenum's own screenshot folders). */
     shot(path: string): Promise<string>;
     retryFailed(
       projectId: string,
@@ -446,7 +446,7 @@ export interface AboutInfo {
   version: string;
   electron: string;
   platform: string;
-  /** The command that adds Conclave to Claude Code as an MCP server (F9). */
+  /** The command that adds Plenum to Claude Code as an MCP server (F9). */
   mcp: string;
 }
 

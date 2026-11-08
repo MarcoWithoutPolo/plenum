@@ -60,7 +60,7 @@ export const DEFAULT_PERMISSIONS: Permissions = {
 export const GitHubLink = z.object({
   /** owner/name */
   repo: z.string(),
-  /** The branch pull requests come from, e.g. conclave/calculator. */
+  /** The branch pull requests come from, e.g. plenum/calculator. */
   prBranch: z.string().nullable(),
   prUrl: z.string().nullable(),
   prState: z.enum(['open', 'merged', 'closed']).nullable(),
@@ -74,7 +74,7 @@ export type ReviewEffort = z.infer<typeof ReviewEffort>;
 export const Project = z.object({
   id: z.string(),
   name: z.string(),
-  /** The user's repository. Conclave never changes its checked-out branch or working files. */
+  /** The user's repository. Plenum never changes its checked-out branch or working files. */
   repoPath: z.string(),
   goal: z.string(),
   doneWhen: z.string().nullable(),
@@ -168,7 +168,7 @@ export const TaskFailure = z.object({
 export type TaskFailure = z.infer<typeof TaskFailure>;
 
 export const TaskGrants = z.object({
-  /** An install command you approved; Conclave runs it before the next build. */
+  /** An install command you approved; Plenum runs it before the next build. */
   install: z.string().optional(),
   /** Network for the next build only. */
   network: z.boolean().optional(),
@@ -270,7 +270,7 @@ export const BrainEventKind = z.enum([
 ]);
 export type BrainEventKind = z.infer<typeof BrainEventKind>;
 
-/** Append-only project log; what the Projects screen and `conclave project status` show. */
+/** Append-only project log; what the Projects screen and `plenum project status` show. */
 export const BrainEvent = z.object({
   id: z.number(),
   projectId: z.string(),

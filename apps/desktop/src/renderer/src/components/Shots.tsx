@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
-import type { Shot, SnapshotSet } from '@conclave/core';
-import { parseVisualIssue, type ShotBox as Box, type VisualIssue } from '@conclave/shared';
+import type { Shot, SnapshotSet } from '@plenum/core';
+import { parseVisualIssue, type ShotBox as Box, type VisualIssue } from '@plenum/shared';
 import type { TaskSnapshots } from '../../../shared/api';
 import { Segmented } from './form';
 import { api } from '@/lib/api';

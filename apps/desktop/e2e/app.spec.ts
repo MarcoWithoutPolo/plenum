@@ -18,11 +18,11 @@ let page: Page;
 let home: string;
 
 test.beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), 'conclave-e2e-'));
+  home = mkdtempSync(join(tmpdir(), 'plenum-e2e-'));
   mkdirSync(shots, { recursive: true });
   app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
-    env: { ...process.env, CONCLAVE_DEMO: '1', CONCLAVE_HOME: home },
+    env: { ...process.env, PLENUM_DEMO: '1', PLENUM_HOME: home },
   });
   page = await app.firstWindow();
   await page.setViewportSize({ width: 1320, height: 860 });
@@ -38,7 +38,7 @@ test('runs with a locked-down renderer', async () => {
   const exposed = await page.evaluate(() => ({
     require: typeof (window as unknown as { require?: unknown }).require,
     process: typeof (window as unknown as { process?: unknown }).process,
-    bridge: Object.keys(window.conclave ?? {}).sort(),
+    bridge: Object.keys(window.plenum ?? {}).sort(),
   }));
   expect(exposed.require).toBe('undefined');
   expect(exposed.process).toBe('undefined');

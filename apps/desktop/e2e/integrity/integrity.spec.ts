@@ -16,19 +16,18 @@ import {
  * checked for sideways scrolling, overflowing or cut text, covered controls, accessibility
  * problems, menus that don't fit or can't reach their last row, and console errors.
  *
- * Each push runs the 900×600 and 1320×860 rows; CONCLAVE_FULL_MATRIX=1 adds 1024×700 and
+ * Each push runs the 900×600 and 1320×860 rows; PLENUM_FULL_MATRIX=1 adds 1024×700 and
  * 1920×1080. Problems are listed together (and saved to test-results/integrity, or
- * CONCLAVE_INTEGRITY_OUT), so one run shows everything wrong.
+ * PLENUM_INTEGRITY_OUT), so one run shows everything wrong.
  */
-const FULL = process.env.CONCLAVE_FULL_MATRIX === '1';
+const FULL = process.env.PLENUM_FULL_MATRIX === '1';
 const SIZES = [
   { width: 900, height: 600 },
   ...(FULL ? [{ width: 1024, height: 700 }] : []),
   { width: 1320, height: 860 },
   ...(FULL ? [{ width: 1920, height: 1080 }] : []),
 ];
-const REPORT =
-  process.env.CONCLAVE_INTEGRITY_OUT ?? join(process.cwd(), 'test-results', 'integrity');
+const REPORT = process.env.PLENUM_INTEGRITY_OUT ?? join(process.cwd(), 'test-results', 'integrity');
 
 interface Screen {
   name: string;
@@ -143,9 +142,9 @@ for (const cell of CELLS) {
           (look) =>
             (
               window as unknown as {
-                conclave: { settings: { update: (p: unknown) => Promise<unknown> } };
+                plenum: { settings: { update: (p: unknown) => Promise<unknown> } };
               }
-            ).conclave.settings.update({ appearance: look }),
+            ).plenum.settings.update({ appearance: look }),
           cell.look,
         );
         await run.page.reload();

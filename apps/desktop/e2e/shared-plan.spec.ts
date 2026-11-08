@@ -5,7 +5,7 @@ import { launch } from './integrity/kit';
 
 test('Cursor and Grok can share one plan, and Cursor then defaults to a Grok model (F12)', async () => {
   // Cursor and Grok are installed only with the nine-AI demo team.
-  const nine = await launch('normal', 'light', { CONCLAVE_DEMO_TEAM: '9' });
+  const nine = await launch('normal', 'light', { PLENUM_DEMO_TEAM: '9' });
   try {
     const p = nine.page;
     await p.setViewportSize({ width: 1320, height: 860 });
@@ -16,8 +16,8 @@ test('Cursor and Grok can share one plan, and Cursor then defaults to a Grok mod
     await expect(shared).toBeChecked();
     const settings = (await p.evaluate(() =>
       (
-        window as unknown as { conclave: { settings: { get(): Promise<unknown> } } }
-      ).conclave.settings.get(),
+        window as unknown as { plenum: { settings: { get(): Promise<unknown> } } }
+      ).plenum.settings.get(),
     )) as {
       limits: { sharedPlans: string[][] };
       defaults: { providers: { cursor?: { model?: string } } };

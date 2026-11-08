@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, GitMerge, Plus } from 'lucide-react';
-import { firstPreferred, type Message, type ProviderId, type Seat } from '@conclave/shared';
+import { firstPreferred, type Message, type ProviderId, type Seat } from '@plenum/shared';
 import type { ProviderInfo } from '../../../shared/api';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';

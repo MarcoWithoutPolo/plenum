@@ -1,4 +1,4 @@
-# Contributing to Conclave
+# Contributing to Plenum
 
 Thanks for helping. Bug reports, fixes and new CLI adapters are all welcome.
 
@@ -19,14 +19,14 @@ You need Node.js 22.13 or later and git.
 npm ci
 npm run check        # lint, format, typecheck and unit tests
 npm run e2e          # builds the app, then drives it in demo mode with Playwright
-npm run -w @conclave/desktop dev   # the app with live reload
+npm run -w @plenum/desktop dev   # the app with live reload
 ```
 
-Demo mode (`CONCLAVE_DEMO=1`) uses fake AIs, so you can work on the app without any CLI installed or signed in.
+Demo mode (`PLENUM_DEMO=1`) uses fake AIs, so you can work on the app without any CLI installed or signed in.
 
 ## Ground rules
 
-- **Never handle credentials.** Conclave drives the official CLIs that users sign in to themselves. No code may read,
+- **Never handle credentials.** Plenum drives the official CLIs that users sign in to themselves. No code may read,
   store or forward passwords, API keys or tokens, or read a CLI's credential files.
 - **Adapters stop at the event format.** Each CLI's output is mapped onto `AgentEvent` in
   `packages/shared/src/events.ts`; nothing above the adapter layer may depend on one CLI's output. See
@@ -39,4 +39,4 @@ Demo mode (`CONCLAVE_DEMO=1`) uses fake AIs, so you can work on the app without 
 ## Pull requests
 
 Keep each one to one change, say why it's needed, and add a test that fails without it. By contributing you agree
-that your contribution is licensed under the [MIT License](LICENSE).
+that your contribution is licensed under the [AGPL-3.0](LICENSE), like the rest of Plenum.

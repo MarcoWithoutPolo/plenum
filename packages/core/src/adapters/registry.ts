@@ -1,4 +1,4 @@
-import { PROVIDERS, type AppSettings, type ProviderId } from '@conclave/shared';
+import { PROVIDERS, type AppSettings, type ProviderId } from '@plenum/shared';
 import { ClaudeAdapter } from './claude.js';
 import { CodexAdapter } from './codex.js';
 import { AntigravityAdapter } from './antigravity.js';
@@ -36,7 +36,7 @@ export const ADAPTER_FACTORIES: Partial<Record<ProviderId, (opts?: FactoryOption
     }),
 };
 
-/** The real providers Conclave knows about, in display order. */
+/** The real providers Plenum knows about, in display order. */
 export function createAdapters(opts: Pick<FactoryOptions, 'settings'> = {}): Adapter[] {
   // Hidden registry entries (Gemini CLI: Google retired it for Free/Pro/Ultra accounts in June
   // 2026 in favor of Antigravity) stay buildable but aren't listed.

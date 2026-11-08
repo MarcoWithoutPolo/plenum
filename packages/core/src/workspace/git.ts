@@ -13,7 +13,7 @@ export class GitError extends Error {
 }
 
 /** Fallback identity for commits when the user has none configured. */
-const IDENTITY = ['-c', 'user.name=Conclave', '-c', 'user.email=conclave@localhost'];
+const IDENTITY = ['-c', 'user.name=Plenum', '-c', 'user.email=plenum@localhost'];
 
 export async function git(cwd: string, args: string[], allowFail = false): Promise<CommandResult> {
   const result = await runCommand('git', args, { cwd, timeoutMs: 120_000 });
@@ -51,7 +51,7 @@ export async function headCommit(path: string): Promise<string> {
   return out(path, ['rev-parse', 'HEAD']);
 }
 
-/** Commit identity args: the user's own if git knows it, else a Conclave fallback. */
+/** Commit identity args: the user's own if git knows it, else a Plenum fallback. */
 export async function commitIdentity(cwd: string): Promise<string[]> {
   const email = await git(cwd, ['config', 'user.email'], true);
   return email.code === 0 && email.stdout.trim() ? [] : IDENTITY;
@@ -97,13 +97,13 @@ export type TaskMerge =
 
 /**
  * Isolated checkouts for the brain. The user's repo keeps its branch and
- * working files; everything happens in worktrees under Conclave's data folder.
+ * working files; everything happens in worktrees under Plenum's data folder.
  */
 export class Workspace {
   constructor(
     /** The user's repository root. */
     readonly repo: string,
-    /** Where this project's worktrees live, e.g. ~/.conclave/projects/<id>. */
+    /** Where this project's worktrees live, e.g. ~/.plenum/projects/<id>. */
     readonly root: string,
     readonly integrationBranch: string,
   ) {}
@@ -129,7 +129,7 @@ export class Workspace {
   }
 
   taskBranch(taskId: string): string {
-    return `conclave/task/${taskId}`;
+    return `plenum/task/${taskId}`;
   }
 
   /** Create the integration branch from `base` (once) and check it out in its own worktree. */
@@ -698,7 +698,7 @@ export async function pushBranch(
     if (opts.exact) {
       return {
         ok: false,
-        error: `${name} on ${remote} has changes Conclave doesn't have; it won't overwrite them.`,
+        error: `${name} on ${remote} has changes Plenum doesn't have; it won't overwrite them.`,
       };
     }
   }

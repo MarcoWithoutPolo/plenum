@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, Plug, TriangleAlert } from 'lucide-react';
-import type { Message, Seat } from '@conclave/shared';
+import type { Message, Seat } from '@plenum/shared';
 import { Composer } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
 import { SeatPicker } from '@/components/SeatPicker';

@@ -7,15 +7,15 @@ import { _electron as electron, expect, test } from '@playwright/test';
 
 // Private test, scenario 4: a project with a build step starts at permission level 2 (edit
 // files only), then switches to level 3 (edit and run the project's checks) mid-run in
-// Team and settings. Real accounts and Conclave data; spends real usage: CONCLAVE_SCENARIO=4.
-test.skip(process.env.CONCLAVE_SCENARIO !== '4', 'set CONCLAVE_SCENARIO=4 to run');
+// Team and settings. Real accounts and Plenum data; spends real usage: PLENUM_SCENARIO=4.
+test.skip(process.env.PLENUM_SCENARIO !== '4', 'set PLENUM_SCENARIO=4 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-4');
 const sqlite = process.getBuiltinModule('node:sqlite');
 
 function read<T>(fn: (db: InstanceType<typeof sqlite.DatabaseSync>) => T): T {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -52,7 +52,7 @@ test('scenario 4: level 2, then 3 mid-run; checks run only at 3', async () => {
   const name = `buildstep-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}`;
 
   // A seed repo with a test and a build step.
-  const repo = join(mkdtempSync(join(tmpdir(), 'conclave-perm-')), name);
+  const repo = join(mkdtempSync(join(tmpdir(), 'plenum-perm-')), name);
   mkdirSync(join(repo, 'src'), { recursive: true });
   mkdirSync(join(repo, 'test'), { recursive: true });
   writeFileSync(
@@ -80,21 +80,17 @@ test('scenario 4: level 2, then 3 mid-run; checks run only at 3', async () => {
   );
   writeFileSync(join(repo, '.gitignore'), 'node_modules/\ndist/\n');
   const git = (...a: string[]) =>
-    execFileSync(
-      'git',
-      ['-c', 'user.name=Conclave Test', '-c', 'user.email=test@localhost', ...a],
-      {
-        cwd: repo,
-      },
-    );
+    execFileSync('git', ['-c', 'user.name=Plenum Test', '-c', 'user.email=test@localhost', ...a], {
+      cwd: repo,
+    });
   git('init', '-q', '-b', 'main');
   git('add', '-A');
   git('commit', '-q', '-m', 'Seed with a build step');
 
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
-    env: { ...env, CONCLAVE_E2E_REPO: repo } as Record<string, string>,
+    env: { ...env, PLENUM_E2E_REPO: repo } as Record<string, string>,
   });
   let n = 0;
   const page = await app.firstWindow();

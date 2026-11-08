@@ -5,7 +5,7 @@
  *
  * - Each target starts from a fresh clone of the committed HEAD, as actions/checkout does, so a
  *   file that only exists in this folder can't make it pass.
- * - Windows uses portable Node from CI_NODE_DIR (default ~/.cache/conclave-ci), and keeps its
+ * - Windows uses portable Node from CI_NODE_DIR (default ~/.cache/plenum-ci), and keeps its
  *   clones, npm cache and temp files there too; point it at another drive to keep them off C:. Its e2e runs on as many cores as GitHub's
  *   Windows runners have (4), where the flakes show up.
  * - Linux runs in Docker on Ubuntu 24.04 like ubuntu-latest, 4 CPUs and 16 GB, and also runs the
@@ -38,7 +38,7 @@ const { values } = parseArgs({
   },
 });
 const NODE = { 22: 'v22.23.4', 24: 'v24.22.2' } as const;
-const cacheDir = process.env.CI_NODE_DIR ?? join(homedir(), '.cache', 'conclave-ci');
+const cacheDir = process.env.CI_NODE_DIR ?? join(homedir(), '.cache', 'plenum-ci');
 // Clones (each with its own node_modules) go here too, not to the system drive's temp folder.
 const workDir = join(cacheDir, 'work');
 mkdirSync(workDir, { recursive: true });
@@ -57,7 +57,7 @@ const STEPS: [string, string][] = [
   ['unit', 'npm test'],
   ['build', 'npm run desktop:build'],
 ];
-const E2E = 'npm run -w @conclave/desktop e2e';
+const E2E = 'npm run -w @plenum/desktop e2e';
 
 type Step = { name: string; ok: boolean; seconds: number; note?: string };
 type Result = { target: string; steps: Step[] };
@@ -175,7 +175,7 @@ WORKDIR /home/ci
 
 async function linux(major: 22 | 24): Promise<Result> {
   const target = `linux${major}`;
-  const image = `conclave-ci:node${major}`;
+  const image = `plenum-ci:node${major}`;
   const log = join(out, `${target}.log`);
   const ctx = mkdtempSync(join(tmpdir(), 'ci-docker-'));
   writeFileSync(join(ctx, 'Dockerfile'), DOCKERFILE(NODE[major]));

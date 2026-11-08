@@ -11,8 +11,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 test('stop and skip a building task; Pause everything off resumes at once', async () => {
   test.setTimeout(120_000);
-  const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-loose-'));
+  const home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-loose-'));
   const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
       cwd: repo,
@@ -25,10 +25,10 @@ test('stop and skip a building task; Pause everything off resumes at once', asyn
     args: [join(here, '../out/main/index.js')],
     env: {
       ...process.env,
-      CONCLAVE_DEMO: '1',
-      CONCLAVE_DEMO_SLOW: '1',
-      CONCLAVE_HOME: home,
-      CONCLAVE_E2E_REPO: repo,
+      PLENUM_DEMO: '1',
+      PLENUM_DEMO_SLOW: '1',
+      PLENUM_HOME: home,
+      PLENUM_E2E_REPO: repo,
     },
   });
   const page = await app.firstWindow();
@@ -66,7 +66,7 @@ test('stop and skip a building task; Pause everything off resumes at once', asyn
     await expect(pause).toBeChecked();
     await sidebar.getByRole('button', { name: /^Projects/ }).click();
     await page
-      .getByRole('button', { name: /^conclave-e2e-loose-/ })
+      .getByRole('button', { name: /^plenum-e2e-loose-/ })
       .first()
       .click();
     await expect(page.getByText('Waiting for usage', { exact: true })).toBeVisible({
@@ -80,7 +80,7 @@ test('stop and skip a building task; Pause everything off resumes at once', asyn
     const off = Date.now();
     await sidebar.getByRole('button', { name: /^Projects/ }).click();
     await page
-      .getByRole('button', { name: /^conclave-e2e-loose-/ })
+      .getByRole('button', { name: /^plenum-e2e-loose-/ })
       .first()
       .click();
     await expect(page.getByText('Waiting for usage', { exact: true })).toHaveCount(0, {

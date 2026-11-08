@@ -18,10 +18,10 @@ import {
   openProject,
 } from './scenario-kit.js';
 
-// Private tests, scenarios 15–20 (v0.9), on your real accounts and Conclave data. They spend real
-// usage (Copilot Free counts premium requests). Pick them: CONCLAVE_SCENARIO=15,…,21.
+// Private tests, scenarios 15–20 (v0.9), on your real accounts and Plenum data. They spend real
+// usage (Copilot Free counts premium requests). Pick them: PLENUM_SCENARIO=15,…,21.
 // Scenario 21 needs Cursor and Grok out of usage, which free plans reach quickly.
-const which = (process.env.CONCLAVE_SCENARIO ?? '').split(',').map((s) => s.trim());
+const which = (process.env.PLENUM_SCENARIO ?? '').split(',').map((s) => s.trim());
 
 type Reply = {
   reply: {
@@ -52,7 +52,7 @@ const PONG = 'Reply with exactly the word: pong';
 
 // ── 15: each new AI chats, then joins a council with Claude, Codex and Antigravity ───────────
 test('scenario 15: the new AIs chat and join a council', async () => {
-  test.skip(!which.includes('15'), 'set CONCLAVE_SCENARIO=15 to run');
+  test.skip(!which.includes('15'), 'set PLENUM_SCENARIO=15 to run');
   test.setTimeout(20 * 60_000);
   const { checks, check } = checker();
   const { app, api } = await launch('15');
@@ -105,7 +105,7 @@ test('scenario 15: the new AIs chat and join a council', async () => {
 
 // ── 19: the picker's model and effort reach each CLI exactly ─────────────────────────────────
 test('scenario 19: the picker sets model and effort per provider', async () => {
-  test.skip(!which.includes('19'), 'set CONCLAVE_SCENARIO=19 to run');
+  test.skip(!which.includes('19'), 'set PLENUM_SCENARIO=19 to run');
   test.setTimeout(15 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot } = await launch('19');
@@ -149,7 +149,7 @@ test('scenario 19: the picker sets model and effort per provider', async () => {
       JSON.stringify(m).slice(0, 160),
     );
     // Cursor puts the effort in the id. Its free plan runs Grok 4.7 only at fixed settings, so
-    // the High id is refused: Conclave sends it as-is, and then stops offering it.
+    // the High id is refused: Plenum sends it as-is, and then stops offering it.
     await pick('Cursor', /^Grok 4\.7/, 'High', 'Grok');
     m = last();
     const hidden = query<{ unavailable: string }>(
@@ -216,7 +216,7 @@ async function runProject(
 // ── 16 + 18: Cursor builds at level 2; a local model reviews through Ollama ──────────────────
 // ── 20: finish with "Merge here, then push"; a later push behind the remote is refused ──────
 test('scenarios 16, 18 and 20: Cursor builds, a local model reviews, merge and push', async () => {
-  test.skip(!['16', '18', '20'].some((s) => which.includes(s)), 'set CONCLAVE_SCENARIO=16,18,20');
+  test.skip(!['16', '18', '20'].some((s) => which.includes(s)), 'set PLENUM_SCENARIO=16,18,20');
   test.setTimeout(60 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('16');
@@ -299,7 +299,7 @@ test('scenarios 16, 18 and 20: Cursor builds, a local model reviews, merge and p
       });
       check(
         '20: merged here and pushed',
-        result.ok && !result.pushError && /Merge conclave\/integration/.test(onRemote),
+        result.ok && !result.pushError && /Merge plenum\/integration/.test(onRemote),
         result.error ?? result.pushError ?? onRemote,
       );
       const other = mkdtempSync(join(tmpdir(), 'scenario-20-other-'));
@@ -356,7 +356,7 @@ test('scenarios 16, 18 and 20: Cursor builds, a local model reviews, merge and p
 
 // ── 17: a local model builds through OpenCode; the governor never pauses it for usage ────────
 test('scenario 17: a local model builds through OpenCode', async () => {
-  test.skip(!which.includes('17'), 'set CONCLAVE_SCENARIO=17 to run');
+  test.skip(!which.includes('17'), 'set PLENUM_SCENARIO=17 to run');
   test.setTimeout(60 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('17');
@@ -410,7 +410,7 @@ test('scenario 17: a local model builds through OpenCode', async () => {
 // ── 21: an AI at its usage limit hands off and says when it's back ──────────────────────────
 // Run while Cursor's and Grok's plans are out of usage (free plans run out quickly).
 test('scenario 21: Cursor and Grok at their limits hand off and say when they are back', async () => {
-  test.skip(!which.includes('21'), 'set CONCLAVE_SCENARIO=21 (with Cursor and Grok out of usage)');
+  test.skip(!which.includes('21'), 'set PLENUM_SCENARIO=21 (with Cursor and Grok out of usage)');
   test.setTimeout(45 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('21');

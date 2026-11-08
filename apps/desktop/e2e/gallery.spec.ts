@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test, type Page } from '@playwright/test';
 
 // Screenshots of each screen and popover in light and dark mode, for design review.
-// Run with CONCLAVE_SHOTS=1; images land in e2e/screenshots/gallery.
-test.skip(process.env.CONCLAVE_SHOTS !== '1', 'set CONCLAVE_SHOTS=1 to capture');
+// Run with PLENUM_SHOTS=1; images land in e2e/screenshots/gallery.
+test.skip(process.env.PLENUM_SHOTS !== '1', 'set PLENUM_SHOTS=1 to capture');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'screenshots', 'gallery');
@@ -16,7 +16,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`gallery ${scheme}`, async () => {
     test.setTimeout(180_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
     const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
@@ -33,11 +33,11 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_SLOW: '1',
-        CONCLAVE_DEMO_ASK: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_SLOW: '1',
+        PLENUM_DEMO_ASK: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
@@ -171,7 +171,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`gallery failures ${scheme}`, async () => {
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
     const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
@@ -185,10 +185,10 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_BREAK: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_BREAK: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
@@ -239,7 +239,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`gallery install request ${scheme}`, async () => {
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
     const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
@@ -253,10 +253,10 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_ASK: 'install',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_ASK: 'install',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
@@ -297,7 +297,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`gallery usage limit ${scheme}`, async () => {
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
     const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
@@ -311,10 +311,10 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_LIMIT: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_LIMIT: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
@@ -366,7 +366,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`gallery lanes ${scheme}`, async () => {
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
     const repo = mkdtempSync(join(tmpdir(), 'greeter-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
@@ -383,11 +383,11 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_SLOW: '1',
-        CONCLAVE_DEMO_LANES: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_SLOW: '1',
+        PLENUM_DEMO_LANES: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
@@ -469,10 +469,10 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`gallery settings ${scheme}`, async () => {
     test.setTimeout(60_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-shots-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-shots-'));
     const app = await electron.launch({
       args: [join(here, '../out/main/index.js')],
-      env: { ...process.env, CONCLAVE_DEMO: '1', CONCLAVE_HOME: home },
+      env: { ...process.env, PLENUM_DEMO: '1', PLENUM_HOME: home },
       colorScheme: scheme,
     });
     try {

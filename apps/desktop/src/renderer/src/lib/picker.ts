@@ -5,7 +5,7 @@ import {
   resolveModel,
   type ModelOption,
   type Seat,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { api } from './api';
 import type { ProviderInfo } from '../../../shared/api';
 import type { PickerModel, PickerProvider, PickerValue } from '@/components/ModelPicker';
@@ -163,7 +163,7 @@ export function modelLabel(info: ProviderInfo | undefined, id: string | undefine
 
 /* ── Recent choices (per viewer, best effort) ─────────────────────────── */
 
-const RECENT_KEY = 'conclave.recentSeats';
+const RECENT_KEY = 'plenum.recentSeats';
 
 export function recentSeats(): Seat[] {
   try {

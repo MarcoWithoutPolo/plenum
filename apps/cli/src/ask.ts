@@ -1,5 +1,5 @@
-import { firstPreferred, type Seat } from '@conclave/shared';
-import type { CouncilUpdate, Engine } from '@conclave/core';
+import { firstPreferred, type Seat } from '@plenum/shared';
+import type { CouncilUpdate, Engine } from '@plenum/core';
 import { bold, dim, heading, paint, seatName, shortId, stats } from './format.js';
 
 export interface AskArgs {
@@ -13,7 +13,7 @@ export interface AskArgs {
 export async function askCommand(engine: Engine, args: AskArgs): Promise<number> {
   const members = args.members ?? (await engine.readySeats());
   if (members.length === 0) {
-    console.error('No AI provider is signed in. Run: conclave doctor');
+    console.error('No AI provider is signed in. Run: plenum doctor');
     return 1;
   }
   const synthesizer = args.synthesizer ?? firstPreferred(members)!;
@@ -80,7 +80,7 @@ export async function askCommand(engine: Engine, args: AskArgs): Promise<number>
     );
     console.log(
       dim(
-        `\nthread ${shortId(result.thread.id)} · follow up with: conclave ask --thread ${shortId(result.thread.id)} "..."`,
+        `\nthread ${shortId(result.thread.id)} · follow up with: plenum ask --thread ${shortId(result.thread.id)} "..."`,
       ),
     );
     return result.merged.ok ? 0 : 1;

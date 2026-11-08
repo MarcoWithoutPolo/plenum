@@ -1,4 +1,4 @@
-# Conclave: notes for AI agents working in this repo
+# Plenum: notes for AI agents working in this repo
 
 - How the pieces fit is in the README ("How a project runs") and `docs/ADAPTERS.md`; benchmark evidence is in `bench/RESULTS.md`. Every change ends with `npm run check` green.
 - TypeScript ESM monorepo (npm workspaces). Relative imports use `.js` extensions (NodeNext).

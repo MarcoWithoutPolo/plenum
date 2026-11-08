@@ -11,7 +11,7 @@ coverage/
 Thumbs.db
 
 # Local runtime data (database, worktrees, logs)
-.conclave/
+.plenum/
 
 # Playwright output
 test-results/

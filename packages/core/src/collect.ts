@@ -1,4 +1,4 @@
-import type { AgentEvent, Usage } from '@conclave/shared';
+import type { AgentEvent, Usage } from '@plenum/shared';
 
 export interface RunResult {
   ok: boolean;

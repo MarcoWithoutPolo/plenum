@@ -1,4 +1,4 @@
-import type { Approval, GitHubLink, Project, Task } from '@conclave/shared';
+import type { Approval, GitHubLink, Project, Task } from '@plenum/shared';
 import type { EngineContext } from '../chat/service.js';
 import { pushBranch } from '../workspace/git.js';
 import type { GhCheck, GhPullRequest, GitHub } from './gh.js';
@@ -36,7 +36,7 @@ export function pullRequestBody(ctx: EngineContext, project: Project): string {
       `Every task passed \`${project.testCommand}\` and a review by a different AI.`,
     usage && `<sub>Agent runs: ${usage}</sub>`,
     project.github?.issue && `Closes #${project.github.issue.number}`,
-    '---\nOpened by Conclave.',
+    '---\nOpened by Plenum.',
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -68,7 +68,7 @@ export async function openPullRequest(
   const pushed = await pushBranch(
     project.repoPath,
     project.integrationBranch,
-    open ? link.prBranch! : `conclave/${slugify(project.name)}`,
+    open ? link.prBranch! : `plenum/${slugify(project.name)}`,
     { protect: project.baseBranch, exact: Boolean(open) },
   );
   if (!pushed.ok) return pushed;

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { CheckCircle2, Inbox, MessageCircleQuestion, XCircle } from 'lucide-react';
-import type { Approval } from '@conclave/shared';
+import type { Approval } from '@plenum/shared';
 import { ApprovalCard } from '@/components/ApprovalCard';
 import { relative } from '@/components/PlanUsage';
 import { QuestionCard } from '@/components/QuestionCard';

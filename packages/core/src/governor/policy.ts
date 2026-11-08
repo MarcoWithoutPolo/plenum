@@ -1,4 +1,4 @@
-import type { LimitSettings, ProviderId, QuietHours } from '@conclave/shared';
+import type { LimitSettings, ProviderId, QuietHours } from '@plenum/shared';
 
 /** What the user set in Settings, plus today's run counts: the governor's house rules. */
 export interface GovernorPolicy {
@@ -68,7 +68,7 @@ export function policyBlock(policy: GovernorPolicy, provider: ProviderId, now: D
   return null;
 }
 
-/** The share of a plan window Conclave may use before leaving the rest for you. */
+/** The share of a plan window Plenum may use before leaving the rest for you. */
 export function ceilingFor(
   policy: GovernorPolicy | undefined,
   provider: ProviderId,

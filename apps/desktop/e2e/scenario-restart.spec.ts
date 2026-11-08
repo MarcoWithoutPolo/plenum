@@ -13,8 +13,8 @@ import {
 
 // Private test, scenario 7: close the app mid-run, reopen and resume; then kill it outright
 // mid-run, reopen and resume. Checks that no work is duplicated and counts stay honest.
-// Real accounts and Conclave data; spends real usage: CONCLAVE_SCENARIO=7 only.
-test.skip(process.env.CONCLAVE_SCENARIO !== '7', 'set CONCLAVE_SCENARIO=7 to run');
+// Real accounts and Plenum data; spends real usage: PLENUM_SCENARIO=7 only.
+test.skip(process.env.PLENUM_SCENARIO !== '7', 'set PLENUM_SCENARIO=7 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-7');
@@ -29,7 +29,7 @@ interface TaskRow {
 }
 
 function state(name: string) {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -74,7 +74,7 @@ function killTree(pid: number) {
   }
 }
 
-const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
 const launch = () =>
   electron.launch({
     args: [join(here, '../out/main/index.js')],
@@ -135,8 +135,8 @@ test('scenario 7: close and kill mid-run, reopen, resume, nothing duplicated', a
     page.screenshot({ path: join(shots, `${String(++n).padStart(2, '0')}-${label}.png`) });
 
   try {
-    // CONCLAVE_SCENARIO7_RESUME=1 resumes an existing run and goes straight to the hard kill.
-    const resume = process.env.CONCLAVE_SCENARIO7_RESUME === '1';
+    // PLENUM_SCENARIO7_RESUME=1 resumes an existing run and goes straight to the hard kill.
+    const resume = process.env.PLENUM_SCENARIO7_RESUME === '1';
     if (!resume) {
       // Create and start, skipping the questions to keep the run short.
       await page.setViewportSize({ width: 1320, height: 860 });

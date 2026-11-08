@@ -114,7 +114,7 @@ describe('adapter kit', () => {
   });
 
   it('records what a run printed, scrubbed', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-kit-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-kit-'));
     try {
       const file = join(dir, 'out', 'run.jsonl');
       const exec = recordingExec(lines([`{"cwd":${JSON.stringify(dir)}}`]), file, dir);
@@ -126,7 +126,7 @@ describe('adapter kit', () => {
   });
 
   it('reports a missing CLI and finds installer locations before PATH', async () => {
-    const found = await detectVersion('fake', 'conclave-no-such-cli', { missing: 'Not here' });
+    const found = await detectVersion('fake', 'plenum-no-such-cli', { missing: 'Not here' });
     expect(found).toMatchObject({ installed: false, status: { detail: 'Not here' } });
     expect(locateCli('mycli', { windows: [], unix: [] })).toBe('mycli');
     const here = process.execPath;
@@ -136,7 +136,7 @@ describe('adapter kit', () => {
 
 describe('edits outside the working folder', () => {
   it('fail the run with a clear error', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-out-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-out-'));
     try {
       class EditParser extends TypedEventParser {
         protected on(_type: string, message: Record<string, unknown>): EventBody[] {
@@ -144,9 +144,9 @@ describe('edits outside the working folder', () => {
         }
       }
       const inside = join(dir, 'a.txt');
-      const elsewhere = join(homedir(), 'conclave-somewhere-else.txt');
+      const elsewhere = join(homedir(), 'plenum-somewhere-else.txt');
       // A throwaway check script in the system temp folder is allowed.
-      const scratch = join(tmpdir(), 'conclave-check.mjs');
+      const scratch = join(tmpdir(), 'plenum-check.mjs');
       const events = [];
       for await (const e of runCli(
         'fake',

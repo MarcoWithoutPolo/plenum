@@ -23,7 +23,7 @@ import {
   type Project,
   type ProjectDecision,
   type Task,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { ApprovalCard, SyncLine, useSync } from '@/components/ApprovalCard';
 import { Dialog } from '@/components/Dialog';
 import { Popover } from '@/components/Popover';
@@ -58,7 +58,7 @@ import { QUESTION_KINDS, useProjects } from '@/lib/projects';
 import { errorText, providerName, useApp } from '@/lib/store';
 import { PreviewPane } from '@/components/Preview';
 import { StartCheckNote } from '@/components/StartCheck';
-import type { StartCheck } from '@conclave/core';
+import type { StartCheck } from '@plenum/core';
 import { TaskDrawer } from './TaskDrawer';
 import { settle } from '@/lib/settle';
 
@@ -540,7 +540,7 @@ function RemoveDialog({
       }
     >
       <p className="text-[13.5px] leading-relaxed text-muted">
-        Conclave forgets this project's tasks and activity and deletes its worktrees. The{' '}
+        Plenum forgets this project's tasks and activity and deletes its worktrees. The{' '}
         <code className="rounded bg-sunken px-1 font-mono text-[12px]">
           {project.integrationBranch}
         </code>{' '}

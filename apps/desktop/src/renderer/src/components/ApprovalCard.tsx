@@ -7,8 +7,8 @@ import {
   GitPullRequest,
   UploadCloud,
 } from 'lucide-react';
-import type { SyncState } from '@conclave/core';
-import type { Approval, Project } from '@conclave/shared';
+import type { SyncState } from '@plenum/core';
+import type { Approval, Project } from '@plenum/shared';
 import { api } from '@/lib/api';
 import { Button } from './bits';
 import { Segmented } from './form';

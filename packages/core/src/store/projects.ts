@@ -20,7 +20,7 @@ import {
   type Task,
   type TaskStatus,
   IN_FLIGHT,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { transaction } from './db.js';
 import { newId } from './ids.js';
 
@@ -126,7 +126,7 @@ export class ProjectStore {
       doneWhen: input.doneWhen ?? null,
       testCommand: input.testCommand ?? null,
       baseBranch: input.baseBranch,
-      integrationBranch: input.integrationBranch ?? 'conclave/integration',
+      integrationBranch: input.integrationBranch ?? 'plenum/integration',
       routing: input.routing,
       maxAttempts: input.maxAttempts ?? 3,
       maxParallel: clampParallel(input.maxParallel ?? 1),

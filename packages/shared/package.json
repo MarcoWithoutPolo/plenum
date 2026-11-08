@@ -1,9 +1,9 @@
 {
-  "name": "@conclave/shared",
+  "name": "@plenum/shared",
   "version": "1.0.0",
   "private": true,
-  "description": "Schemas and types shared by the Conclave engine, CLI and desktop app.",
-  "license": "MIT",
+  "description": "Schemas and types shared by the Plenum engine, CLI and desktop app.",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "exports": {
     ".": {

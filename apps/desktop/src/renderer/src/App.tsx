@@ -87,7 +87,7 @@ export function App() {
         {!ready && loadError ? (
           <div role="alert" className="grid flex-1 place-items-center px-8 text-center">
             <div className="max-w-md">
-              <p className="text-[15px] font-semibold">Conclave couldn’t load</p>
+              <p className="text-[15px] font-semibold">Plenum couldn’t load</p>
               <p className="mt-1 text-[13px] text-muted">{loadError}</p>
               <button
                 type="button"

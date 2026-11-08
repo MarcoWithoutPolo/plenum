@@ -48,7 +48,7 @@ const git = (cwd: string, ...args: string[]) =>
   ).trim();
 
 function repo(): string {
-  const r = temp('conclave-repo-');
+  const r = temp('plenum-repo-');
   git(r, 'init', '-q', '-b', 'main');
   writeFileSync(join(r, 'README.md'), '# demo\n');
   git(r, 'add', '-A');
@@ -65,7 +65,7 @@ async function setup(
   builder: ConstructorParameters<typeof FakeAdapter>[0] = { reply: 'done', act: writeHello },
 ) {
   const r = repo();
-  const home = temp('conclave-home-');
+  const home = temp('plenum-home-');
   const store = new Store(':memory:');
   let plans = 0;
   const claude = new FakeAdapter(
@@ -223,7 +223,7 @@ describe('BrainManager', () => {
 
 describe('run lock', () => {
   it('lets one brain hold a project and takes over stale locks', () => {
-    const path = join(temp('conclave-lock-'), 'run.lock');
+    const path = join(temp('plenum-lock-'), 'run.lock');
     const lock = acquireLock(path);
     expect(() => acquireLock(path)).toThrow(ProjectBusyError);
     lock.release();
@@ -247,7 +247,7 @@ describe('approving the merge', () => {
     const result = await decideApproval(ctx, home, approval.id, 'approved');
     expect(result.ok).toBe(true);
     expect(git(r, 'show', 'main:hello.txt')).toBe('hello');
-    expect(git(r, 'log', '--oneline', '-1')).toContain('Merge conclave/integration');
+    expect(git(r, 'log', '--oneline', '-1')).toContain('Merge plenum/integration');
     expect(store.projects.approvals(project.id, 'pending')).toEqual([]);
     expect(store.projects.events(project.id).at(-1)?.message).toMatch(
       /^You approved: merged into main/,
@@ -286,7 +286,7 @@ describe('approving the merge', () => {
 
   /** A bare repo standing in for GitHub, with main pushed to it. */
   function withRemote(r: string) {
-    const remote = mkdtempSync(join(tmpdir(), 'conclave-remote-'));
+    const remote = mkdtempSync(join(tmpdir(), 'plenum-remote-'));
     git(remote, 'init', '-q', '--bare', '-b', 'main');
     git(r, 'remote', 'add', 'origin', remote);
     git(r, 'push', '-q', '-u', 'origin', 'main');
@@ -302,7 +302,7 @@ describe('approving the merge', () => {
     git(r, 'commit', '-q', '--allow-empty', '-m', 'mine');
     expect(await syncState(r, 'main')).toMatchObject({ ahead: 1, behind: 0 });
     // Someone else pushes to GitHub: now it's both ways.
-    const other = mkdtempSync(join(tmpdir(), 'conclave-other-'));
+    const other = mkdtempSync(join(tmpdir(), 'plenum-other-'));
     git(other, 'clone', '-q', remote, '.');
     git(
       other,
@@ -332,13 +332,13 @@ describe('approving the merge', () => {
     });
     expect(result).toMatchObject({ ok: true });
     expect(result.ok && result.pushError).toBeFalsy();
-    expect(git(remote, 'log', '--oneline', '-1', 'main')).toContain('Merge conclave/integration');
+    expect(git(remote, 'log', '--oneline', '-1', 'main')).toContain('Merge plenum/integration');
   });
 
   it("refuses to merge and push while GitHub has commits you don't, and never forces", async () => {
     const { ctx, home, repo: r, approval } = await finished();
     const remote = withRemote(r);
-    const other = mkdtempSync(join(tmpdir(), 'conclave-other-'));
+    const other = mkdtempSync(join(tmpdir(), 'plenum-other-'));
     git(other, 'clone', '-q', remote, '.');
     git(
       other,
@@ -387,7 +387,7 @@ describe('Tasks left mid-step and stale locks (E5, E7)', () => {
   });
 
   it('a lock whose owner stopped touching it is taken over, by exactly one taker', () => {
-    const dir = temp('conclave-lock-');
+    const dir = temp('plenum-lock-');
     const path = join(dir, 'run.lock');
     // A lock held by a living process (this one's parent stands in for a reused pid), untouched
     // for five minutes: its real owner is gone.

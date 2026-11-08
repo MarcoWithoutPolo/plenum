@@ -7,7 +7,7 @@ import {
   type AgentEvent,
   type ProviderStatus,
   type Role,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
 import {
@@ -167,7 +167,7 @@ function modeArgs(role: Role, readOnly: boolean, permissions?: RunPermissions): 
   return ['--mode', 'accept-edits'];
 }
 
-/** agy can edit-only or run freely, with nothing in between that Conclave can verify. */
+/** agy can edit-only or run freely, with nothing in between that Plenum can verify. */
 export function antigravityPermissionGap(permissions: RunPermissions): string | undefined {
   if (permissions.level === 3 || permissions.level === 4) {
     return "Antigravity can't limit which commands run or block the network, so it works at levels 2 and 5 only.";
@@ -201,7 +201,7 @@ export function antigravityArgs(request: RunRequest): { args: string[]; cleanup:
   let cleanup = () => {};
   const extra: string[] = [];
   if (prompt.length > MAX_ARG_PROMPT) {
-    const dir = mkdtempSync(join(tmpdir(), 'conclave-agy-'));
+    const dir = mkdtempSync(join(tmpdir(), 'plenum-agy-'));
     const file = join(dir, 'instructions.md');
     writeFileSync(file, prompt);
     prompt = `Your full instructions are in the file ${file}. Read that whole file first, then follow it exactly. It is part of this request, not part of the project.`;

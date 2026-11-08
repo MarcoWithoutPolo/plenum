@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { AgentEvent, ProviderStatus, Role } from '@conclave/shared';
+import type { AgentEvent, ProviderStatus, Role } from '@plenum/shared';
 import { runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
 import {
@@ -157,7 +157,7 @@ export function grokArgs(request: RunRequest): { args: string[]; cleanup: () => 
   assertSafeModel(request.model);
   assertSafeEffort(request.effort);
   assertSafeSession(request.sessionId);
-  const dir = mkdtempSync(join(tmpdir(), 'conclave-grok-'));
+  const dir = mkdtempSync(join(tmpdir(), 'plenum-grok-'));
   const file = join(dir, 'prompt.md');
   writeFileSync(file, request.prompt);
   const args = [
@@ -205,10 +205,10 @@ function permissionArgs(role: Role, readOnly: boolean, permissions?: RunPermissi
 /** Command allow-lists aren't verified yet, so levels 3 and 4 wait. */
 export function grokPermissionGap(permissions: RunPermissions): string | undefined {
   if (permissions.level === 3 || permissions.level === 4) {
-    return 'Grok Build works at levels 1, 2 and 5 in Conclave for now; command allow-lists for levels 3 and 4 are not verified yet.';
+    return 'Grok Build works at levels 1, 2 and 5 in Plenum for now; command allow-lists for levels 3 and 4 are not verified yet.';
   }
   if (permissions.network && permissions.level < 5) {
-    return 'Grok Build reaches the network only at level 5 in Conclave.';
+    return 'Grok Build reaches the network only at level 5 in Plenum.';
   }
   return undefined;
 }

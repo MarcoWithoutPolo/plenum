@@ -10,10 +10,10 @@ const welcome = (page: Page) => page.getByRole('dialog', { name: /Connect your A
 
 async function open(connected: number, env: Record<string, string> = {}) {
   const run = await launch('empty', 'light', {
-    CONCLAVE_DEMO_FIRST_RUN: '1',
-    CONCLAVE_DEMO_CONNECTED: String(connected),
+    PLENUM_DEMO_FIRST_RUN: '1',
+    PLENUM_DEMO_CONNECTED: String(connected),
     // Installed: Claude, Codex, Antigravity, and the v0.9 AIs.
-    CONCLAVE_DEMO_TEAM: '9',
+    PLENUM_DEMO_TEAM: '9',
     ...env,
   });
   await run.page.setViewportSize({ width: 1320, height: 860 });
@@ -46,13 +46,13 @@ test('one AI: Continue with 1 AI, a free second AI pointed out, reviews of its o
     await page.getByRole('button', { name: 'Continue' }).click();
     const team = page.getByRole('list', { name: 'Team' });
     await expect(team).toContainText('(only one AI, so it reviews its own work)');
-    await page.getByRole('button', { name: 'Start using Conclave' }).click();
+    await page.getByRole('button', { name: 'Start using Plenum' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
     // Done for good: the next launch goes straight in (checked through the setting).
     const settings = await page.evaluate(() =>
       (
-        window as unknown as { conclave: { settings: { get(): Promise<unknown> } } }
-      ).conclave.settings.get(),
+        window as unknown as { plenum: { settings: { get(): Promise<unknown> } } }
+      ).plenum.settings.get(),
     );
     expect(settings).toMatchObject({ firstRun: { done: true } });
   } finally {
@@ -106,8 +106,8 @@ test('four AIs: everything works, with a backup at every role', async () => {
 
 test('a computer without Node.js is told what to do, not shown an npm error', async () => {
   const run = await launch('empty', 'light', {
-    CONCLAVE_DEMO_FIRST_RUN: '1',
-    CONCLAVE_DEMO_NO_NPM: '1',
+    PLENUM_DEMO_FIRST_RUN: '1',
+    PLENUM_DEMO_NO_NPM: '1',
   });
   try {
     const page = run.page;
@@ -119,7 +119,7 @@ test('a computer without Node.js is told what to do, not shown an npm error', as
     await expect(add.getByRole('button', { name: 'Install', exact: true })).toHaveCount(0);
     // Once Node.js is there, Check again brings Install back.
     await run.app.evaluate(() => {
-      delete process.env.CONCLAVE_DEMO_NO_NPM;
+      delete process.env.PLENUM_DEMO_NO_NPM;
     });
     await add.getByRole('button', { name: 'Check again' }).first().click();
     await expect(add.getByRole('button', { name: 'Install', exact: true }).first()).toBeVisible();

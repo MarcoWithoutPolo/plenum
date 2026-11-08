@@ -44,7 +44,7 @@ export function lockHolder(path: string): number | undefined {
 }
 
 /**
- * One brain per project, across the desktop app and every `conclave` CLI: a lock file holding
+ * One brain per project, across the desktop app and every `plenum` CLI: a lock file holding
  * the owner's pid, touched while held. A lock left by a crashed process is taken over; when two
  * processes find it stale at once, only one can move it aside, so only one gets the lock (E7).
  */
@@ -80,7 +80,7 @@ export function acquireLock(path: string): { release: () => void } {
         throw new ProjectBusyError(
           holder === process.pid
             ? 'This project is already running here.'
-            : `This project is already running in another Conclave window or terminal (process ${holder}).`,
+            : `This project is already running in another Plenum window or terminal (process ${holder}).`,
         );
       }
       // Stale: move it aside under a name only this process uses. A rename is atomic, so of two

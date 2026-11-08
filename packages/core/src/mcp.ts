@@ -1,20 +1,20 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { firstPreferred, type QuestionPayload } from '@conclave/shared';
+import { firstPreferred, type QuestionPayload } from '@plenum/shared';
 import { z } from 'zod';
 import { decideApproval } from './brain/manager.js';
 import { parseSeat, type Engine } from './engine.js';
 
 /**
- * Conclave as an MCP server (v1.0 F9): Claude Code, Codex or any MCP client can ask a council,
+ * Plenum as an MCP server (v1.0 F9): Claude Code, Codex or any MCP client can ask a council,
  * read projects and the Inbox, queue a task and answer a project's question. It only reads and
  * queues: merges, pull requests, pushes, installs and network access stay in the Inbox for you.
  *
- *   claude mcp add conclave -- "<Conclave.exe>" --mcp
- *   claude mcp add conclave -- npm --prefix <clone> run -s conclave -- mcp
+ *   claude mcp add plenum -- "<Plenum.exe>" --mcp
+ *   claude mcp add plenum -- npm --prefix <clone> run -s plenum -- mcp
  */
 export function createMcpServer(engine: Engine, version: string): McpServer {
-  const server = new McpServer({ name: 'conclave', version });
+  const server = new McpServer({ name: 'plenum', version });
   const store = engine.store;
   const text = (value: unknown) => ({
     content: [
@@ -59,7 +59,7 @@ export function createMcpServer(engine: Engine, version: string): McpServer {
         return refuse((e as Error).message);
       }
       if (seats.length === 0)
-        return refuse('No AI is signed in. Open Conclave → Accounts to connect one.');
+        return refuse('No AI is signed in. Open Plenum → Accounts to connect one.');
       const result = await engine.council.ask(question, {
         members: seats,
         synthesizer: firstPreferred(seats)!,
@@ -81,7 +81,7 @@ export function createMcpServer(engine: Engine, version: string): McpServer {
     'list_projects',
     {
       title: 'List projects',
-      description: 'Every Conclave project with its status and task counts.',
+      description: 'Every Plenum project with its status and task counts.',
       annotations: { readOnlyHint: true },
     },
     () =>
@@ -154,7 +154,7 @@ export function createMcpServer(engine: Engine, version: string): McpServer {
       const p = findProject(id);
       if (!p) return refuse(`No project "${id}".`);
       if (p.status === 'done' || p.status === 'stopped')
-        return refuse(`"${p.name}" is ${p.status}. Open it in Conclave to start it again.`);
+        return refuse(`"${p.name}" is ${p.status}. Open it in Plenum to start it again.`);
       const [task] = store.projects.addTasks(p.id, [{ title, spec }]);
       store.projects.log({
         projectId: p.id,
@@ -173,7 +173,7 @@ export function createMcpServer(engine: Engine, version: string): McpServer {
     {
       title: 'List the Inbox',
       description:
-        'What waits for you across projects: questions (which answer_question can answer) and approvals (which only you can decide, in Conclave).',
+        'What waits for you across projects: questions (which answer_question can answer) and approvals (which only you can decide, in Plenum).',
       annotations: { readOnlyHint: true },
     },
     () =>
@@ -213,7 +213,7 @@ export function createMcpServer(engine: Engine, version: string): McpServer {
       if (!approval || approval.status !== 'pending') return refuse(`No open question "${id}".`);
       if (approval.kind !== 'question')
         return refuse(
-          `That's a ${approval.kind.replace('_', ' ')} request: only you can decide it, in Conclave's Inbox.`,
+          `That's a ${approval.kind.replace('_', ' ')} request: only you can decide it, in Plenum's Inbox.`,
         );
       const outcome = await decideApproval(engine, engine.home, approval.id, 'approved', answer);
       return outcome.ok

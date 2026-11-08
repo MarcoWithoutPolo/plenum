@@ -16,9 +16,9 @@ import {
   waitFor,
 } from './scenario-kit.js';
 
-// Private tests, scenarios 22–23 (v0.9.1, the faster loop), on your real accounts and Conclave
-// data. They spend real usage. Pick them: CONCLAVE_SCENARIO=22,23.
-const which = (process.env.CONCLAVE_SCENARIO ?? '').split(',').map((s) => s.trim());
+// Private tests, scenarios 22–23 (v0.9.1, the faster loop), on your real accounts and Plenum
+// data. They spend real usage. Pick them: PLENUM_SCENARIO=22,23.
+const which = (process.env.PLENUM_SCENARIO ?? '').split(',').map((s) => s.trim());
 
 type Api = <T>(fn: string, ...args: unknown[]) => Promise<T>;
 
@@ -44,7 +44,7 @@ const hhmm = (d: Date) =>
 
 // ── 22: a reviewer asks for one small change; the retry continues from the kept commit ───────
 test('scenario 22: a review send-back continues from the last attempt', async () => {
-  test.skip(!which.includes('22'), 'set CONCLAVE_SCENARIO=22 to run');
+  test.skip(!which.includes('22'), 'set PLENUM_SCENARIO=22 to run');
   test.setTimeout(40 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('22');
@@ -104,7 +104,7 @@ test('scenario 22: a review send-back continues from the last attempt', async ()
 
 function readClamp(dir: string): string {
   try {
-    return execFileSync('git', ['show', 'conclave/integration:clamp.js'], {
+    return execFileSync('git', ['show', 'plenum/integration:clamp.js'], {
       cwd: dir,
       encoding: 'utf8',
     });
@@ -119,7 +119,7 @@ function readClamp(dir: string): string {
 
 // ── 23: the only reviewer is unavailable after a build; it parks and is reviewed without a rebuild
 test('scenario 23: a tested build parks until a reviewer is free', async () => {
-  test.skip(!which.includes('23'), 'set CONCLAVE_SCENARIO=23 to run');
+  test.skip(!which.includes('23'), 'set PLENUM_SCENARIO=23 to run');
   test.setTimeout(40 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('23');

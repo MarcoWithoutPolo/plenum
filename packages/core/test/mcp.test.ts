@@ -19,7 +19,7 @@ const temp = (prefix: string) => {
 };
 
 async function setup() {
-  const repo = temp('conclave-mcp-repo-');
+  const repo = temp('plenum-mcp-repo-');
   const git = (...a: string[]) =>
     execFileSync(
       'git',
@@ -34,7 +34,7 @@ async function setup() {
   git('commit', '-q', '-m', 'init');
   const synth = (prompt: string) => prompt.includes('You are the synthesizer');
   const engine = new Engine({
-    home: temp('conclave-mcp-home-'),
+    home: temp('plenum-mcp-home-'),
     store: new Store(':memory:'),
     adapters: [
       new FakeAdapter(

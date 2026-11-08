@@ -1,4 +1,4 @@
-import type { Seat } from '@conclave/shared';
+import type { Seat } from '@plenum/shared';
 import type { SettingsStore } from './store/settings.js';
 
 /**

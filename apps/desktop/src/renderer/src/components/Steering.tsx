@@ -14,7 +14,7 @@ import {
   type SteeringAction,
   type SteeringMessage,
   type Task,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { Button, ProviderDot } from './bits';
 import { Dialog } from './Dialog';
 import { Popover } from './Popover';

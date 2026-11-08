@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, CircleDot, Eye, Pin, RefreshCw, RotateCcw, X, XCircle } from 'lucide-react';
-import type { Approval, BrainEvent, Project, Seat, Task } from '@conclave/shared';
+import type { Approval, BrainEvent, Project, Seat, Task } from '@plenum/shared';
 import { DiffView } from '@/components/DiffView';
 import { FailureCard } from '@/components/FailureCard';
 import { Markdown } from '@/components/Markdown';

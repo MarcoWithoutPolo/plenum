@@ -24,7 +24,7 @@ import {
   createProject,
   openDatabase,
   type RunRequest,
-} from '@conclave/core';
+} from '@plenum/core';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const { values } = parseArgs({
@@ -110,7 +110,7 @@ async function worker(): Promise<void> {
           : undefined,
     },
     // Not recording requests: a day of prompts held in memory is the harness's growth, not
-    // Conclave's (the 2026-11-07 soak's "heap grew" flags).
+    // Plenum's (the 2026-11-07 soak's "heap grew" flags).
     { id: 'codex', record: false },
   );
   const engine = new Engine({
@@ -168,14 +168,14 @@ async function orchestrate(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const out = join(here, 'results', `soak-${stamp}`);
   mkdirSync(out, { recursive: true });
-  const home = mkdtempSync(join(tmpdir(), 'conclave-soak-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-soak-repo-'));
+  const home = mkdtempSync(join(tmpdir(), 'plenum-soak-home-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-soak-repo-'));
   git(repo, 'init', '-q', '-b', 'main');
   writeFileSync(join(repo, 'README.md'), '# soak\n');
   git(repo, 'add', '-A');
   git(repo, 'commit', '-q', '-m', 'init');
 
-  const db = join(home, 'conclave.db');
+  const db = join(home, 'plenum.db');
   const setupStore = new Store(openDatabase(db));
   const project = await createProject(
     setupStore,
@@ -284,7 +284,7 @@ async function orchestrate(): Promise<void> {
   const final = check(true);
 
   // Every merged task's file is on the integration branch.
-  const files = git(repo, 'ls-tree', '--name-only', 'conclave/integration', 'items/')
+  const files = git(repo, 'ls-tree', '--name-only', 'plenum/integration', 'items/')
     .split('\n')
     .filter(Boolean).length;
   if (files !== final.merged)

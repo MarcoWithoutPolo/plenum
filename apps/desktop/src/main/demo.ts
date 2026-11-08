@@ -11,8 +11,8 @@ import {
   type FakeScript,
   type RunRequest,
   type Store,
-} from '@conclave/core';
-import { groupVariants, markOlder, type ProviderId } from '@conclave/shared';
+} from '@plenum/core';
+import { groupVariants, markOlder, type ProviderId } from '@plenum/shared';
 
 interface DemoTask {
   title: string;
@@ -21,11 +21,11 @@ interface DemoTask {
   body: string;
   /** More files the builder writes. */
   more?: Record<string, string>;
-  /** What the builder writes once a reviewer sent it back (CONCLAVE_DEMO_VISUAL). */
+  /** What the builder writes once a reviewer sent it back (PLENUM_DEMO_VISUAL). */
   fixed?: string;
 }
 
-/** CONCLAVE_DEMO_WEB=1: a small web page, so the preview and the screenshots have something. */
+/** PLENUM_DEMO_WEB=1: a small web page, so the preview and the screenshots have something. */
 const page = (align: 'left' | 'center') =>
   [
     '<!doctype html>',
@@ -71,7 +71,7 @@ const WEB_TASKS: DemoTask[] = [
     body: page('left'),
     more: {
       'style.css': STYLE,
-      'conclave.shots.json': `${JSON.stringify({ states: [{ name: 'counted', page: '/', steps: [{ click: 'Add one' }, { click: 'Add one' }] }] }, null, 2)}\n`,
+      'plenum.shots.json': `${JSON.stringify({ states: [{ name: 'counted', page: '/', steps: [{ click: 'Add one' }, { click: 'Add one' }] }] }, null, 2)}\n`,
     },
     fixed: page('center'),
   },
@@ -107,15 +107,15 @@ const GREET_TASKS: DemoTask[] = [
   },
 ];
 
-const web = () => process.env.CONCLAVE_DEMO_WEB === '1';
+const web = () => process.env.PLENUM_DEMO_WEB === '1';
 const demoTasks = () => (web() ? WEB_TASKS : GREET_TASKS);
 
 /**
- * CONCLAVE_DEMO_VISUAL=1: a reviewer that can see sends the page back once: the count sits at
+ * PLENUM_DEMO_VISUAL=1: a reviewer that can see sends the page back once: the count sits at
  * the left on a phone. The builder centers it, and the next review approves.
  */
 function visualReply(req: RunRequest): string | undefined {
-  if (process.env.CONCLAVE_DEMO_VISUAL !== '1' || !req.images?.length) return undefined;
+  if (process.env.PLENUM_DEMO_VISUAL !== '1' || !req.images?.length) return undefined;
   const html = join(req.cwd, 'index.html');
   if (!existsSync(html) || readFileSync(html, 'utf8').includes('text-align: center')) {
     return undefined;
@@ -139,8 +139,8 @@ function visualReply(req: RunRequest): string | undefined {
 }
 
 /**
- * CONCLAVE_DEMO_ASK=1: the second task's builder asks a question before it builds;
- * CONCLAVE_DEMO_ASK=install: it asks to install a package instead.
+ * PLENUM_DEMO_ASK=1: the second task's builder asks a question before it builds;
+ * PLENUM_DEMO_ASK=install: it asks to install a package instead.
  */
 const DEMO_QUESTION = {
   question: 'Which tone should the usage notes use?',
@@ -151,7 +151,7 @@ const DEMO_QUESTION = {
 
 function asksFirst(req: RunRequest): boolean {
   return (
-    (process.env.CONCLAVE_DEMO_ASK === '1' || process.env.CONCLAVE_DEMO_ASK === 'install') &&
+    (process.env.PLENUM_DEMO_ASK === '1' || process.env.PLENUM_DEMO_ASK === 'install') &&
     req.role === 'builder' &&
     req.prompt.includes(`YOUR TASK: ${GREET_TASKS[1]!.title}`) &&
     !/The user answered|Assumption made|Settled by/.test(req.prompt)
@@ -178,7 +178,7 @@ function projectReply(req: RunRequest): string | undefined {
       ],
       // With lanes on, the planner plans the tasks (independent) instead of the clarify step.
       tasks:
-        process.env.CONCLAVE_DEMO_LANES === '1'
+        process.env.PLENUM_DEMO_LANES === '1'
           ? []
           : demoTasks().map(({ title, spec }) => ({ title, spec })),
       test_command: null,
@@ -186,7 +186,7 @@ function projectReply(req: RunRequest): string | undefined {
   }
   if (asksFirst(req)) {
     return JSON.stringify(
-      process.env.CONCLAVE_DEMO_ASK === 'install'
+      process.env.PLENUM_DEMO_ASK === 'install'
         ? {
             question:
               'May I run `npm install marked` to render the usage notes from Markdown? I have no shell here and the rules do not let me reach the network.',
@@ -217,8 +217,8 @@ function projectReply(req: RunRequest): string | undefined {
   }
   if (req.role === 'planner') {
     const todo = demoTasks().filter((t) => !existsSync(join(req.cwd, t.file)));
-    // CONCLAVE_DEMO_LANES=1: the tasks are independent and touch different files, so they run at once.
-    const lanes = process.env.CONCLAVE_DEMO_LANES === '1';
+    // PLENUM_DEMO_LANES=1: the tasks are independent and touch different files, so they run at once.
+    const lanes = process.env.PLENUM_DEMO_LANES === '1';
     return todo.length
       ? JSON.stringify({
           done: false,
@@ -241,8 +241,8 @@ function projectReply(req: RunRequest): string | undefined {
   if (req.role === 'reviewer') {
     const visual = visualReply(req);
     if (visual) return visual;
-    // CONCLAVE_DEMO_REJECT=1: reviewers always ask for changes, to show the issue checklist.
-    if (process.env.CONCLAVE_DEMO_REJECT === '1') {
+    // PLENUM_DEMO_REJECT=1: reviewers always ask for changes, to show the issue checklist.
+    if (process.env.PLENUM_DEMO_REJECT === '1') {
       return JSON.stringify({
         approve: false,
         issues: ['Add a JSDoc comment to greet()', 'Rename the parameter to fullName'],
@@ -261,9 +261,9 @@ function projectReply(req: RunRequest): string | undefined {
 
 async function projectAct(req: RunRequest): Promise<void> {
   if (req.role !== 'builder') return;
-  // CONCLAVE_DEMO_SLOW keeps builders busy long enough to see a project mid-run.
-  if (process.env.CONCLAVE_DEMO_SLOW) {
-    const ms = process.env.CONCLAVE_DEMO_LANES === '1' ? 6000 : 2500;
+  // PLENUM_DEMO_SLOW keeps builders busy long enough to see a project mid-run.
+  if (process.env.PLENUM_DEMO_SLOW) {
+    const ms = process.env.PLENUM_DEMO_LANES === '1' ? 6000 : 2500;
     await new Promise((r) => setTimeout(r, ms));
   }
   if (asksFirst(req)) return;
@@ -275,9 +275,9 @@ async function projectAct(req: RunRequest): Promise<void> {
     writeFileSync(join(req.cwd, file), body);
 }
 
-/** CONCLAVE_DEMO_OUT=codex: that AI starts at its usage limit for 70 minutes (the start-up check). */
+/** PLENUM_DEMO_OUT=codex: that AI starts at its usage limit for 70 minutes (the start-up check). */
 export function demoReadings(store: Store): void {
-  const out = process.env.CONCLAVE_DEMO_OUT as ProviderId | undefined;
+  const out = process.env.PLENUM_DEMO_OUT as ProviderId | undefined;
   if (!out) return;
   const now = Date.now();
   store.recordQuota({
@@ -369,11 +369,11 @@ export function demoGitHub(): GitHub {
 }
 
 /**
- * CONCLAVE_DEMO_CONNECTED=<n> (F7 tests): the first n installed AIs are signed in and the others
+ * PLENUM_DEMO_CONNECTED=<n> (F7 tests): the first n installed AIs are signed in and the others
  * signed out, and Sign in signs one in after a moment, as if its own sign-in had finished.
  */
 const signedIn = new Set<string>();
-const connectedCount = process.env.CONCLAVE_DEMO_CONNECTED;
+const connectedCount = process.env.PLENUM_DEMO_CONNECTED;
 
 export function demoSignIn(provider: string): Promise<{ opened: boolean }> {
   setTimeout(() => signedIn.add(provider), 800);
@@ -401,7 +401,7 @@ function withDemoAuth(adapters: Adapter[]): Adapter[] {
   return adapters;
 }
 
-/** In CONCLAVE_DEMO_DATA=empty no AI is installed yet (the first run, every empty state). */
+/** In PLENUM_DEMO_DATA=empty no AI is installed yet (the first run, every empty state). */
 function installed(status: { version: string; detail: string }) {
   return demoData() === 'empty'
     ? { installed: false, auth: 'unknown' as const, version: undefined, detail: undefined }
@@ -409,7 +409,7 @@ function installed(status: { version: string; detail: string }) {
 }
 
 /**
- * Demo providers for CONCLAVE_DEMO=1: the whole app works offline, costs
+ * Demo providers for PLENUM_DEMO=1: the whole app works offline, costs
  * nothing, and end-to-end tests get deterministic answers.
  */
 /** Demo council answers to "Best way to store small settings?", one voice per AI. */
@@ -442,9 +442,9 @@ export function demoAdapters(): Adapter[] {
     const question = req.prompt.split('\n').filter(Boolean).at(-1) ?? '';
     // The README's council screenshot asks this; answer it like the real thing.
     if (/store small settings/i.test(question)) return SETTINGS_ANSWERS[name] ?? '';
-    // CONCLAVE_DEMO_SLOW_COUNCIL=1: Antigravity takes its time in a council, so there is a
+    // PLENUM_DEMO_SLOW_COUNCIL=1: Antigravity takes its time in a council, so there is a
     // member to skip (F4).
-    if (process.env.CONCLAVE_DEMO_SLOW_COUNCIL && name === 'Antigravity' && req.role === 'chat')
+    if (process.env.PLENUM_DEMO_SLOW_COUNCIL && name === 'Antigravity' && req.role === 'chat')
       return `Antigravity (demo) is still thinking it through: ${'more detail '.repeat(150)}`;
     return `${name} (demo) here. You asked: "${question}". This is a demo answer that streams in word by word.`;
   };
@@ -494,17 +494,17 @@ export function demoAdapters(): Adapter[] {
         reply: answer('Codex'),
         delayMs: 40,
         act: projectAct,
-        // CONCLAVE_DEMO_LIMIT=1: Codex is out of usage, to show limit handling.
+        // PLENUM_DEMO_LIMIT=1: Codex is out of usage, to show limit handling.
         limitWhen: () =>
-          process.env.CONCLAVE_DEMO_LIMIT === '1'
+          process.env.PLENUM_DEMO_LIMIT === '1'
             ? {
                 message:
                   "You've reached your usage limit. It resets at the start of your next billing period.",
               }
             : undefined,
-        // CONCLAVE_DEMO_BREAK=1: Codex's builds crash, to show failure recovery.
+        // PLENUM_DEMO_BREAK=1: Codex's builds crash, to show failure recovery.
         failWhen: (req) =>
-          process.env.CONCLAVE_DEMO_BREAK === '1' && req.role === 'builder'
+          process.env.PLENUM_DEMO_BREAK === '1' && req.role === 'builder'
             ? 'codex exec: stream disconnected before completion (connection reset)'
             : undefined,
       },
@@ -575,13 +575,13 @@ export function demoAdapters(): Adapter[] {
 
 /**
  * The AIs v0.9 added. Not installed in the demo by default, so every scenario keeps its
- * three-AI team and they show under "AIs you can add". CONCLAVE_DEMO_TEAM=9 signs them all in.
+ * three-AI team and they show under "AIs you can add". PLENUM_DEMO_TEAM=9 signs them all in.
  */
 function moreAIs(
   answer: (who: string) => FakeScript['reply'],
   act: FakeScript['act'],
 ): FakeAdapter[] {
-  const on = process.env.CONCLAVE_DEMO_TEAM === '9' || demoData() === 'stress';
+  const on = process.env.PLENUM_DEMO_TEAM === '9' || demoData() === 'stress';
   const status = (version: string, detail: string) =>
     on
       ? { version, detail }
@@ -683,19 +683,19 @@ function moreAIs(
 }
 
 /**
- * CONCLAVE_DEMO_FAIL=<channel,…> (or `*`): those calls from the window fail, so the tests can
+ * PLENUM_DEMO_FAIL=<channel,…> (or `*`): those calls from the window fail, so the tests can
  * check every action shows its failure. Read on every call, so a test can change it while the
  * app runs.
  */
 export function demoFailure(channel: string): void {
-  const fail = process.env.CONCLAVE_DEMO_FAIL?.split(',').map((c) => c.trim());
+  const fail = process.env.PLENUM_DEMO_FAIL?.split(',').map((c) => c.trim());
   if (fail?.includes(channel) || fail?.includes('*')) {
     throw new Error(`Demo failure: ${channel} was made to fail`);
   }
 }
 
-/** CONCLAVE_DEMO_DATA: `empty` (no AI installed, nothing yet) or `stress` (long, many, mixed). */
-export const demoData = () => process.env.CONCLAVE_DEMO_DATA as 'empty' | 'stress' | undefined;
+/** PLENUM_DEMO_DATA: `empty` (no AI installed, nothing yet) or `stress` (long, many, mixed). */
+export const demoData = () => process.env.PLENUM_DEMO_DATA as 'empty' | 'stress' | undefined;
 
 const LONG_WORD = 'Supercalifragilisticexpialidocious'.repeat(9);
 const MIXED = [
@@ -706,7 +706,7 @@ const MIXED = [
 ];
 
 /**
- * CONCLAVE_DEMO_DATA=stress: 300 threads, a project with 60 tasks and an Inbox of 40, with
+ * PLENUM_DEMO_DATA=stress: 300 threads, a project with 60 tasks and an Inbox of 40, with
  * 80-character titles, a 300-character word, emoji, CJK and right-to-left text. Every screen
  * has to stay usable with it.
  */

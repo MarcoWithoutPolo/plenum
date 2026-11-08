@@ -731,8 +731,8 @@ function Connect({
     <div className="flex flex-1 flex-col gap-3 px-4 pt-1 pb-4 text-[13px]">
       <p className="text-muted">
         {provider.installed
-          ? `${provider.name} is installed but not signed in. Sign in with your own account; Conclave never sees your password.`
-          : `${provider.name} isn't connected. Install its CLI and sign in with your own account; Conclave never sees your password.`}
+          ? `${provider.name} is installed but not signed in. Sign in with your own account; Plenum never sees your password.`
+          : `${provider.name} isn't connected. Install its CLI and sign in with your own account; Plenum never sees your password.`}
       </p>
       {provider.install && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[12.5px]">

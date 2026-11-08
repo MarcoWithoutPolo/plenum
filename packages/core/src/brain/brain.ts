@@ -13,7 +13,7 @@ import type {
   Task,
   TaskFailure,
   TaskStatus,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import {
   IN_FLIGHT,
   PROVIDERS,
@@ -23,7 +23,7 @@ import {
   resolveModel,
   sortEfforts,
   visualIssueLine,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { limitResetsAt, looksLikeLimit } from '../adapters/kit/index.js';
 import { builderPermissions, checkCommands, type RunPermissions } from '../adapters/permissions.js';
 import { decisionsSection } from '../store/decisions.js';
@@ -57,7 +57,7 @@ import { findReplacement } from './similar.js';
 import { seatOptions } from '../seats.js';
 
 export interface BrainOptions {
-  /** Conclave's data folder; worktrees go under <home>/projects/<project id>. */
+  /** Plenum's data folder; worktrees go under <home>/projects/<project id>. */
   home: string;
   governor?: Governor;
   maxTasksPerPlan?: number;
@@ -924,8 +924,8 @@ export class Brain {
     }
     try {
       return await this.sendBack(project, now, {
-        failure: this.failureOf('crash', 'A step failed in Conclave', message, null),
-        feedback: `A step failed in Conclave, not in your work (${message}). Do the task again.`,
+        failure: this.failureOf('crash', 'A step failed in Plenum', message, null),
+        feedback: `A step failed in Plenum, not in your work (${message}). Do the task again.`,
       });
     } catch {
       return this.requeue(now);
@@ -1023,7 +1023,7 @@ export class Brain {
     const kept = this.resumed.has(task.id) ? task.kept?.commit : undefined;
     const install = task.grants?.install;
     if (install && isRunnableInstall(install)) {
-      // You approved this exact command; Conclave runs it, not the agent.
+      // You approved this exact command; Plenum runs it, not the agent.
       const ran = await runShell(install, {
         cwd,
         timeoutMs: this.testTimeout,
@@ -1598,7 +1598,7 @@ export class Brain {
     crashPoint('after-approve');
     const merged = await this.workspace.mergeTask(
       task.id,
-      `conclave: merge "${task.title}"`,
+      `plenum: merge "${task.title}"`,
       testCommandOf(project) ? (cwd) => this.runTests(project, cwd) : undefined,
     );
     // Once the merge landed, the task is merged even if you pressed Stop meanwhile: putting it
@@ -2523,7 +2523,7 @@ function levelNote(p: RunPermissions): string {
   return ` · level ${p.level}: ${what}${p.network && p.level < 5 ? ', with network' : ''}`;
 }
 
-/** Package folders by installer; added to .gitignore after Conclave runs an install. */
+/** Package folders by installer; added to .gitignore after Plenum runs an install. */
 const INSTALL_FOLDERS: [RegExp, string][] = [
   [/^(npm|pnpm|yarn|bun)\b/i, 'node_modules/'],
   [/^(uv|pip|pip3|python -m pip)\b/i, '.venv/'],
@@ -2579,7 +2579,7 @@ function failure(result: RunResult): string {
 }
 
 function commitMessage(task: Task, builder: Seat): string {
-  return `conclave: ${task.title}\n\n${task.spec.slice(0, 1500)}\n\nBuilt by ${seatLabel(builder)} (task ${task.id}, attempt ${task.attempts + 1}).`;
+  return `plenum: ${task.title}\n\n${task.spec.slice(0, 1500)}\n\nBuilt by ${seatLabel(builder)} (task ${task.id}, attempt ${task.attempts + 1}).`;
 }
 
 function interruptibleSleep(ms: number, signal?: AbortSignal): Promise<void> {

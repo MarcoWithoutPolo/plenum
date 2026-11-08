@@ -1,4 +1,4 @@
-import type { BrainEvent, NotificationSettings } from '@conclave/shared';
+import type { BrainEvent, NotificationSettings } from '@plenum/shared';
 
 export type NoticeKind = keyof NotificationSettings;
 

@@ -25,8 +25,8 @@ const SENTENCE =
   'Build a small greeter: greet(name) returns "Hello, <name>!", with a README section, tests for empty names, and a note on Unicode names like Zoë and 李雷.';
 
 test.beforeAll(async () => {
-  home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-  repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-repo-'));
+  home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+  repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-repo-'));
   const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
       cwd: repo,
@@ -42,10 +42,10 @@ test.beforeAll(async () => {
     args: [join(here, '../out/main/index.js')],
     env: {
       ...process.env,
-      CONCLAVE_DEMO: '1',
-      CONCLAVE_DEMO_SLOW: '1',
-      CONCLAVE_HOME: home,
-      CONCLAVE_E2E_REPO: repo,
+      PLENUM_DEMO: '1',
+      PLENUM_DEMO_SLOW: '1',
+      PLENUM_HOME: home,
+      PLENUM_E2E_REPO: repo,
     },
   });
   page = await app.firstWindow();

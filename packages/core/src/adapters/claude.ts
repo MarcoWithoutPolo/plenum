@@ -5,7 +5,7 @@ import {
   type ProviderStatus,
   type Role,
   type Usage,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { safeCommands, type RunPermissions } from './permissions.js';
 import { runCommand } from '../process.js';
 import {
@@ -30,7 +30,7 @@ import { QUIET_MS } from './types.js';
 
 const INITIALIZE = {
   type: 'control_request',
-  request_id: 'conclave-models',
+  request_id: 'plenum-models',
   request: { subtype: 'initialize' },
 };
 
@@ -319,7 +319,7 @@ export class ClaudeParser extends ClaudeStreamParser {
 
   protected usage(result: Record<string, unknown>): Usage {
     const usage = isRecord(result.usage) ? result.usage : {};
-    // Claude counts cache writes and reads apart from input_tokens; Conclave's inputTokens is all of them.
+    // Claude counts cache writes and reads apart from input_tokens; Plenum's inputTokens is all of them.
     const cached = num(usage.cache_read_input_tokens);
     return tokenUsage({
       input:

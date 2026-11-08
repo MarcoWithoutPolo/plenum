@@ -1,5 +1,5 @@
 /**
- * New project → Start from an example (v1.0 F6): goals like the ones Conclave is measured on
+ * New project → Start from an example (v1.0 F6): goals like the ones Plenum is measured on
  * (bench/projects), ready to edit. Each one suits an empty folder.
  */
 export interface Example {

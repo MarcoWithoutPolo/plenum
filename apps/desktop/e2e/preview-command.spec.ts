@@ -8,7 +8,7 @@ import { _electron as electron, expect, test } from '@playwright/test';
 // A project with its own dev server: the preview asks once before running `npm run dev`, then
 // loads it; allowed once, it opens straight away next time (a changed command asks again:
 // covered by the BrainManager.preview unit tests).
-// With CONCLAVE_SHOTS=1 it also runs in dark mode and saves gallery images.
+// With PLENUM_SHOTS=1 it also runs in dark mode and saves gallery images.
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'screenshots', 'gallery');
 
@@ -29,13 +29,13 @@ const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 for (const scheme of ['light', 'dark'] as const) {
   test(`dev-server preview: asks once, then loads it (${scheme})`, async () => {
     test.skip(
-      scheme === 'dark' && process.env.CONCLAVE_SHOTS !== '1',
-      'dark runs with CONCLAVE_SHOTS=1',
+      scheme === 'dark' && process.env.PLENUM_SHOTS !== '1',
+      'dark runs with PLENUM_SHOTS=1',
     );
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-    const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-dev-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+    const repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-dev-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
         cwd: repo,
@@ -55,16 +55,16 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_SLOW: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_SLOW: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
     const page = await app.firstWindow();
     const shot = async (name: string) => {
-      if (process.env.CONCLAVE_SHOTS !== '1') return;
+      if (process.env.PLENUM_SHOTS !== '1') return;
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(out, `${scheme}-${name}.png`) });
     };
@@ -108,15 +108,15 @@ for (const scheme of ['light', 'dark'] as const) {
             'LOGS',
             await page.evaluate(async () => {
               const w = window as unknown as {
-                conclave: {
+                plenum: {
                   projects: {
                     list(): Promise<{ project: { id: string } }[]>;
                     previewLogs(id: string): Promise<string>;
                   };
                 };
               };
-              const [p] = await w.conclave.projects.list();
-              return p ? w.conclave.projects.previewLogs(p.project.id) : '(no project)';
+              const [p] = await w.plenum.projects.list();
+              return p ? w.plenum.projects.previewLogs(p.project.id) : '(no project)';
             }),
           );
           throw err;

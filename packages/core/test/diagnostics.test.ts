@@ -29,7 +29,7 @@ describe('Export logs (C9)', () => {
       platform: 'win32',
       arch: 'x64',
     });
-    expect(report).toMatch(/^Conclave 1\.0\.0 diagnostics/);
+    expect(report).toMatch(/^Plenum 1\.0\.0 diagnostics/);
     expect(report).toContain('== AIs ==');
     expect(report).toContain('claude: installed');
     expect(report).toContain('== Settings ==');

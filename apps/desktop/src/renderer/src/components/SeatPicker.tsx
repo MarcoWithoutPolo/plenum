@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ProviderId, Seat } from '@conclave/shared';
+import type { ProviderId, Seat } from '@plenum/shared';
 import { api } from '@/lib/api';
 import { pickerProviders, recentSeats, rememberSeat, seatToValue, valueToSeat } from '@/lib/picker';
 import { useApp } from '@/lib/store';

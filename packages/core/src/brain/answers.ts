@@ -1,4 +1,4 @@
-import type { Approval, QuestionPayload, Task } from '@conclave/shared';
+import type { Approval, QuestionPayload, Task } from '@plenum/shared';
 import type { Store } from '../store/store.js';
 import { isRunnableInstall } from './questions.js';
 
@@ -73,7 +73,7 @@ export function answerQuestion(store: Store, approvalId: string, answer: string)
 }
 
 /**
- * Approve or decline an install or network request. An approved install that Conclave can
+ * Approve or decline an install or network request. An approved install that Plenum can
  * run is run before the next build; one it can't run means you installed it yourself.
  */
 export function decidePermission(

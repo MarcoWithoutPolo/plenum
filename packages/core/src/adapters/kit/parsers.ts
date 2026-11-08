@@ -1,4 +1,4 @@
-import type { Usage } from '@conclave/shared';
+import type { Usage } from '@plenum/shared';
 import { limitResetsAt, looksLikeLimit } from './limits.js';
 import type { EventBody, LineParser } from './run.js';
 import { isRecord, str } from './values.js';

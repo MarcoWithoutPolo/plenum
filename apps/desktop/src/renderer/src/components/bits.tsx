@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ProviderId } from '@conclave/shared';
+import type { ProviderId } from '@plenum/shared';
 
 export function ProviderDot({ provider, size = 8 }: { provider: ProviderId; size?: number }) {
   return (

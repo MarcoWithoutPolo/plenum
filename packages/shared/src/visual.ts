@@ -23,7 +23,7 @@ export function visualIssueLine(v: VisualIssue): string {
  * contain spaces, so the path is what follows the last ": " when it ends in ".png".
  */
 export function parseVisualIssue(line: string): VisualIssue {
-  // Labels Conclave gave start with "after:" or "before:"; anything else is the reviewer's own.
+  // Labels Plenum gave start with "after:" or "before:"; anything else is the reviewer's own.
   const m =
     /^(.*) \[((?:after|before): .+)\]$/s.exec(line.trim()) ?? /^(.*?) \[(.+)\]$/s.exec(line.trim());
   if (!m) return { issue: line.trim() };

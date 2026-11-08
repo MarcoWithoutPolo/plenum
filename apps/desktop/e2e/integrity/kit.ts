@@ -29,8 +29,8 @@ export async function launch(
   theme: Theme,
   env: Record<string, string> = {},
 ): Promise<Running> {
-  const home = mkdtempSync(join(tmpdir(), 'conclave-int-home-'));
-  const repo = mkdtempSync(join(tmpdir(), 'conclave-int-repo-'));
+  const home = mkdtempSync(join(tmpdir(), 'plenum-int-home-'));
+  const repo = mkdtempSync(join(tmpdir(), 'plenum-int-repo-'));
   const git = (...a: string[]) =>
     execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
       cwd: repo,
@@ -46,10 +46,10 @@ export async function launch(
     args: [join(here, '../../out/main/index.js')],
     env: {
       ...process.env,
-      CONCLAVE_DEMO: '1',
-      CONCLAVE_HOME: home,
-      CONCLAVE_E2E_REPO: repo,
-      ...(data !== 'normal' && { CONCLAVE_DEMO_DATA: data }),
+      PLENUM_DEMO: '1',
+      PLENUM_HOME: home,
+      PLENUM_E2E_REPO: repo,
+      ...(data !== 'normal' && { PLENUM_DEMO_DATA: data }),
       ...env,
     },
     colorScheme: theme,

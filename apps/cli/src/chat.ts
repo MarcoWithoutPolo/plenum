@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
-import { firstPreferred, type ProviderId, type Seat, type Thread } from '@conclave/shared';
-import { parseSeat, type Engine } from '@conclave/core';
+import { firstPreferred, type ProviderId, type Seat, type Thread } from '@plenum/shared';
+import { parseSeat, type Engine } from '@plenum/core';
 import { bold, dim, messageBlock, paint, seatName, shortId, stats, threadLine } from './format.js';
 
 export interface ChatArgs {
@@ -27,14 +27,14 @@ export async function chatCommand(engine: Engine, args: ChatArgs): Promise<numbe
     const ok = await sendOne(engine, thread, args.message, args.seat);
     console.log(
       dim(
-        `\nthread ${shortId(thread.id)} · continue with: conclave chat --thread ${shortId(thread.id)}`,
+        `\nthread ${shortId(thread.id)} · continue with: plenum chat --thread ${shortId(thread.id)}`,
       ),
     );
     return ok ? 0 : 1;
   }
 
   console.log(
-    `${bold('Conclave chat')} ${dim(`· thread ${shortId(thread.id)} · /help for commands`)}`,
+    `${bold('Plenum chat')} ${dim(`· thread ${shortId(thread.id)} · /help for commands`)}`,
   );
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   rl.on('SIGINT', () => rl.close());
@@ -70,12 +70,12 @@ export async function chatCommand(engine: Engine, args: ChatArgs): Promise<numbe
 async function openThread(engine: Engine, args: ChatArgs): Promise<Thread | undefined> {
   if (args.threadId) {
     const found = engine.store.findThread(args.threadId);
-    if (!found) console.error(`No chat found for "${args.threadId}". See: conclave threads`);
+    if (!found) console.error(`No chat found for "${args.threadId}". See: plenum threads`);
     return found;
   }
   const seat = args.seat ?? (await defaultSeat(engine));
   if (!seat) {
-    console.error('No AI provider is signed in. Run: conclave doctor');
+    console.error('No AI provider is signed in. Run: plenum doctor');
     return undefined;
   }
   return engine.chat.createThread(seat);

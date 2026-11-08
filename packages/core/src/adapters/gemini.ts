@@ -1,4 +1,4 @@
-import type { ProviderStatus } from '@conclave/shared';
+import type { ProviderStatus } from '@plenum/shared';
 import { runCommand, isNotFound } from '../process.js';
 import {
   assertSafeModel,

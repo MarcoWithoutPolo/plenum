@@ -1,9 +1,9 @@
 {
-  "name": "@conclave/desktop",
+  "name": "@plenum/desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "The Conclave desktop app.",
-  "license": "MIT",
+  "description": "The Plenum desktop app.",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
@@ -35,7 +35,7 @@
     "vite": "^8.3.4",
     "zustand": "^5.0.15"
   },
-  "productName": "Conclave",
-  "author": "Conclave contributors",
-  "homepage": "https://github.com/MarcoWithoutPolo/conclave"
+  "productName": "Plenum",
+  "author": "MarcoWithoutPolo",
+  "homepage": "https://github.com/MarcoWithoutPolo/plenum"
 }

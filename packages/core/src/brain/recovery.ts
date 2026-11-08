@@ -7,7 +7,7 @@ import type {
   Task,
   TaskFailure,
   TaskStatus,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import type { RunResult } from '../collect.js';
 import { seatLabel } from '../chat/transcript.js';
 import type { ProjectStore } from '../store/projects.js';

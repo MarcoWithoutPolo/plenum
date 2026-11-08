@@ -1,9 +1,9 @@
 {
-  "name": "@conclave/core",
+  "name": "@plenum/core",
   "version": "1.0.0",
   "private": true,
-  "description": "The Conclave engine: CLI adapters, chat, council, brain loop, governor and store.",
-  "license": "MIT",
+  "description": "The Plenum engine: CLI adapters, chat, council, brain loop, governor and store.",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "exports": {
     ".": {
@@ -16,7 +16,7 @@
     "dist"
   ],
   "dependencies": {
-    "@conclave/shared": "*",
+    "@plenum/shared": "*",
     "@modelcontextprotocol/sdk": "1.32.1",
     "cross-spawn": "^7.0.6",
     "zod": "^4.6.7"

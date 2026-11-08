@@ -89,7 +89,7 @@ function EmptyState({ onCreate, disabled }: { onCreate: () => void; disabled: bo
       </div>
       <h2 className="mt-4 text-[19px] font-semibold tracking-tight">Start your first project</h2>
       <p className="mx-auto mt-1.5 max-w-md text-[13.5px] text-muted">
-        Point Conclave at a git repository and describe the goal. It works on its own, round after
+        Point Plenum at a git repository and describe the goal. It works on its own, round after
         round, and waits for your approval before anything reaches your branch.
       </p>
       <ol className="mx-auto mt-7 grid max-w-3xl grid-cols-4 gap-3 text-left">

@@ -1,18 +1,18 @@
 {
-  "name": "@conclave/cli",
+  "name": "@plenum/cli",
   "version": "1.0.0",
   "private": true,
-  "description": "The conclave command: doctor, chat, ask the council, run projects headless.",
-  "license": "MIT",
+  "description": "The plenum command: doctor, chat, ask the council, run projects headless.",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "bin": {
-    "conclave": "./dist/main.js"
+    "plenum": "./dist/main.js"
   },
   "files": [
     "dist"
   ],
   "dependencies": {
-    "@conclave/core": "*",
-    "@conclave/shared": "*"
+    "@plenum/core": "*",
+    "@plenum/shared": "*"
   }
 }

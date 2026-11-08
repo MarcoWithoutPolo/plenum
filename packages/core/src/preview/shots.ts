@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SHOTS_FILE, parseShotsFile, type Project, type ShotState } from '@conclave/shared';
+import { SHOTS_FILE, parseShotsFile, type Project, type ShotState } from '@plenum/shared';
 import type { Store } from '../store/store.js';
 import type { SnapshotSet } from '../store/snapshots.js';
 import { PreviewServer, detectPreview, previewAllowed } from './preview.js';
@@ -24,7 +24,7 @@ export type TaskShots =
     }
   | { kind: 'skipped'; reason: string };
 
-/** Where a project's screenshots live: under Conclave's data folder, never in your repo. */
+/** Where a project's screenshots live: under Plenum's data folder, never in your repo. */
 export const shotsDir = (home: string, projectId: string) =>
   join(home, 'projects', projectId, 'shots');
 

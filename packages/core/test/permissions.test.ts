@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PERMISSIONS } from '@conclave/shared';
+import { DEFAULT_PERMISSIONS } from '@plenum/shared';
 import {
   antigravityArgs,
   antigravityPermissionGap,

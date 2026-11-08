@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { connect } from 'node:net';
 import { expect, test } from '@playwright/test';
 
-// Private tests, scenarios 9–13 (v0.8), on your real accounts and Conclave data. Scenarios 9,
-// 11 and 13 spend real usage; 10 and 12 run no AI. Pick them: CONCLAVE_SCENARIO=9,10,11,12,13.
+// Private tests, scenarios 9–13 (v0.8), on your real accounts and Plenum data. Scenarios 9,
+// 11 and 13 spend real usage; 10 and 12 run no AI. Pick them: PLENUM_SCENARIO=9,10,11,12,13.
 // Scenario 14 (can each AI read a screenshot) is packages/core/test/live-vision.test.ts.
 import {
   stamp,
@@ -20,11 +20,11 @@ import {
   openProject,
 } from './scenario-kit.js';
 
-const which = (process.env.CONCLAVE_SCENARIO ?? '').split(',').map((s) => s.trim());
+const which = (process.env.PLENUM_SCENARIO ?? '').split(',').map((s) => s.trim());
 
 // ── 9: a static web app, 2 lanes: shots for every task, a real visual review ─────────────
 test('scenario 9: a static tip calculator, screenshots and a real visual review', async () => {
-  test.skip(!which.includes('9'), 'set CONCLAVE_SCENARIO=9 to run');
+  test.skip(!which.includes('9'), 'set PLENUM_SCENARIO=9 to run');
   test.setTimeout(75 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('9');
@@ -128,7 +128,7 @@ test('scenario 9: a static tip calculator, screenshots and a real visual review'
 
 // ── 10: a Vite app: asks once, the preview loads the dev server, stop leaves nothing ──────
 test('scenario 10: a Vite dev server preview', async () => {
-  test.skip(!which.includes('10'), 'set CONCLAVE_SCENARIO=10 to run');
+  test.skip(!which.includes('10'), 'set PLENUM_SCENARIO=10 to run');
   test.setTimeout(10 * 60_000);
   const { checks, check } = checker();
   const name = `vite-${stamp}`;
@@ -228,11 +228,11 @@ test('scenario 10: a Vite dev server preview', async () => {
 
 // ── 11: Antigravity reviews slowly; the review time budget asks a faster AI too ─────────
 test('scenario 11: the review time budget', async () => {
-  test.skip(!which.includes('11'), 'set CONCLAVE_SCENARIO=11 to run');
+  test.skip(!which.includes('11'), 'set PLENUM_SCENARIO=11 to run');
   test.setTimeout(45 * 60_000);
   const { checks, check } = checker();
   // A short budget makes the backup reviewer step in every time (v0.9 C10): no slow AI needed.
-  const { app, page, shot, api } = await launch('11', { CONCLAVE_REVIEW_BUDGET_MS: '20000' });
+  const { app, page, shot, api } = await launch('11', { PLENUM_REVIEW_BUDGET_MS: '20000' });
   try {
     const name = `units-${stamp}`;
     const p = await api<{ id: string }>('projects.create', {
@@ -296,7 +296,7 @@ test('scenario 11: the review time budget', async () => {
 
 // ── 12: Codex can't work right now: the start-up check says what changes, before anything runs
 test('scenario 12: the start-up check', async () => {
-  test.skip(!which.includes('12'), 'set CONCLAVE_SCENARIO=12 to run');
+  test.skip(!which.includes('12'), 'set PLENUM_SCENARIO=12 to run');
   test.setTimeout(10 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('12');
@@ -360,7 +360,7 @@ test('scenario 12: the start-up check', async () => {
 
 // ── 13: skip a running task from the chat: only its lane stops ───────────────────────────
 test('scenario 13: skip a running task from the chat', async () => {
-  test.skip(!which.includes('13'), 'set CONCLAVE_SCENARIO=13 to run');
+  test.skip(!which.includes('13'), 'set PLENUM_SCENARIO=13 to run');
   test.setTimeout(60 * 60_000);
   const { checks, check } = checker();
   const { app, page, shot, api } = await launch('13');

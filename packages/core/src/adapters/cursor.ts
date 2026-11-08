@@ -6,7 +6,7 @@ import {
   type ProviderStatus,
   type Role,
   type Usage,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import { runCommand } from '../process.js';
 import type { RunPermissions } from './permissions.js';
 import {
@@ -148,7 +148,7 @@ export function cursorArgs(request: RunRequest): string[] {
     '--output-format',
     'stream-json',
     '--stream-partial-output',
-    // Conclave runs it only in its own worktrees and temp folders.
+    // Plenum runs it only in its own worktrees and temp folders.
     '--trust',
     ...modeArgs(request.role ?? 'chat', request.readOnly ?? true, request.permissions),
   ];
@@ -174,7 +174,7 @@ function modeArgs(role: Role, readOnly: boolean, permissions?: RunPermissions): 
 /** Without a per-run rule file, Cursor runs either no commands or all of them. */
 export function cursorPermissionGap(permissions: RunPermissions): string | undefined {
   if (permissions.level === 3 || permissions.level === 4) {
-    return "Cursor can't limit which commands run from Conclave, so it works at levels 1, 2 and 5 only.";
+    return "Cursor can't limit which commands run from Plenum, so it works at levels 1, 2 and 5 only.";
   }
   if (permissions.network && permissions.level < 5) {
     return 'Cursor only reaches the network at level 5.';

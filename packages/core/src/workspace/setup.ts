@@ -153,7 +153,7 @@ export function detectTestCommand(root: string): { command: string; source: stri
 
 /** The default parent for new project folders. */
 export function defaultProjectsFolder(): string {
-  return join(homedir(), 'Documents', 'Conclave Projects');
+  return join(homedir(), 'Documents', 'Plenum Projects');
 }
 
 const BAD_NAME = /[<>:"/\\|?*\x00-\x1f]|^\.+$|^(con|prn|aux|nul|com\d|lpt\d)$/i;

@@ -13,7 +13,7 @@ type Tray = { labels(): string[]; choose(label: string): void } | null | undefin
 const tray = (app: ElectronApplication, fn: string, arg?: string) =>
   app.evaluate(
     (_e, [fn, arg]) => {
-      const t = (globalThis as { conclaveTray?: Tray }).conclaveTray;
+      const t = (globalThis as { plenumTray?: Tray }).plenumTray;
       if (!t) return null;
       return fn === 'labels' ? t.labels() : (t.choose(arg!), null);
     },
@@ -24,7 +24,7 @@ const visible = (app: ElectronApplication) =>
     BrowserWindow.getAllWindows().map((w) => !w.isDestroyed() && w.isVisible()),
   );
 
-test('closing the window keeps Conclave in the tray, and the tray opens it again', async () => {
+test('closing the window keeps Plenum in the tray, and the tray opens it again', async () => {
   const run = await launch('normal', 'light');
   try {
     const { app, page } = run;
@@ -36,9 +36,9 @@ test('closing the window keeps Conclave in the tray, and the tray opens it again
     await expect(section.getByRole('radio', { name: 'Keep running' })).toBeChecked();
 
     const labels = (await tray(app, 'labels')) as string[];
-    expect(labels).toContain('Open Conclave');
+    expect(labels).toContain('Open Plenum');
     expect(labels).toContain('Pause everything');
-    expect(labels).toContain('Quit Conclave');
+    expect(labels).toContain('Quit Plenum');
     expect(labels.some((l) => l.startsWith('Inbox:'))).toBe(true);
 
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
@@ -46,7 +46,7 @@ test('closing the window keeps Conclave in the tray, and the tray opens it again
 
     // Pause everything from the tray is the same setting as in Settings.
     await tray(app, 'choose', 'Pause everything');
-    await tray(app, 'choose', 'Open Conclave');
+    await tray(app, 'choose', 'Open Plenum');
     await expect.poll(() => visible(app)).toEqual([true]);
     await page.getByRole('button', { name: /^Projects/ }).click();
     await page.getByRole('button', { name: /^Settings/ }).click();

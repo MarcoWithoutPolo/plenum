@@ -48,7 +48,7 @@ export async function setUp(root: string, conflict = false): Promise<CrashProjec
   writeFileSync(join(repo, 'check.js'), "console.log('ok');\n");
   git(repo, 'add', '-A');
   git(repo, 'commit', '-q', '-m', 'init');
-  const db = join(root, 'conclave.db');
+  const db = join(root, 'plenum.db');
   const store = new Store(db);
   const project = await createProject(store, [{ provider: 'claude' }, { provider: 'codex' }], {
     repoPath: repo,

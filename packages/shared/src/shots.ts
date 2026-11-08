@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
 /**
- * `conclave.shots.json` at the top of a web project: states worth a screenshot that the page
- * only reaches once it's used (a board with cards, a form with an error). Conclave replays each
+ * `plenum.shots.json` at the top of a web project: states worth a screenshot that the page
+ * only reaches once it's used (a board with cards, a form with an error). Plenum replays each
  * state's steps in its screenshot browser before the shots, so the free checks and the reviewer
  * see the page in use, not just empty.
  */
-export const SHOTS_FILE = 'conclave.shots.json';
+export const SHOTS_FILE = 'plenum.shots.json';
 
 export const ShotStep = z.union([
   /** Type into the field with this label (its label, aria-label or placeholder). */

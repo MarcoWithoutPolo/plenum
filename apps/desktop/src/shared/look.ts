@@ -1,4 +1,4 @@
-import type { AppearanceSettings } from '@conclave/shared';
+import type { AppearanceSettings } from '@plenum/shared';
 
 /**
  * The page side of Appearance and accessibility (F3): attributes the stylesheet keys off.

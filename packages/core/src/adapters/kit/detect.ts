@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { ProviderId, ProviderStatus } from '@conclave/shared';
+import type { ProviderId, ProviderStatus } from '@plenum/shared';
 import { isNotFound, runCommand } from '../../process.js';
 
 /**

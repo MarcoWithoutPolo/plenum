@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BrainEvent, NotificationSettings } from '@conclave/shared';
+import type { BrainEvent, NotificationSettings } from '@plenum/shared';
 import { Notifier, noticeFor, type Notice } from '../src/main/notify';
 
 const ALL_ON: NotificationSettings = {
@@ -52,8 +52,8 @@ describe('Notifications', () => {
       body: 'Codex asks: Which tone?',
     });
     expect(
-      noticeFor(event('approval', 'Waiting for you: Merge conclave/integration into main'), 'g'),
-    ).toMatchObject({ kind: 'approval', body: 'Merge conclave/integration into main' });
+      noticeFor(event('approval', 'Waiting for you: Merge plenum/integration into main'), 'g'),
+    ).toMatchObject({ kind: 'approval', body: 'Merge plenum/integration into main' });
     expect(noticeFor(event('done', 'Goal met: all done'), 'g')?.kind).toBe('done');
     expect(
       noticeFor(event('stop', '3 tasks in a row failed with nothing merged. Paused…'), 'g')?.kind,
@@ -100,7 +100,7 @@ describe('Notifications', () => {
   it('skips "ready to merge" right after "goal met" for the same project', () => {
     const s = setup();
     s.notifier.handle(event('done', 'Goal met: x'));
-    s.notifier.handle(event('approval', 'Waiting for you: Merge conclave/integration into main'));
+    s.notifier.handle(event('approval', 'Waiting for you: Merge plenum/integration into main'));
     expect(s.shown.map((n) => n.kind)).toEqual(['done']);
     s.tick(60_000);
     s.notifier.handle(event('approval', 'Waiting for you: Open a pull request'));

@@ -1,9 +1,9 @@
 /**
- * Conclave benchmark: the same goal, given to Claude Code, Codex and Antigravity on their own,
- * and to Conclave. Scored by hidden acceptance tests the agents never see.
+ * Plenum benchmark: the same goal, given to Claude Code, Codex and Antigravity on their own,
+ * and to Plenum. Scored by hidden acceptance tests the agents never see.
  *
  *   npx tsx --conditions=development bench/run.ts --projects textkit,calc,inventory \
- *     --contenders claude,codex,antigravity,conclave --runs 1
+ *     --contenders claude,codex,antigravity,plenum --runs 1
  *
  * `reference` is a free contender that copies the reference solution (checks the pipeline).
  * Results go to bench/results/<timestamp>/ (one JSON per run plus summary.md).
@@ -41,8 +41,8 @@ import {
   silenceSqliteWarning,
   type Adapter,
   type RunPermissions,
-} from '@conclave/core';
-import type { ProviderId } from '@conclave/shared';
+} from '@plenum/core';
+import type { ProviderId } from '@plenum/shared';
 
 silenceSqliteWarning();
 // Browser-based hidden tests (kanban) load Playwright and Electron from the repo.
@@ -51,13 +51,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const { values } = parseArgs({
   options: {
     projects: { type: 'string', default: 'textkit,calc,inventory' },
-    contenders: { type: 'string', default: 'claude,codex,antigravity,conclave' },
+    contenders: { type: 'string', default: 'claude,codex,antigravity,plenum' },
     /**
-     * Force Conclave's team, e.g. "builder:antigravity,reviewer:claude+codex". A seat can name a
+     * Force Plenum's team, e.g. "builder:antigravity,reviewer:claude+codex". A seat can name a
      * model and an effort: "builder:codex@gpt-6-luna~medium+claude".
      */
     team: { type: 'string' },
-    /** Conclave's permission level (Antigravity can only build at 2 or 5). */
+    /** Plenum's permission level (Antigravity can only build at 2 or 5). */
     level: { type: 'string', default: '3' },
     /** Screenshots and the free visual checks for web projects (needs Chrome or Edge). */
     shots: { type: 'string', default: 'on' },
@@ -104,7 +104,7 @@ const team = values.team
       }),
     )
   : undefined;
-/** Names this run's Conclave variant in results, e.g. conclave-b=antigravity-r=claude-2l. */
+/** Names this run's Plenum variant in results, e.g. plenum-b=antigravity-r=claude-2l. */
 const variant = `${
   values.team
     ? `-${values.team
@@ -155,7 +155,7 @@ const SINGLE: Record<
     permissions: { level: 2, network: false },
     note: 'level 2: edits only (agy headless has no allow-listed commands)',
   },
-  // v0.9: the new AIs, each at the strongest level Conclave can enforce for it (level 2).
+  // v0.9: the new AIs, each at the strongest level Plenum can enforce for it (level 2).
   cursor: {
     make: () => new CursorAdapter(),
     permissions: { level: 2, network: false },
@@ -208,11 +208,11 @@ interface Result {
   hidden: { pass: number; fail: number; total: number; failed?: string[] };
   ownTests: 'pass' | 'fail' | 'none';
   interventions: number;
-  /** A usage limit cut the run short (single tool) or forced a fallback (Conclave). */
+  /** A usage limit cut the run short (single tool) or forced a fallback (Plenum). */
   limited: boolean;
   usage: Usage[];
   notes: string[];
-  /** Conclave only: the brain's activity, minutes from the start, to see where time went. */
+  /** Plenum only: the brain's activity, minutes from the start, to see where time went. */
   timeline?: string[];
 }
 
@@ -335,12 +335,12 @@ async function runSingle(
   return { ok, limited, usage: [usage], interventions, notes };
 }
 
-async function runConclave(
+async function runPlenum(
   project: string,
   goal: string,
   dir: string,
 ): Promise<Partial<Result> & { codeDir: string }> {
-  const home = mkdtempSync(join(tmpdir(), 'bench-conclave-home-'));
+  const home = mkdtempSync(join(tmpdir(), 'bench-plenum-home-'));
   const engine = new Engine({ home });
   const ready = await engine.readySeats();
   const projectRow = await createProject(engine.store, ready, {
@@ -428,7 +428,7 @@ async function runConclave(
   );
   const t0 = events[0]?.at ?? Date.now();
   // Where the time went (v0.9.2): inside AI runs (overlaps counted once), waiting for a usage
-  // limit, and the rest (tests, git, Conclave's own steps), so a slow AI reply isn't read as a
+  // limit, and the rest (tests, git, Plenum's own steps), so a slow AI reply isn't read as a
   // slow loop.
   const spans = (
     db
@@ -452,7 +452,7 @@ async function runConclave(
   const wall = end - t0;
   const min = (ms: number) => (ms / 60_000).toFixed(1);
   notes.push(
-    `time: AI ${min(aiMs)} min · waiting for limits ${min(waitMs)} min · Conclave ${min(Math.max(0, wall - aiMs - waitMs))} min`,
+    `time: AI ${min(aiMs)} min · waiting for limits ${min(waitMs)} min · Plenum ${min(Math.max(0, wall - aiMs - waitMs))} min`,
   );
   const timeline = events.map(
     (e) =>
@@ -460,8 +460,8 @@ async function runConclave(
   );
   engine.close();
   // Export what landed on the integration branch.
-  const codeDir = mkdtempSync(join(tmpdir(), `bench-${project}-conclave-out-`));
-  execFileSync('git', ['--work-tree', codeDir, 'checkout', 'conclave/integration', '--', '.'], {
+  const codeDir = mkdtempSync(join(tmpdir(), `bench-${project}-plenum-out-`));
+  execFileSync('git', ['--work-tree', codeDir, 'checkout', 'plenum/integration', '--', '.'], {
     cwd: dir,
   });
   git(dir, 'reset', '-q', '--hard');
@@ -498,8 +498,8 @@ for (const project of projects) {
         if (contender === 'reference') {
           cpSync(join(here, 'projects', project, 'reference'), dir, { recursive: true });
           partial = { ok: true, usage: [], interventions: 0, notes: ['reference solution'] };
-        } else if (contender === 'conclave') {
-          partial = await runConclave(project, goal, dir);
+        } else if (contender === 'plenum') {
+          partial = await runPlenum(project, goal, dir);
         } else if (SINGLE[contender]) {
           partial = await runSingle(project, contender, goal, dir);
         } else {
@@ -517,7 +517,7 @@ for (const project of projects) {
       const codeDir = partial.codeDir ?? dir;
       const result: Result = {
         project,
-        contender: contender === 'conclave' ? `conclave${variant}` : contender,
+        contender: contender === 'plenum' ? `plenum${variant}` : contender,
         run,
         ok: partial.ok ?? false,
         wallMs,

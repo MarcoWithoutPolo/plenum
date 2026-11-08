@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, Menu, nativeImage, Tray, type MenuItemConstructorOptions } from 'electron';
-import type { BrainManager, Engine } from '@conclave/core';
+import type { BrainManager, Engine } from '@plenum/core';
 
 /** Statuses that mean a project's brain is still working, or waiting for a limit to reset. */
 export const ACTIVE = ['running', 'waiting'];
@@ -17,7 +17,7 @@ export interface TrayActions {
 }
 
 /**
- * The tray (menu bar on macOS) icon (v1.0 F11): Conclave stays reachable while its window is
+ * The tray (menu bar on macOS) icon (v1.0 F11): Plenum stays reachable while its window is
  * closed and projects keep working. The menu lists the running projects and what waits in the
  * Inbox, and pauses or quits everything.
  */
@@ -39,7 +39,7 @@ export class AppTray {
       ? nativeImage.createFromPath(file).resize({ width: size, height: size })
       : nativeImage.createEmpty();
     this.tray = new Tray(icon);
-    this.tray.setToolTip('Conclave');
+    this.tray.setToolTip('Plenum');
     // Windows and Linux: a click opens the window; the menu is on right-click.
     if (process.platform !== 'darwin') this.tray.on('click', () => actions.show());
     this.refresh();
@@ -62,7 +62,7 @@ export class AppTray {
     this.menu = Menu.buildFromTemplate(this.items());
     this.tray.setContextMenu(this.menu);
     const waiting = this.waiting();
-    this.tray.setToolTip(waiting ? `Conclave: ${waiting} waiting for you` : 'Conclave');
+    this.tray.setToolTip(waiting ? `Plenum: ${waiting} waiting for you` : 'Plenum');
   }
 
   destroy(): void {
@@ -81,7 +81,7 @@ export class AppTray {
     const waiting = this.waiting();
     const paused = store.settings.get().limits.pauseAll;
     return [
-      { label: 'Open Conclave', click: () => this.actions.show() },
+      { label: 'Open Plenum', click: () => this.actions.show() },
       { type: 'separator' },
       ...(active.length
         ? active.slice(0, 8).map((p): MenuItemConstructorOptions => ({
@@ -112,7 +112,7 @@ export class AppTray {
             },
           ]
         : []),
-      { label: 'Quit Conclave', click: () => this.actions.quit() },
+      { label: 'Quit Plenum', click: () => this.actions.quit() },
     ];
   }
 }

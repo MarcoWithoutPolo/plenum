@@ -92,7 +92,7 @@ describe('GrokAdapter (recorded grok 1.0.70, free account)', () => {
     expect(types(result.events)).toEqual(
       expect.arrayContaining(['message.delta', 'session', 'usage', 'message.done', 'done']),
     );
-    // input_tokens leaves out cache reads; Conclave counts every input token.
+    // input_tokens leaves out cache reads; Plenum counts every input token.
     expect(result.usage!.inputTokens).toBeGreaterThan(result.usage!.cachedInputTokens!);
   });
 

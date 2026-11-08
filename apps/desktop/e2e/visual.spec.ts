@@ -5,23 +5,23 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
 
-// A web project in demo mode: the builder writes a page, Conclave screenshots it, a reviewer
+// A web project in demo mode: the builder writes a page, Plenum screenshots it, a reviewer
 // that can see sends it back once ("the count sits at the left"), and the fix merges. Along the
 // way: the live preview, the Screenshots section, the visual failure card, the settings and
-// the Usage line. With CONCLAVE_SHOTS=1 it also runs in dark mode and saves gallery images.
+// the Usage line. With PLENUM_SHOTS=1 it also runs in dark mode and saves gallery images.
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'screenshots', 'gallery');
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`visual review: preview, screenshots, a visual send-back and its fix (${scheme})`, async () => {
     test.skip(
-      scheme === 'dark' && process.env.CONCLAVE_SHOTS !== '1',
-      'dark runs with CONCLAVE_SHOTS=1',
+      scheme === 'dark' && process.env.PLENUM_SHOTS !== '1',
+      'dark runs with PLENUM_SHOTS=1',
     );
     test.setTimeout(180_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-    const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-web-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+    const repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-web-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
         cwd: repo,
@@ -35,16 +35,16 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_WEB: '1',
-        CONCLAVE_DEMO_VISUAL: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_WEB: '1',
+        PLENUM_DEMO_VISUAL: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
     const shot = async (name: string) => {
-      if (process.env.CONCLAVE_SHOTS !== '1') return;
+      if (process.env.PLENUM_SHOTS !== '1') return;
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(out, `${scheme}-${name}.png`) });
     };
@@ -94,7 +94,7 @@ for (const scheme of ['light', 'dark'] as const) {
         .getByRole('radio', { name: 'Dark' })
         .click();
       await expect(shots.getByRole('img', { name: '/, phone, dark' })).toBeVisible();
-      // The page in use: the sample state from conclave.shots.json, replayed before its shots.
+      // The page in use: the sample state from plenum.shots.json, replayed before its shots.
       await shots
         .getByRole('radiogroup', { name: 'Page' })
         .getByRole('radio', { name: '/ (counted)' })

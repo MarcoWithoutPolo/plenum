@@ -1,5 +1,5 @@
 /**
- * The team finder (v1.0 F5): which team should Conclave start projects with? Each candidate team
+ * The team finder (v1.0 F5): which team should Plenum start projects with? Each candidate team
  * builds the same projects, interleaved run by run (so usage limits and the time of day hit them
  * all alike), through bench/run.ts. The winner passes every hidden test in every run a usage
  * limit didn't cut off, then is fastest by the median of its project medians; within 10%, the one
@@ -121,7 +121,7 @@ for (let run = 1; run <= runs; run++) {
         '--projects',
         project,
         '--contenders',
-        'conclave',
+        'plenum',
         '--team',
         c.team,
         '--runs',

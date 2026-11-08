@@ -11,14 +11,14 @@ import {
   RotateCcw,
   ShieldCheck,
 } from 'lucide-react';
-import type { GitHubStatus } from '@conclave/core';
+import type { GitHubStatus } from '@plenum/core';
 import {
   LOCAL_LIBRARY,
   providerEntry,
   type AppSettings,
   type ProviderId,
   type Seat,
-} from '@conclave/shared';
+} from '@plenum/shared';
 import type { ProviderInfo, QuotaInfo } from '../../../shared/api';
 import { api } from '@/lib/api';
 import { errorText, readyProviders, useApp } from '@/lib/store';
@@ -193,7 +193,7 @@ export function AccountsScreen() {
           <div className="mt-4 flex items-start gap-3 rounded-xl border border-line bg-sunken px-4 py-3 text-[13px] text-muted">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ok" aria-hidden />
             <p>
-              You sign in on each provider's own page. Conclave never sees or stores your passwords,
+              You sign in on each provider's own page. Plenum never sees or stores your passwords,
               API keys or tokens. Each CLI keeps its own credentials.
             </p>
           </div>
@@ -715,7 +715,7 @@ function ModelLibrary({ have, onPulled }: { have: string[]; onPulled: () => Prom
       </ul>
       {pulling && (
         <p className="mt-1 text-[12px] text-faint">
-          Ollama's progress shows below. You can keep using Conclave meanwhile.
+          Ollama's progress shows below. You can keep using Plenum meanwhile.
         </p>
       )}
       <span className="sr-only" aria-live="polite">

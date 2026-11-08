@@ -2,7 +2,7 @@ import electronUpdater from 'electron-updater';
 import type { UpdateState } from '../shared/api.js';
 
 const DAY = 24 * 60 * 60_000;
-const RELEASES = 'https://github.com/MarcoWithoutPolo/conclave/releases/latest';
+const RELEASES = 'https://github.com/MarcoWithoutPolo/plenum/releases/latest';
 
 /**
  * Updates from the public repository's releases (v1.0 F10): checked at start and then daily,
@@ -70,7 +70,7 @@ export class Updates {
     if (this.opts.building())
       return {
         ok: false,
-        reason: 'A project is building. The update installs when you next quit Conclave.',
+        reason: 'A project is building. The update installs when you next quit Plenum.',
       };
     electronUpdater.autoUpdater.quitAndInstall(false, true);
     return { ok: true };

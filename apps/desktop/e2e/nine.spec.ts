@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test, type Page } from '@playwright/test';
 
-// Every v0.9 AI signed in (CONCLAVE_DEMO_TEAM=9): the picker, the team editor and Accounts with
+// Every v0.9 AI signed in (PLENUM_DEMO_TEAM=9): the picker, the team editor and Accounts with
 // seven providers, in light and dark. Screenshots land in e2e/screenshots/nine.
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'screenshots', 'nine');
@@ -20,7 +20,7 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`seven AIs in the picker, team editor and accounts (${scheme})`, async () => {
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-nine-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-nine-'));
     const repo = mkdtempSync(join(tmpdir(), 'nine-repo-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
@@ -37,10 +37,10 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_TEAM: '9',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_TEAM: '9',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
@@ -83,7 +83,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Choose model' }).click();
       await providerButton(page, 'Local').click();
       await expect(picker.getByRole('option', { name: /GPT-OSS 20B/ })).toContainText('fits');
-      await expect(picker.getByText(/Conclave gives each job the context it needs/)).toBeVisible();
+      await expect(picker.getByText(/Plenum gives each job the context it needs/)).toBeVisible();
       await shot('picker-local');
 
       // Grok's own effort levels.

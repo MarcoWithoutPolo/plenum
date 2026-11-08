@@ -137,16 +137,16 @@ describe('GitHub through gh', () => {
 
 describe('Folder and git setup', () => {
   it('tells a ready repo, a plain folder, a nested folder and a repo without commits apart', async () => {
-    const plain = temp('conclave-plain-');
+    const plain = temp('plenum-plain-');
     writeFileSync(join(plain, 'index.html'), '<h1>hi</h1>');
     expect(await inspectFolder(plain)).toMatchObject({ kind: 'not_git', files: 1, large: false });
     expect(await inspectFolder(join(plain, 'missing'))).toMatchObject({ kind: 'missing' });
 
-    const empty = temp('conclave-empty-');
+    const empty = temp('plenum-empty-');
     git(empty, 'init', '-q', '-b', 'main');
     expect(await inspectFolder(empty)).toMatchObject({ kind: 'no_commits' });
 
-    const repo = temp('conclave-ready-');
+    const repo = temp('plenum-ready-');
     git(repo, 'init', '-q', '-b', 'main');
     writeFileSync(join(repo, 'package.json'), '{"scripts":{"test":"vitest"}}');
     git(repo, 'add', '-A');
@@ -164,7 +164,7 @@ describe('Folder and git setup', () => {
   });
 
   it('sets up git with a stack .gitignore and a first commit', async () => {
-    const dir = temp('conclave-setup-');
+    const dir = temp('plenum-setup-');
     writeFileSync(join(dir, 'package.json'), '{}');
     writeFileSync(join(dir, '.env'), 'SECRET=1');
     const setup = await setUpGit(dir);
@@ -179,7 +179,7 @@ describe('Folder and git setup', () => {
   });
 
   it('never touches an existing .gitignore and commits an empty repo', async () => {
-    const dir = temp('conclave-keep-');
+    const dir = temp('plenum-keep-');
     writeFileSync(join(dir, '.gitignore'), 'mine\n');
     git(dir, 'init', '-q', '-b', 'main');
     const setup = await setUpGit(dir);
@@ -188,7 +188,7 @@ describe('Folder and git setup', () => {
   });
 
   it('creates new folders but refuses one that exists and has files', () => {
-    const parent = temp('conclave-parent-');
+    const parent = temp('plenum-parent-');
     const made = createProjectFolder(parent, 'Calculator');
     writeFileSync(join(made, 'x'), '1');
     expect(() => createProjectFolder(parent, 'Calculator')).toThrow(/isn't empty/);
@@ -196,7 +196,7 @@ describe('Folder and git setup', () => {
   });
 
   it('stops counting files just past the limit', () => {
-    const dir = temp('conclave-count-');
+    const dir = temp('plenum-count-');
     for (let i = 0; i < 12; i++) writeFileSync(join(dir, `f${i}`), '');
     mkdirSync(join(dir, 'node_modules'));
     writeFileSync(join(dir, 'node_modules', 'skip'), '');
@@ -207,23 +207,23 @@ describe('Folder and git setup', () => {
 
 describe('Pull requests', () => {
   async function finishedProject() {
-    const remote = temp('conclave-remote-');
+    const remote = temp('plenum-remote-');
     git(remote, 'init', '-q', '--bare', '-b', 'main');
-    const repo = temp('conclave-pr-repo-');
+    const repo = temp('plenum-pr-repo-');
     git(repo, 'init', '-q', '-b', 'main');
     writeFileSync(join(repo, 'README.md'), '# demo\n');
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'init');
     git(repo, 'remote', 'add', 'origin', remote);
     git(repo, 'push', '-q', 'origin', 'main');
-    git(repo, 'branch', 'conclave/integration');
-    git(repo, 'checkout', '-q', 'conclave/integration');
+    git(repo, 'branch', 'plenum/integration');
+    git(repo, 'checkout', '-q', 'plenum/integration');
     writeFileSync(join(repo, 'sum.js'), 'module.exports = (a, b) => a + b;\n');
     git(repo, 'add', '-A');
     git(repo, 'commit', '-q', '-m', 'sum');
     git(repo, 'checkout', '-q', 'main');
 
-    const home = temp('conclave-pr-home-');
+    const home = temp('plenum-pr-home-');
     const store = new Store(':memory:');
     const ctx = {
       store,
@@ -268,7 +268,7 @@ describe('Pull requests', () => {
       github: gh,
     });
     expect(outcome).toMatchObject({ ok: true, url });
-    expect(git(remote, 'branch', '--list')).toContain('conclave/calculator-app');
+    expect(git(remote, 'branch', '--list')).toContain('plenum/calculator-app');
     expect(git(remote, 'log', '--oneline', 'main')).not.toContain('sum');
 
     const create = calls.find((c) => c.args[0] === 'pr')!;
@@ -277,7 +277,7 @@ describe('Pull requests', () => {
         '--base',
         'main',
         '--head',
-        'conclave/calculator-app',
+        'plenum/calculator-app',
         '--body-file',
         '-',
       ]),
@@ -287,7 +287,7 @@ describe('Pull requests', () => {
     expect(create.stdin).not.toContain(project.repoPath);
     expect(store.projects.get(project.id)?.github).toMatchObject({
       repo: 'octocat/calculator',
-      prBranch: 'conclave/calculator-app',
+      prBranch: 'plenum/calculator-app',
       prUrl: url,
       prState: 'open',
     });
@@ -295,24 +295,24 @@ describe('Pull requests', () => {
 
   it('never overwrites a remote branch that diverged; it picks the next name', async () => {
     const { remote, repo } = await finishedProject();
-    const other = temp('conclave-other-');
+    const other = temp('plenum-other-');
     git(other, 'clone', '-q', remote, '.');
-    git(other, 'checkout', '-q', '-b', 'conclave/x');
+    git(other, 'checkout', '-q', '-b', 'plenum/x');
     writeFileSync(join(other, 'theirs.txt'), 'theirs');
     git(other, 'add', '-A');
     git(other, 'commit', '-q', '-m', 'theirs');
-    git(other, 'push', '-q', 'origin', 'conclave/x');
+    git(other, 'push', '-q', 'origin', 'plenum/x');
 
-    expect(await pushBranch(repo, 'conclave/integration', 'conclave/x')).toEqual({
+    expect(await pushBranch(repo, 'plenum/integration', 'plenum/x')).toEqual({
       ok: true,
-      branch: 'conclave/x-2',
+      branch: 'plenum/x-2',
     });
-    expect(
-      await pushBranch(repo, 'conclave/integration', 'conclave/x', { exact: true }),
-    ).toMatchObject({ ok: false });
-    expect(
-      await pushBranch(repo, 'conclave/integration', 'main', { protect: 'main' }),
-    ).toMatchObject({ ok: false });
+    expect(await pushBranch(repo, 'plenum/integration', 'plenum/x', { exact: true })).toMatchObject(
+      { ok: false },
+    );
+    expect(await pushBranch(repo, 'plenum/integration', 'main', { protect: 'main' })).toMatchObject(
+      { ok: false },
+    );
   });
 
   it('follows the PR: merged on GitHub, and a failing check becomes a task', async () => {
@@ -321,7 +321,7 @@ describe('Pull requests', () => {
     store.projects.update(project.id, {
       github: {
         repo: 'octocat/calculator',
-        prBranch: 'conclave/calculator-app',
+        prBranch: 'plenum/calculator-app',
         prUrl: url,
         prState: 'open',
         issue: null,
@@ -376,6 +376,6 @@ describe('Pull requests', () => {
       '--push',
     ]);
     expect(store.projects.get(project.id)?.github?.repo).toBe('octocat/calculator');
-    expect(pullRequestBody(ctx, store.projects.get(project.id)!)).toContain('Opened by Conclave.');
+    expect(pullRequestBody(ctx, store.projects.get(project.id)!)).toContain('Opened by Plenum.');
   });
 });

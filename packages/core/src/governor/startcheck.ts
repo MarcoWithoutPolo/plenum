@@ -1,4 +1,4 @@
-import type { Project, ProviderId, Routing, Seat } from '@conclave/shared';
+import type { Project, ProviderId, Routing, Seat } from '@plenum/shared';
 import { seatLabel } from '../chat/transcript.js';
 import type { Availability } from './governor.js';
 import { RANK, type SeatStats } from './rank.js';

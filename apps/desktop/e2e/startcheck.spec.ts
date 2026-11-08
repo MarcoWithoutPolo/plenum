@@ -7,20 +7,20 @@ import { _electron as electron, expect, test } from '@playwright/test';
 
 // The start-up check in demo mode: Codex starts at its usage limit, so pressing Resume first
 // says what that changes (Claude builds, so Antigravity reviews, far slower), with Resume anyway,
-// Wait until… and Edit team. With CONCLAVE_SHOTS=1 it saves gallery images in light and dark.
+// Wait until… and Edit team. With PLENUM_SHOTS=1 it saves gallery images in light and dark.
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'screenshots', 'gallery');
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`start-up check: an AI out of usage, explained before the start (${scheme})`, async () => {
     test.skip(
-      scheme === 'dark' && process.env.CONCLAVE_SHOTS !== '1',
-      'dark runs with CONCLAVE_SHOTS=1',
+      scheme === 'dark' && process.env.PLENUM_SHOTS !== '1',
+      'dark runs with PLENUM_SHOTS=1',
     );
     test.setTimeout(120_000);
     mkdirSync(out, { recursive: true });
-    const home = mkdtempSync(join(tmpdir(), 'conclave-e2e-home-'));
-    const repo = mkdtempSync(join(tmpdir(), 'conclave-e2e-check-'));
+    const home = mkdtempSync(join(tmpdir(), 'plenum-e2e-home-'));
+    const repo = mkdtempSync(join(tmpdir(), 'plenum-e2e-check-'));
     const git = (...a: string[]) =>
       execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.com', ...a], {
         cwd: repo,
@@ -33,17 +33,17 @@ for (const scheme of ['light', 'dark'] as const) {
       args: [join(here, '../out/main/index.js')],
       env: {
         ...process.env,
-        CONCLAVE_DEMO: '1',
-        CONCLAVE_DEMO_OUT: 'codex',
-        CONCLAVE_DEMO_SLOW: '1',
-        CONCLAVE_HOME: home,
-        CONCLAVE_E2E_REPO: repo,
+        PLENUM_DEMO: '1',
+        PLENUM_DEMO_OUT: 'codex',
+        PLENUM_DEMO_SLOW: '1',
+        PLENUM_HOME: home,
+        PLENUM_E2E_REPO: repo,
       },
       colorScheme: scheme,
     });
     const page = await app.firstWindow();
     const shot = async (name: string) => {
-      if (process.env.CONCLAVE_SHOTS !== '1') return;
+      if (process.env.PLENUM_SHOTS !== '1') return;
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(out, `${scheme}-${name}.png`) });
     };

@@ -1,4 +1,4 @@
-import { AgentQuestion } from '@conclave/shared';
+import { AgentQuestion } from '@plenum/shared';
 import { extractJson } from './json.js';
 
 export interface ParsedQuestion extends AgentQuestion {
@@ -65,7 +65,7 @@ export function parseQuestion(
   return undefined;
 }
 
-/** Install commands Conclave will run for you once approved; anything else is copy-only. */
+/** Install commands Plenum will run for you once approved; anything else is copy-only. */
 const INSTALL_SHAPES = [
   /^(npm|pnpm|yarn|bun) (add|install|i)( (-D|--save-dev|-E|--save-exact|--dev))*( [@a-z0-9][\w@./^~=<>-]*)+$/i,
   /^(pip|pip3|python -m pip) install( [a-z0-9][\w.[\]=<>~!-]*)+$/i,

@@ -1,4 +1,4 @@
-import type { AgentEvent, ProviderId, ProviderStatus } from '@conclave/shared';
+import type { AgentEvent, ProviderId, ProviderStatus } from '@plenum/shared';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
 
 export interface FakeScript {

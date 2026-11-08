@@ -8,13 +8,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
 // Bundle the engine straight from source, so the app has no workspace links to package.
 const alias = {
-  '@conclave/core': resolve(root, 'packages/core/src/index.ts'),
-  '@conclave/shared': resolve(root, 'packages/shared/src/index.ts'),
+  '@plenum/core': resolve(root, 'packages/core/src/index.ts'),
+  '@plenum/shared': resolve(root, 'packages/shared/src/index.ts'),
 };
 
 /** Strict CSP for the packaged renderer. Dev skips it because Vite's hot reload injects inline scripts. */
 const csp = {
-  name: 'conclave-csp',
+  name: 'plenum-csp',
   transformIndexHtml: {
     order: 'post' as const,
     handler(html: string, ctx: { server?: unknown }) {
@@ -25,7 +25,7 @@ const csp = {
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: https:",
         "font-src 'self' data:",
-        // The live preview: only pages served on this computer (Conclave's server or a dev server).
+        // The live preview: only pages served on this computer (Plenum's server or a dev server).
         'frame-src http://127.0.0.1:* http://localhost:*',
         "connect-src 'self'",
         "object-src 'none'",
@@ -48,7 +48,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(here, 'src/main/index.ts'),
-          // `Conclave --mcp`, run as plain Node (F9).
+          // `Plenum --mcp`, run as plain Node (F9).
           mcp: resolve(here, 'src/main/mcp.ts'),
         },
       },

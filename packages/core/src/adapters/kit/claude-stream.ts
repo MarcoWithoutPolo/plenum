@@ -1,4 +1,4 @@
-import type { Usage } from '@conclave/shared';
+import type { Usage } from '@plenum/shared';
 import { looksLikeLimit } from './limits.js';
 import type { EventBody, LineParser } from './run.js';
 import { isRecord, str } from './values.js';
@@ -30,7 +30,7 @@ export abstract class ClaudeStreamParser implements LineParser {
   /** Every line other than init and result. */
   protected abstract event(message: Record<string, unknown>): EventBody[];
 
-  /** The result line's token counts, in Conclave's convention (see tokenUsage). */
+  /** The result line's token counts, in Plenum's convention (see tokenUsage). */
   protected abstract usage(result: Record<string, unknown>): Usage;
 
   private result(message: Record<string, unknown>): EventBody[] {

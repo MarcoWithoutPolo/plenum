@@ -37,7 +37,7 @@ jobs:
       - run: npm run desktop:build
       - name: Desktop end-to-end (demo mode, virtual display)
         # The control inventory clicks every control on every screen: the full run only.
-        run: xvfb-run -a npm run -w @conclave/desktop e2e -- --grep-invert "every control on"
+        run: xvfb-run -a npm run -w @plenum/desktop e2e -- --grep-invert "every control on"
       - name: Keep the end-to-end traces of a failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -57,7 +57,7 @@ jobs:
         node: [22, 24]
     env:
       # Every window size in the UI integrity suite, not only the two everyday ones.
-      CONCLAVE_FULL_MATRIX: '1'
+      PLENUM_FULL_MATRIX: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -72,10 +72,10 @@ jobs:
       - run: npm run desktop:build
       - name: Desktop end-to-end, every suite
         if: runner.os != 'Linux'
-        run: npm run -w @conclave/desktop e2e
+        run: npm run -w @plenum/desktop e2e
       - name: Desktop end-to-end, every suite (virtual display)
         if: runner.os == 'Linux'
-        run: xvfb-run -a npm run -w @conclave/desktop e2e
+        run: xvfb-run -a npm run -w @plenum/desktop e2e
       - name: Keep the end-to-end traces of a failure
         if: failure()
         uses: actions/upload-artifact@v4

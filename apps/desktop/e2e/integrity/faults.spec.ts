@@ -3,14 +3,14 @@ import { launch, type Running } from './kit';
 
 /**
  * Every failure is shown (v1.0 Q2 rules 1–4, Q3 fault injection): each action's call to the
- * engine is made to fail while the app runs (CONCLAVE_DEMO_FAIL). The error must appear where
+ * engine is made to fail while the app runs (PLENUM_DEMO_FAIL). The error must appear where
  * you'd look, nothing may claim it worked, and the control must work again afterwards.
  */
 let run: Running;
 let page: Page;
 
 test.beforeAll(async () => {
-  run = await launch('normal', 'light', { CONCLAVE_DEMO_SLOW: '1' });
+  run = await launch('normal', 'light', { PLENUM_DEMO_SLOW: '1' });
   page = run.page;
   await page.setViewportSize({ width: 1320, height: 860 });
 });
@@ -21,7 +21,7 @@ test.afterAll(async () => {
 /** Make these engine calls fail (or none) from now on. */
 const failing = (channels: string) =>
   run.app.evaluate((_electron, list) => {
-    process.env.CONCLAVE_DEMO_FAIL = list;
+    process.env.PLENUM_DEMO_FAIL = list;
   }, channels);
 
 const toast = () => page.getByRole('alert').filter({ hasText: 'Demo failure' });

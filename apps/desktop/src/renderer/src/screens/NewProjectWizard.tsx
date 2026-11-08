@@ -22,8 +22,8 @@ import {
   type Permissions,
   type RetryStrategy,
   type Routing,
-} from '@conclave/shared';
-import type { ClarifyResult, FolderState, GhIssue, GhRepo, GitHubStatus } from '@conclave/core';
+} from '@plenum/shared';
+import type { ClarifyResult, FolderState, GhIssue, GhRepo, GitHubStatus } from '@plenum/core';
 import type { PermissionGaps } from '../../../shared/api';
 import { Dialog } from '@/components/Dialog';
 import { Button, GitHubMark, Thinking } from '@/components/bits';
@@ -471,7 +471,7 @@ export function NewProjectWizard({
       open={open}
       onClose={() => onClose()}
       title="New project"
-      description="Conclave plans, builds, tests and reviews on its own, on a separate branch."
+      description="Plenum plans, builds, tests and reviews on its own, on a separate branch."
       width={760}
       footer={footer}
     >
@@ -597,7 +597,7 @@ export function NewProjectWizard({
                   className={inputClass}
                 />
               </Field>
-              <Field label="Location" hintBelow hint="Conclave makes the folder and sets up git.">
+              <Field label="Location" hintBelow hint="Plenum makes the folder and sets up git.">
                 <div className="flex items-center gap-2">
                   <input
                     value={parent}
@@ -1102,7 +1102,7 @@ function CloneList({
           </div>
           <div className="text-[12px] text-faint">
             {gh.installed
-              ? 'Conclave uses the official gh CLI; it never sees your token.'
+              ? 'Plenum uses the official gh CLI; it never sees your token.'
               : 'Install gh from cli.github.com, then sign in from Accounts.'}
           </div>
         </div>

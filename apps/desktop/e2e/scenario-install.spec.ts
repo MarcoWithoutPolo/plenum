@@ -6,16 +6,16 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
 
 // Private test, scenario 5: a task that needs a package. The builder should ask to install it,
-// you approve in the app, Conclave runs the exact command itself, and the task carries on.
-// Real accounts and Conclave data; spends real usage (and runs npm install): CONCLAVE_SCENARIO=5.
-test.skip(process.env.CONCLAVE_SCENARIO !== '5', 'set CONCLAVE_SCENARIO=5 to run');
+// you approve in the app, Plenum runs the exact command itself, and the task carries on.
+// Real accounts and Plenum data; spends real usage (and runs npm install): PLENUM_SCENARIO=5.
+test.skip(process.env.PLENUM_SCENARIO !== '5', 'set PLENUM_SCENARIO=5 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-5');
 const sqlite = process.getBuiltinModule('node:sqlite');
 
 function state(name: string) {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -44,7 +44,7 @@ test('scenario 5: a task asks to install a package, you allow it, it carries on'
   test.setTimeout(55 * 60_000);
   mkdirSync(shots, { recursive: true });
   const name = `chime-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}`;
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
     env: env as Record<string, string>,
@@ -120,20 +120,20 @@ test('scenario 5: a task asks to install a package, you allow it, it carries on'
     const git = (...a: string[]) =>
       execFileSync('git', a, { cwd: s.repo_path, encoding: 'utf8' }).trim();
     console.log('\n--- integration files ---');
-    const files = git('ls-tree', '-r', '--name-only', 'conclave/integration').split('\n');
+    const files = git('ls-tree', '-r', '--name-only', 'plenum/integration').split('\n');
     console.log(
       files.filter((f) => !f.startsWith('node_modules/')).join('\n'),
       `\n(node_modules files committed: ${files.filter((f) => f.startsWith('node_modules/')).length})`,
     );
     console.log('\n--- package.json ---');
     try {
-      console.log(git('show', 'conclave/integration:package.json'));
+      console.log(git('show', 'plenum/integration:package.json'));
     } catch {
       console.log('(none)');
     }
     console.log('\n--- .gitignore ---');
     try {
-      console.log(git('show', 'conclave/integration:.gitignore'));
+      console.log(git('show', 'plenum/integration:.gitignore'));
     } catch {
       console.log('(none)');
     }

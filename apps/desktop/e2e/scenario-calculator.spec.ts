@@ -5,17 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
 
 // Private test, scenario 1: a new calculator project from an empty folder, Ask me on, on your
-// real accounts and your real Conclave data. Spends real usage: CONCLAVE_SCENARIO=1 only.
+// real accounts and your real Plenum data. Spends real usage: PLENUM_SCENARIO=1 only.
 // It runs until the project needs you, meets its goal, pauses, or 50 minutes pass, and leaves
 // the project in your app. It never answers the agents' mid-run questions for you.
-test.skip(process.env.CONCLAVE_SCENARIO !== '1', 'set CONCLAVE_SCENARIO=1 to run');
+test.skip(process.env.PLENUM_SCENARIO !== '1', 'set PLENUM_SCENARIO=1 to run');
 
 const here = dirname(fileURLToPath(import.meta.url));
 const shots = join(here, 'screenshots', 'scenario-1');
 const sqlite = process.getBuiltinModule('node:sqlite');
 
 function projectState(name: string) {
-  const db = new sqlite.DatabaseSync(join(homedir(), '.conclave', 'conclave.db'), {
+  const db = new sqlite.DatabaseSync(join(homedir(), '.plenum', 'plenum.db'), {
     readOnly: true,
   });
   try {
@@ -38,7 +38,7 @@ test('scenario 1: calculator from an empty folder, Ask me on', async () => {
   test.setTimeout(55 * 60_000);
   mkdirSync(shots, { recursive: true });
   const name = `calculator-${new Date().toISOString().slice(0, 10)}`;
-  const { CONCLAVE_DEMO: _d, CONCLAVE_HOME: _h, ...env } = process.env;
+  const { PLENUM_DEMO: _d, PLENUM_HOME: _h, ...env } = process.env;
   const app = await electron.launch({
     args: [join(here, '../out/main/index.js')],
     env: env as Record<string, string>,
@@ -56,7 +56,7 @@ test('scenario 1: calculator from an empty folder, Ask me on', async () => {
     await page.getByRole('button', { name: 'New project' }).click();
     const dialog = page.getByRole('dialog', { name: 'New project' });
 
-    // Where: a brand-new folder; Conclave creates it and sets up git.
+    // Where: a brand-new folder; Plenum creates it and sets up git.
     await dialog.getByRole('radio', { name: /Create a new folder/ }).click();
     await dialog.getByRole('textbox', { name: 'Folder name' }).fill(name);
     await shot('where');

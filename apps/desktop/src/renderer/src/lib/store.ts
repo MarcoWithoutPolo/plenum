@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { AgentEvent, Message, ProviderId, Seat, Thread } from '@conclave/shared';
-import { firstPreferred, preferred, shortName } from '@conclave/shared';
+import type { AgentEvent, Message, ProviderId, Seat, Thread } from '@plenum/shared';
+import { firstPreferred, preferred, shortName } from '@plenum/shared';
 import type { ProviderInfo, QuotaInfo, RunUpdate, ThreadDetail } from '../../../shared/api';
 import { api, newRequestId } from './api';
 import { settle } from './settle';

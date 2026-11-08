@@ -25,7 +25,7 @@ export async function diagnosticsReport(
 ): Promise<string> {
   const lines: string[] = [];
   const add = (s = '') => lines.push(s);
-  add(`Conclave ${app.version} diagnostics, ${new Date().toISOString()}`);
+  add(`Plenum ${app.version} diagnostics, ${new Date().toISOString()}`);
   add(
     `System: ${app.platform} ${app.arch} · Node ${process.versions.node}${app.electron ? ` · Electron ${app.electron}` : ''}`,
   );

@@ -81,7 +81,7 @@ describe('Local models', () => {
             },
           },
           { name: 'llama4:scout', size: 67e9, details: { parameter_size: '109B' } },
-          { name: 'conclave/gpt-oss:20b-32k', size: 13.8e9 },
+          { name: 'plenum/gpt-oss:20b-32k', size: 13.8e9 },
         ],
       }),
       '/api/show': json({
@@ -118,7 +118,7 @@ describe('Local models', () => {
     // An inherited PWD once sent OpenCode to the wrong folder: both point at the worktree.
     expect(call.env?.PWD).toBe('/work/tree');
     expect(call.args).toEqual(expect.arrayContaining(['--dir', '/work/tree']));
-    expect(call.args).toEqual(expect.arrayContaining(['-m', 'ollama/conclave/gpt-oss:20b-32k']));
+    expect(call.args).toEqual(expect.arrayContaining(['-m', 'ollama/plenum/gpt-oss:20b-32k']));
     expect(call.stdin).toBe('');
     expect(http.calls.find((c) => c.url.endsWith('/api/create'))?.body).toMatchObject({
       from: 'gpt-oss:20b',
