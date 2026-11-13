@@ -161,8 +161,10 @@ describe('BrainManager', () => {
     store.settings.update({ limits: { pauseAll: false } });
     const woke = Date.now();
     manager.wake();
-    await until(() => store.projects.get(project.id)?.status === 'done', 10_000);
+    // Time the wake-up itself, not the run after it (slow CI machines take seconds to build).
+    await until(() => store.projects.get(project.id)?.status !== 'waiting', 10_000);
     expect(Date.now() - woke).toBeLessThan(5_000);
+    await until(() => store.projects.get(project.id)?.status === 'done', 30_000);
   });
 
   it('waits to start until the time asked, says why, and Stop ends the wait', async () => {

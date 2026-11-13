@@ -249,7 +249,10 @@ test('arrow keys move through the effort choices, focus and selection together (
   const efforts = page.getByRole('radiogroup', { name: /Effort/ });
   const radios = efforts.getByRole('radio');
   const checked = efforts.locator('[role="radio"][aria-checked="true"]');
+  // The picker focuses its search box once it opens: let that happen before moving focus.
+  await expect(page.getByRole('textbox', { name: 'Search models' })).toBeFocused();
   await checked.focus();
+  await expect(checked).toBeFocused();
   const from = await radios.evaluateAll((els) =>
     els.findIndex((e) => e === document.activeElement),
   );
