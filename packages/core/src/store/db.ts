@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type * as Sqlite from 'node:sqlite';
@@ -324,7 +324,17 @@ function backupBeforeMigrating(db: DatabaseSync, path: string): void {
   const { user_version: v } = db.prepare('PRAGMA user_version').get() as { user_version: number };
   if (v === 0 || v >= MIGRATIONS.length) return;
   const target = `${path}.bak-${v}`;
-  if (!existsSync(target)) db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+  if (!existsSync(target)) {
+    // Several processes can open the database at once (E11): each writes its own copy and
+    // moves it into place, so none ever writes into a half-finished copy of another's.
+    const own = `${target}.${process.pid}-${Date.now()}`;
+    try {
+      db.exec(`VACUUM INTO '${own.replace(/'/g, "''")}'`);
+      if (!existsSync(target)) renameSync(own, target);
+    } finally {
+      rmSync(own, { force: true });
+    }
+  }
   const dir = dirname(path);
   const base = basename(path);
   const backups = readdirSync(dir)

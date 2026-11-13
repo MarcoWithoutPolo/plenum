@@ -254,8 +254,11 @@ test('arrow keys move through the effort choices, focus and selection together (
     els.findIndex((e) => e === document.activeElement),
   );
   await page.keyboard.press('ArrowRight');
-  const to = await radios.evaluateAll((els) => els.findIndex((e) => e === document.activeElement));
-  expect(to).toBe((from + 1) % (await radios.count()));
+  // Focus moves with the re-render that selects the next choice: wait for it, don't race it.
+  const to = (from + 1) % (await radios.count());
+  await expect
+    .poll(() => radios.evaluateAll((els) => els.findIndex((e) => e === document.activeElement)))
+    .toBe(to);
   await expect(radios.nth(to)).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('Home');
   await expect(radios.first()).toBeFocused();

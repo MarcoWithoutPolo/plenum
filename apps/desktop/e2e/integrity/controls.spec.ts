@@ -206,9 +206,13 @@ test('the controls on every screen are the ones in the inventory', () => {
     writeFileSync(INVENTORY, `${JSON.stringify({ ...known, ...sorted }, null, 2)}\n`);
     return;
   }
-  // Linux has no "open at login" (Settings hides that switch there).
+  // Settings leaves out what a platform doesn't have: "open at login" on Linux, and the
+  // close-window choice on a Mac (closing the window never quits there).
   const notHere = new Set(
-    process.platform === 'linux' ? ['switch: Open when you sign in to your computer'] : [],
+    {
+      linux: ['switch: Open when you sign in to your computer'],
+      darwin: ['radio: Ask', 'radio: Keep running', 'radio: Quit'],
+    }[process.platform as string] ?? [],
   );
   for (const [screen, controls] of Object.entries(sorted)) {
     const was = new Set((known[screen] ?? []).filter((c) => !notHere.has(c)));

@@ -144,7 +144,9 @@ export async function layoutProblems(page: Page): Promise<string[]> {
         const ps = getComputedStyle(p);
         if (ps.overflowY === 'visible' && ps.overflowX === 'visible') continue;
         const q = p.getBoundingClientRect();
-        if (y < q.top || y > q.bottom || x < q.left || x > q.right) hiddenByScroll = true;
+        // A center on the very edge (within a pixel) is half scrolled out: clipped, not covered.
+        if (y <= q.top + 1 || y >= q.bottom - 1 || x <= q.left + 1 || x >= q.right - 1)
+          hiddenByScroll = true;
       }
       if (hiddenByScroll) continue;
       const hit = document.elementFromPoint(x, y);

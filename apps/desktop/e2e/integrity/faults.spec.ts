@@ -45,8 +45,10 @@ test('a setting the engine refuses goes back to what is saved, with the reason (
   await page.getByRole('button', { name: /^Settings/ }).click();
   const pause = page.getByRole('switch', { name: 'Pause everything' });
   await expect(pause).not.toBeChecked();
+  // The switch is disabled until settings load; a click before then would do nothing.
+  await expect(pause).toBeEnabled();
   await failing('settings:update');
-  await pause.click({ force: true });
+  await pause.locator('xpath=ancestor::label[1]').click();
   await expect(toast()).toBeVisible();
   await expect(pause).not.toBeChecked();
 });
