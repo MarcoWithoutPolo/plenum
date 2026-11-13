@@ -184,7 +184,11 @@ for (const screen of SCREENS) {
           .catch(() => false));
         k++
       )
-        await messages.first().click();
+        // A message can close itself while being clicked; then there is nothing left to close.
+        await messages
+          .first()
+          .click({ timeout: 3000 })
+          .catch(() => undefined);
     }
     expect(dead, `controls that did nothing on ${screen.name}`).toEqual([]);
   });
@@ -202,8 +206,12 @@ test('the controls on every screen are the ones in the inventory', () => {
     writeFileSync(INVENTORY, `${JSON.stringify({ ...known, ...sorted }, null, 2)}\n`);
     return;
   }
+  // Linux has no "open at login" (Settings hides that switch there).
+  const notHere = new Set(
+    process.platform === 'linux' ? ['switch: Open when you sign in to your computer'] : [],
+  );
   for (const [screen, controls] of Object.entries(sorted)) {
-    const was = new Set(known[screen] ?? []);
+    const was = new Set((known[screen] ?? []).filter((c) => !notHere.has(c)));
     const now = new Set(controls);
     const added = controls.filter((c) => !was.has(c));
     const removed = [...was].filter((c) => !now.has(c));
