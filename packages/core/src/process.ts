@@ -1,6 +1,7 @@
-import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import { spawn as nodeSpawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import spawn from 'cross-spawn';
+import { jobLauncher, windowsCommandLine } from './winjob.js';
 
 export interface ProcessOptions {
   command: string;
@@ -13,6 +14,11 @@ export interface ProcessOptions {
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /**
+   * On Windows, run it in a job object, so whatever it starts and leaves behind ends with it
+   * (agent runs; 1.0.1 S3). Elsewhere its own process group already does this.
+   */
+  contain?: boolean;
 }
 
 /**
@@ -42,14 +48,18 @@ export async function* streamProcess(opts: ProcessOptions): AsyncGenerator<Proce
     wake?.();
   };
 
-  const child = spawn(opts.command, opts.args, {
+  const options: SpawnOptions = {
     cwd: opts.cwd,
     env: opts.env ?? process.env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
     // Its own process group on macOS and Linux, so a stop takes what the CLI started (E6).
     detached: process.platform !== 'win32',
-  });
+  };
+  const launcher = opts.contain ? await jobLauncher() : undefined;
+  const child = launcher
+    ? contained(launcher, opts.command, opts.args, options)
+    : spawn(opts.command, opts.args, options);
 
   let spawnError: string | undefined;
   let killedReason: string | undefined;
@@ -186,6 +196,32 @@ export function isNotFound(result: CommandResult): boolean {
     `${result.error ?? ''} ${result.stderr}`,
   );
 }
+
+/**
+ * Start a command through the job launcher: resolved and quoted exactly as cross-spawn and Node
+ * would (npm .cmd shims go through cmd.exe), then passed on to the launcher as one command line.
+ */
+function contained(
+  launcher: string,
+  command: string,
+  args: string[],
+  options: SpawnOptions,
+): ChildProcess {
+  const parse = (spawn as unknown as { _parse: CrossSpawnParse })._parse;
+  const parsed = parse(command, args, options);
+  const line = windowsCommandLine(
+    parsed.command,
+    parsed.args,
+    parsed.options.windowsVerbatimArguments === true,
+  );
+  return nodeSpawn(launcher, [line], { ...parsed.options, windowsVerbatimArguments: true });
+}
+
+type CrossSpawnParse = (
+  command: string,
+  args: string[],
+  options: SpawnOptions,
+) => { command: string; args: string[]; options: SpawnOptions };
 
 /**
  * Kill a process and everything it started, and wait until they're gone: the whole process group
@@ -325,21 +361,41 @@ export interface ShellResult {
  * Run a user-provided shell command (a project's test command) in `cwd`.
  * On timeout or abort the whole process tree is killed.
  */
-export function runShell(
+export async function runShell(
   command: string,
   opts: { cwd: string; timeoutMs?: number; signal?: AbortSignal; maxOutput?: number },
+): Promise<ShellResult> {
+  return runShellWith(command, { ...opts, launcher: await jobLauncher() });
+}
+
+function runShellWith(
+  command: string,
+  opts: {
+    cwd: string;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    maxOutput?: number;
+    launcher?: string;
+  },
 ): Promise<ShellResult> {
   const started = Date.now();
   const max = opts.maxOutput ?? 12_000;
   return new Promise((resolve) => {
-    const child = nodeSpawn(command, {
+    const options: SpawnOptions = {
       cwd: opts.cwd,
-      shell: true,
       windowsHide: true,
       // Its own process group on macOS and Linux, so a stop takes everything it started (E6).
       detached: process.platform !== 'win32',
       env: { ...process.env, CI: '1', FORCE_COLOR: '0' },
-    });
+    };
+    // On Windows, in a job object: a test command that starts a server and leaves it running
+    // (a dev server for end-to-end tests) doesn't outlive the run (1.0.1 S3).
+    const child = opts.launcher
+      ? nodeSpawn(opts.launcher, [`${process.env.ComSpec ?? 'cmd.exe'} /d /s /c "${command}"`], {
+          ...options,
+          windowsVerbatimArguments: true,
+        })
+      : nodeSpawn(command, { ...options, shell: true });
     let output = '';
     let timedOut = false;
     const add = (chunk: Buffer) => {

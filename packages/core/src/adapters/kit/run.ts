@@ -86,7 +86,7 @@ export async function* runCli(
   }
 
   async function* replay(): AsyncGenerator<AgentEvent> {
-    for await (const chunk of exec({ ...process, signal })) {
+    for await (const chunk of exec({ ...process, signal, contain: true })) {
       if (chunk.kind === 'stderr') {
         stderrTail = (stderrTail + chunk.text).slice(-4000);
         continue;
