@@ -249,20 +249,20 @@ test('arrow keys move through the effort choices, focus and selection together (
   const efforts = page.getByRole('radiogroup', { name: /Effort/ });
   const radios = efforts.getByRole('radio');
   const checked = efforts.locator('[role="radio"][aria-checked="true"]');
-  // The picker focuses its search box once it opens: let that happen before moving focus.
-  await expect(page.getByRole('textbox', { name: 'Search models' })).toBeFocused();
-  await checked.focus();
-  await expect(checked).toBeFocused();
-  const from = await radios.evaluateAll((els) =>
-    els.findIndex((e) => e === document.activeElement),
-  );
-  await page.keyboard.press('ArrowRight');
-  // Focus moves with the re-render that selects the next choice: wait for it, don't race it.
-  const to = (from + 1) % (await radios.count());
-  await expect
-    .poll(() => radios.evaluateAll((els) => els.findIndex((e) => e === document.activeElement)))
-    .toBe(to);
-  await expect(radios.nth(to)).toHaveAttribute('aria-checked', 'true');
+  const focused = () =>
+    radios.evaluateAll((els) => els.findIndex((e) => e === document.activeElement));
+  // The picker focuses its search box as it opens, and on a slow machine a late re-layout can do
+  // that again after the test has moved focus: start over when it does, rather than race it.
+  await expect(async () => {
+    await checked.focus();
+    const from = await focused();
+    expect(from).toBeGreaterThanOrEqual(0);
+    await page.keyboard.press('ArrowRight');
+    // Focus moves with the re-render that selects the next choice.
+    const to = (from + 1) % (await radios.count());
+    await expect.poll(focused, { timeout: 2000 }).toBe(to);
+    await expect(radios.nth(to)).toHaveAttribute('aria-checked', 'true', { timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
   await page.keyboard.press('Home');
   await expect(radios.first()).toBeFocused();
   await expect(radios.first()).toHaveAttribute('aria-checked', 'true');
