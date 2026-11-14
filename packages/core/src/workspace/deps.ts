@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   existsSync,
   lstatSync,
+  mkdirSync,
   readFileSync,
   readlinkSync,
   rmSync,
@@ -9,7 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { runCommand, runShell } from '../process.js';
 
 /**
@@ -115,11 +116,39 @@ export async function linkDeps(dir: string, source: string): Promise<boolean> {
     if (resolve(readlinkSync(modules)) === resolve(target)) return true;
     releaseDeps(dir);
   }
-  const ignored = await runCommand('git', ['check-ignore', '-q', 'node_modules/'], { cwd: dir });
-  if (ignored.code !== 0) return false;
+  if (!(await linkIgnored(dir))) return false;
   // A junction on Windows: no administrator rights or developer mode needed.
   symlinkSync(target, modules, 'junction');
   return true;
+}
+
+const ignores = async (dir: string, path: string) =>
+  (await runCommand('git', ['check-ignore', '-q', path], { cwd: dir })).code === 0;
+
+/**
+ * Whether git ignores a node_modules *link* here, so it can never be committed. The usual
+ * `node_modules/` rule matches folders only, and on macOS and Linux the link is a symlink, which
+ * git sees as a file. Where the project ignores the folder, the link is added to the repository's
+ * own exclude list (.git/info/exclude: local, never committed, and harmless for your folder,
+ * whose node_modules is ignored already).
+ */
+async function linkIgnored(dir: string): Promise<boolean> {
+  if (!(await ignores(dir, 'node_modules/'))) return false;
+  if (await ignores(dir, 'node_modules')) return true;
+  const common = await runCommand('git', ['rev-parse', '--git-common-dir'], { cwd: dir });
+  if (common.code !== 0) return false;
+  const exclude = join(resolve(dir, common.stdout.trim()), 'info', 'exclude');
+  mkdirSync(dirname(exclude), { recursive: true });
+  const before = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+  const rule = '/node_modules';
+  if (!before.split(/\r?\n/).includes(rule)) {
+    const note = '# Plenum: the node_modules link in its own copies of this project\n';
+    writeFileSync(
+      exclude,
+      `${before}${before && !before.endsWith('\n') ? '\n' : ''}${note}${rule}\n`,
+    );
+  }
+  return ignores(dir, 'node_modules');
 }
 
 /** Remove a node_modules link (never what it points to). Safe to call on any folder. */

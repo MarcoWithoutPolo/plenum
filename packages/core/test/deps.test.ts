@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -71,8 +79,14 @@ describe('packages in Plenum’s own folders (1.0.1)', () => {
     expect(await linkDeps(tree, integration)).toBe(true);
     expect(lstatSync(join(tree, 'node_modules')).isSymbolicLink()).toBe(true);
     expect(existsSync(join(tree, 'node_modules', 'tiny', 'index.js'))).toBe(true);
-    // The task's commit never picks the link up.
+    // The task's commit never picks the link up (on macOS and Linux it's a symlink, which the
+    // usual node_modules/ rule doesn't match; the repository's local exclude list does).
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: tree }).toString()).toBe('');
+    expect(readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8')).toContain('/node_modules');
+    execFileSync('git', ['add', '-A'], { cwd: tree });
+    expect(execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: tree }).toString()).toBe(
+      '',
+    );
 
     await ws.removeTaskTree('t1');
     expect(existsSync(tree)).toBe(false);
