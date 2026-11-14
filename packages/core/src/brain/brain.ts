@@ -35,7 +35,7 @@ import { runShell } from '../process.js';
 import { Workspace, headCommit } from '../workspace/git.js';
 import { TaskMovedError } from '../store/projects.js';
 import { crashPoint } from '../crash.js';
-import { detectPreview } from '../preview/preview.js';
+import { detectPreview, previewAllowed } from '../preview/preview.js';
 import {
   imageTokens,
   pickReviewShots,
@@ -44,6 +44,13 @@ import {
   type TaskShots,
 } from '../preview/shots.js';
 import { linkSignals, type LinkedSignal } from '../signals.js';
+import {
+  depsInstalled,
+  depsPlan,
+  installDeps,
+  linkDeps,
+  type DepsPlan,
+} from '../workspace/deps.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock, lockHolder } from './lock.js';
@@ -1234,6 +1241,7 @@ export class Brain {
     if (testCommand) {
       this.projects.updateTask(task.id, { status: 'verifying' }, LIVE);
       crashPoint('mid-tests');
+      await this.dependencies(project, cwd);
       const link = this.linkFor(task);
       const run = await runShell(testCommand, {
         cwd,
@@ -1296,6 +1304,7 @@ export class Brain {
     commit: string,
   ): Promise<TaskShots | undefined> {
     if (detectPreview(cwd).kind === 'none') return undefined;
+    await this.dependencies(project, cwd);
     const shots = await snapshotTask({
       store: this.ctx.store,
       home: this.opts.home,
@@ -1308,7 +1317,11 @@ export class Brain {
       snapshotter: this.opts.snapshotter!,
     });
     if (shots.kind === 'skipped') {
-      this.log('verify', shots.reason, { task });
+      // Said once per run, not after every task (it's the same until you act on it).
+      if (!this.said.has(shots.reason)) {
+        this.said.add(shots.reason);
+        this.log('verify', shots.reason, { task });
+      }
       return shots;
     }
     const n = shots.after.shots.length;
@@ -1876,8 +1889,49 @@ export class Brain {
   }
 
   /** The project's test command in `cwd`, for the merge queue's combined re-test. */
+  /** Messages logged once per run. */
+  private readonly said = new Set<string>();
+  private installing: Promise<void> | undefined;
+
+  /**
+   * A JavaScript project's packages, in a task's folder (1.0.1). The integration folder installs
+   * them (npm ci, or the project's own package manager) once you've allowed the preview, which runs
+   * the project's code anyway, and again when the lock file changes. Task folders link to that.
+   */
+  private async dependencies(project: Project, cwd: string): Promise<void> {
+    const integration = this.workspace.integrationPath;
+    const plan = depsPlan(integration);
+    if (!plan) return;
+    if (!depsInstalled(integration, plan)) {
+      if (!previewAllowed(project.previewCommand, detectPreview(integration))) return;
+      // It failed for these dependencies already this run: don't try again on every task.
+      if (this.said.has(plan.key)) return;
+      this.installing ??= this.installDependencies(plan).finally(() => {
+        this.installing = undefined;
+      });
+      await this.installing;
+    }
+    if (cwd !== integration) await linkDeps(cwd, integration);
+  }
+
+  private async installDependencies(plan: DepsPlan): Promise<void> {
+    const ran = await installDeps(this.workspace.integrationPath, plan, this.signal);
+    if (ran.ok) {
+      this.log(
+        'verify',
+        `Installed the project's packages with ${plan.command} (${Math.round(ran.ms / 1000)} s)`,
+      );
+    } else if (!this.said.has(plan.key)) {
+      this.said.add(plan.key);
+      this.log('verify', `Couldn't install the project's packages with ${plan.command}`, {
+        data: { output: ran.output },
+      });
+    }
+  }
+
   private async runTests(project: Project, cwd: string): Promise<{ ok: boolean; output: string }> {
     const command = testCommandOf(project)!;
+    await this.dependencies(project, cwd);
     const run = await runShell(command, {
       cwd,
       timeoutMs: this.testTimeout,

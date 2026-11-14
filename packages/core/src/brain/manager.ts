@@ -37,6 +37,7 @@ import { openPullRequest, publishRepo } from '../github/flows.js';
 import { lockHolder } from './lock.js';
 import { retryFailed, retryTask, skipTask, type RetryOptions } from './recovery.js';
 import { addTask, applySteering, dismissSteering, editTask, moveTask, steer } from './steering.js';
+import { depsInstalled, depsPlan, installDeps, linkDeps } from '../workspace/deps.js';
 
 export function projectRoot(home: string, projectId: string): string {
   return join(home, 'projects', projectId);
@@ -534,7 +535,19 @@ export class BrainManager {
     const plan = detectPreview(dir);
     if (plan.kind === 'none') return { kind: 'none', reason: plan.reason };
     if (plan.kind === 'command' && !previewAllowed(project.previewCommand, plan)) {
-      return { kind: 'needs_approval', command: plan.command, runs: plan.runs };
+      const deps = depsPlan(dir);
+      return {
+        kind: 'needs_approval',
+        command: plan.command,
+        runs: plan.runs,
+        ...(deps && { installs: deps.command }),
+      };
+    }
+    // A dev server needs the project's packages (1.0.1): Plenum's own folders get them installed
+    // (task folders link to the integration folder's); your own folder is yours to install.
+    if (plan.kind === 'command') {
+      const missing = await this.previewDependencies(project, dir);
+      if (missing) return { kind: 'failed', ...missing };
     }
     const key = previewKey(projectId, opts.taskId);
     let server = this.previews.get(key);
@@ -559,6 +572,40 @@ export class BrainManager {
         logs: server.logs(),
       };
     }
+  }
+
+  /** Packages for a preview's folder; why not, when they can't be there. */
+  private async previewDependencies(
+    project: Project,
+    dir: string,
+  ): Promise<{ error: string; logs: string } | undefined> {
+    const plan = depsPlan(dir);
+    if (!plan) return undefined;
+    const integration = projectWorkspace(this.home, project).integrationPath;
+    if (dir === project.repoPath || !worktreeReady(integration)) {
+      if (existsSync(join(dir, 'node_modules'))) return undefined;
+      return {
+        error: `The project's packages aren't installed in ${project.repoPath}. Run ${plan.command} there, then try again.`,
+        logs: '',
+      };
+    }
+    const base = depsPlan(integration);
+    if (base && !depsInstalled(integration, base)) {
+      const ran = await installDeps(integration, base);
+      if (!ran.ok) {
+        return {
+          error: `Installing the project's packages with ${base.command} failed.`,
+          logs: ran.output,
+        };
+      }
+    }
+    if (dir !== integration && !(await linkDeps(dir, integration))) {
+      return {
+        error: `This task changed the project's packages, so its preview needs its own ${plan.command}.`,
+        logs: '',
+      };
+    }
+    return undefined;
   }
 
   /** What a preview shows: one task's worktree, or what's merged so far (the repo before that). */
@@ -671,7 +718,7 @@ const previewKey = (projectId: string, taskId?: string) =>
 /** What opening a preview gave: a URL, a command to allow first, nothing to preview, or why it failed. */
 export type PreviewResult =
   | { kind: 'ready'; url: string; static: boolean }
-  | { kind: 'needs_approval'; command: string; runs: string }
+  | { kind: 'needs_approval'; command: string; runs: string; installs?: string }
   | { kind: 'none'; reason: string }
   | { kind: 'failed'; error: string; logs: string };
 

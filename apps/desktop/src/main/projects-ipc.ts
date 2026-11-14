@@ -45,6 +45,7 @@ import {
   clampParallel,
   Governor,
   routingInsights,
+  depsPlan,
   detectPreview,
   previewAllowed,
 } from '@plenum/core';
@@ -179,15 +180,16 @@ export function registerProjectIpc(
   /** What the project would preview: what's merged so far, or the repo before the first run. */
   const previewOf = (project: Project): ProjectDetail['preview'] => {
     const ws = projectWorkspace(engine.home, project);
-    const plan = detectPreview(
-      existsSync(ws.integrationPath) ? ws.integrationPath : project.repoPath,
-    );
+    const dir = existsSync(ws.integrationPath) ? ws.integrationPath : project.repoPath;
+    const plan = detectPreview(dir);
     if (plan.kind === 'static') return { kind: 'static' };
     if (plan.kind === 'command') {
+      const deps = depsPlan(dir);
       return {
         kind: 'command',
         command: plan.command,
         allowed: previewAllowed(project.previewCommand, plan),
+        ...(deps && { installs: deps.command }),
       };
     }
     return null;

@@ -33,6 +33,7 @@ import { ASK_POLICIES, LEVEL_NAMES } from '@/components/form';
 import {
   DecisionsPanel,
   DraftBanner,
+  PreviewAskBanner,
   LimitBanner,
   NeedsYou,
   ProblemBanner,
@@ -148,6 +149,13 @@ export function ProjectView({ projectId }: { projectId: string }) {
             />
           )}
           {project.status === 'draft' && <DraftBanner project={project} />}
+          {detail.preview?.kind === 'command' && !detail.preview.allowed && !preview && (
+            <PreviewAskBanner
+              project={project}
+              command={detail.preview.command}
+              {...(detail.preview.installs && { installs: detail.preview.installs })}
+            />
+          )}
           <NeedsYou questions={questions} tasks={tasks} />
           {pending && (
             <ApprovalCard approval={pending} project={project} running={running} variant="banner" />

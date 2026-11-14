@@ -141,6 +141,7 @@ export function PreviewPane({
         <PreviewApproval
           command={state.command}
           runs={state.runs}
+          {...(state.installs && { installs: state.installs })}
           onAllow={async () => {
             await api().projects.allowPreview(projectId, state.command, taskId);
             await open();
@@ -247,12 +248,15 @@ function ScaledFrame({
 export function PreviewApproval({
   command,
   runs,
+  installs,
   onAllow,
   onCancel,
 }: {
   command: string;
   /** What the script runs, from package.json. */
   runs: string;
+  /** How its packages are installed first (npm ci), when it has any. */
+  installs?: string;
   onAllow: () => Promise<void>;
   onCancel: () => void;
 }) {
@@ -268,6 +272,13 @@ export function PreviewApproval({
         It runs the project’s own code on your computer, in this project’s folder, outside any
         agent’s sandbox. You’ll be asked again if package.json changes what it runs.
       </p>
+      {installs && (
+        <p className="mt-1.5 max-w-2xl text-[13px] text-muted">
+          First it installs the project’s packages with{' '}
+          <span className="font-mono text-[12px]">{installs}</span>, in Plenum’s own copy of the
+          project (never in your folder). Screenshots and tests during the build use them too.
+        </p>
+      )}
       {error && <p className="mt-2 text-[12.5px] text-danger">{error}</p>}
       <div className="mt-4 flex gap-2">
         <Button onClick={onCancel}>Not now</Button>

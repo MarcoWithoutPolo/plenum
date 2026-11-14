@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:f
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { removeDir, runCommand, type CommandResult } from '../process.js';
 import { crashPoint } from '../crash.js';
+import { releaseDeps } from './deps.js';
 
 export class GitError extends Error {
   constructor(
@@ -141,6 +142,7 @@ export class Workspace {
     if (existsSync(this.integrationPath) && !worktreeReady(this.integrationPath)) {
       // A checkout that never finished (the run was stopped mid-way): start it again.
       // Twice --force: git won't otherwise remove a worktree still locked "initializing".
+      releaseDeps(this.integrationPath);
       await git(
         this.repo,
         ['worktree', 'remove', '--force', '--force', this.integrationPath],
@@ -288,6 +290,8 @@ export class Workspace {
   private async removeTree(taskId: string, keepBranch = false): Promise<void> {
     const path = this.taskPath(taskId);
     if (existsSync(path)) {
+      // First the node_modules link, if any: git would follow it and empty the folder it points to.
+      releaseDeps(path);
       // Twice --force: a worktree whose `git worktree add` was killed stays locked
       // "initializing", and git (and `worktree prune`) won't drop it otherwise (soak, item 7915).
       await git(this.repo, ['worktree', 'remove', '--force', '--force', path], true);
@@ -400,6 +404,7 @@ export class Workspace {
         await git(this.repo, ['worktree', 'prune'], true);
         await git(this.repo, ['worktree', 'add', '--detach', path, tip]);
       } else {
+        releaseDeps(path);
         await git(path, ['merge', '--abort'], true);
         await git(path, ['checkout', '-q', '--force', '--detach', tip]);
         await git(path, ['reset', '-q', '--hard', tip]);
@@ -479,8 +484,10 @@ export class Workspace {
       .map((l) => l.slice('worktree '.length).trim())
       .filter((p) => normalize(p).startsWith(normalize(this.root)));
     // Twice --force, so a worktree locked by a killed checkout goes too.
-    for (const path of mine)
+    for (const path of mine) {
+      releaseDeps(path);
       await git(this.repo, ['worktree', 'remove', '--force', '--force', path], true);
+    }
     rmSync(this.root, { recursive: true, force: true });
     await git(this.repo, ['worktree', 'prune'], true);
   }

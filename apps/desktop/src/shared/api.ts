@@ -125,7 +125,16 @@ export interface ProjectDetail {
   /** AIs on this team that are out of usage right now (limits never fail tasks). */
   limits: LimitNotice[];
   /** How the project can be previewed: Plenum serves it (static), or its own dev server. */
-  preview: { kind: 'static' } | { kind: 'command'; command: string; allowed: boolean } | null;
+  preview:
+    | { kind: 'static' }
+    | {
+        kind: 'command';
+        command: string;
+        allowed: boolean;
+        /** How its packages are installed first, when it has any (npm ci). */
+        installs?: string;
+      }
+    | null;
 }
 
 /** A task's latest screenshots and the integration shots they were compared with. */

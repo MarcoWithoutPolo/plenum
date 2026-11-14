@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CircleDashed,
   ExternalLink,
+  Eye,
   GitPullRequest,
   Hourglass,
   Pencil,
@@ -907,5 +908,80 @@ function slug(name: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9.-]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'project'
+  );
+}
+
+/* ── Preview not allowed yet ─────────────────────────────────────────── */
+
+/**
+ * A web project whose dev server you haven't allowed gets no screenshots and no visual review, so
+ * it asks here, as soon as the project has a dev command, not after everything is built (1.0.1).
+ */
+export function PreviewAskBanner({
+  project,
+  command,
+  installs,
+}: {
+  project: Project;
+  command: string;
+  installs?: string;
+}) {
+  const load = useProjects((s) => s.load);
+  const toast = useApp((s) => s.showToast);
+  const [busy, setBusy] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <section
+      aria-label="Allow the preview"
+      className="mt-5 flex items-start gap-3.5 rounded-2xl border border-accent/35 bg-accent-soft/60 px-5 py-3.5"
+    >
+      <Eye className="mt-0.5 size-4.5 shrink-0 text-accent" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <h2 className="text-[13.5px] font-semibold">
+          Allow the preview, so Plenum can see the pages it builds
+        </h2>
+        <p className="mt-0.5 text-[12.5px] text-muted">
+          Until then there are no screenshots and no visual review. It runs{' '}
+          <span className="font-mono text-[12px]">{command}</span>, the project’s own code, in
+          Plenum’s copy of the project
+          {installs ? (
+            <>
+              , after installing its packages with{' '}
+              <span className="font-mono text-[12px]">{installs}</span>
+            </>
+          ) : null}
+          .
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await api().projects.allowPreview(project.id, command);
+              await load(project.id);
+            } catch (err) {
+              toast('error', errorText(err));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Allow
+        </Button>
+        <button
+          type="button"
+          aria-label="Not now"
+          onClick={() => setDismissed(true)}
+          className="grid size-7 place-items-center rounded-lg text-muted hover:bg-panel hover:text-ink"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
+    </section>
   );
 }
