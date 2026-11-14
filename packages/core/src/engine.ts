@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import {
   PROVIDERS,
   providerEntry,
@@ -11,7 +10,7 @@ import type { CachedCatalog } from './store/catalogs.js';
 import type { Adapter } from './adapters/types.js';
 import { ChatService } from './chat/service.js';
 import { Council } from './council/council.js';
-import { defaultHome } from './store/db.js';
+import { databasePath, defaultHome } from './store/db.js';
 import { Store } from './store/store.js';
 
 export interface EngineOptions {
@@ -32,7 +31,7 @@ export class Engine {
 
   constructor(opts: EngineOptions = {}) {
     this.home = opts.home ?? defaultHome();
-    this.store = opts.store ?? new Store(join(this.home, 'plenum.db'));
+    this.store = opts.store ?? new Store(databasePath(this.home));
     this.adapters = adapterMap(
       opts.adapters ?? createAdapters({ settings: () => this.store.settings.get() }),
     );

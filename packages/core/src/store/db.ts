@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type * as Sqlite from 'node:sqlite';
@@ -302,8 +302,34 @@ export function defaultHome(): string {
   return !existsSync(home) && existsSync(before) ? before : home;
 }
 
+/**
+ * The database in a data folder: plenum.db. Before 1.0 it was conclave.db, and 1.0.0 opened a new,
+ * empty plenum.db next to it, hiding everything from before. Where only conclave.db exists, it
+ * becomes plenum.db (written through first, so nothing is left in its WAL); if another process
+ * has it open, it's used where it is until the next start.
+ */
+export function databasePath(home = defaultHome()): string {
+  const path = join(home, 'plenum.db');
+  const before = join(home, 'conclave.db');
+  if (existsSync(path) || !existsSync(before)) return path;
+  try {
+    const old = new (sqlite().DatabaseSync)(before);
+    old.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    old.close();
+    // Something else still has it open (its WAL wasn't emptied): leave it where it is for now.
+    const wal = `${before}-wal`;
+    if (existsSync(wal) && statSync(wal).size > 0) return before;
+    renameSync(before, path);
+    rmSync(wal, { force: true });
+    rmSync(`${before}-shm`, { force: true });
+    return path;
+  } catch {
+    return existsSync(path) ? path : before;
+  }
+}
+
 /** Open (and migrate) the Plenum database. Pass ':memory:' for tests. */
-export function openDatabase(path = join(defaultHome(), 'plenum.db')): DatabaseSync {
+export function openDatabase(path = databasePath()): DatabaseSync {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new (sqlite().DatabaseSync)(path);
   // The wait first: switching to WAL needs a moment's lock another process may hold (E11).

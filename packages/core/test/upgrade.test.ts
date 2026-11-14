@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { databaseAtVersion, defaultHome, openDatabase, SCHEMA_VERSION } from '../src/store/db.js';
+import {
+  databaseAtVersion,
+  databasePath,
+  defaultHome,
+  openDatabase,
+  SCHEMA_VERSION,
+} from '../src/store/db.js';
 import { Store } from '../src/index.js';
 
 /**
@@ -195,6 +201,33 @@ describe('The data folder after the rename to Plenum', () => {
     expect(defaultHome()).toBe(join(home, '.plenum'));
     process.env.PLENUM_HOME = join(home, 'elsewhere');
     expect(defaultHome()).toBe(join(home, 'elsewhere'));
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('opens the data from before the rename: conclave.db becomes plenum.db (1.0.1)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'plenum-dbname-'));
+    try {
+      // A database from the Conclave days, with a chat in it, and changes still in its WAL.
+      const old = new Store(join(home, 'conclave.db'));
+      old.createThread({ title: 'From before', provider: 'claude' });
+      expect(existsSync(join(home, 'conclave.db-wal'))).toBe(true);
+      old.db.close();
+      const path = databasePath(home);
+      expect(path).toBe(join(home, 'plenum.db'));
+      expect(existsSync(join(home, 'conclave.db'))).toBe(false);
+      const store = new Store(path);
+      expect(store.listThreads().map((t) => t.title)).toEqual(['From before']);
+      store.db.close();
+      // From then on, plenum.db is simply used.
+      expect(databasePath(home)).toBe(join(home, 'plenum.db'));
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a new install just gets plenum.db', () => {
+    const home = mkdtempSync(join(tmpdir(), 'plenum-dbname-'));
+    expect(databasePath(home)).toBe(join(home, 'plenum.db'));
     rmSync(home, { recursive: true, force: true });
   });
 });
