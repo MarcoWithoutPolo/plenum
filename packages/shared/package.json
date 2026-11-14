@@ -1,6 +1,6 @@
 {
   "name": "@plenum/shared",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Schemas and types shared by the Plenum engine, CLI and desktop app.",
   "license": "AGPL-3.0-only",

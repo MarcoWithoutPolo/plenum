@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.1
+
+The first update: making sure updates work, plus fixes found in the first days of 1.0.
+
+- **Your data from before the rename is back.** 1.0.0 kept your `~/.conclave` folder but opened a new, empty
+  database in it, so earlier chats and projects seemed gone. Nothing was lost: 1.0.1 opens the old one.
+- **Previews of JavaScript projects work.** Plenum's own copies of a project never had its packages, so a Vite or
+  Next dev server couldn't start: no preview, no screenshots, and tests that need packages failed. Once you allow a
+  project's preview, Plenum installs its packages there (`npm ci`, or the project's package manager) and every task
+  uses them.
+- **The preview asks early.** A web project whose preview you haven't allowed now asks on its page as soon as it has
+  a dev command, instead of after everything is built.
+- **Report a problem:** Settings → About saves the logs (keys and tokens removed) and opens a new GitHub issue with
+  your Plenum version and system filled in. Nothing else goes in the link, and the log stays on your computer until
+  you attach it yourself.
+- **Windows: nothing left running.** A server an AI started in the background and forgot to stop used to keep
+  running after its step (a known limit in 1.0). AI runs and test commands now run in a Windows job object, so
+  whatever they start ends with them.
+- **Long runs use less memory:** each step used to leave a little behind for as long as its project ran.
+- Issue templates for bug reports, feature ideas and "an AI CLI changed".
+
+The "Fast" and "Thorough" team presets promised for 1.0.1 are part of 1.1 instead, together with a third, "Balanced",
+and a much shorter New project dialog.
+
 ## 1.0.0 (2026-11-08)
 
 The first public release. Plenum runs the AI coding CLIs you already use and are signed in to (Claude Code, Codex,

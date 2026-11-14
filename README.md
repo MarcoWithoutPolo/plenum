@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/MarcoWithoutPolo/plenum/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MarcoWithoutPolo/plenum/actions/workflows/ci.yml/badge.svg" /></a>
-  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-7c5cff" /></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.0.1" src="https://img.shields.io/badge/version-1.0.1-7c5cff" /></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-555" />
   <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
 </p>
@@ -129,8 +129,6 @@ database is backed up before any upgrade changes it.
   the same hands-on run; please report what you find.
 - Cursor's CLI can't limit which commands it runs, so Cursor builds at permission levels 1, 2 and 5 only; Plenum
   says so when you pick it.
-- On Windows, a server an AI started and forgot to stop can outlive its run. Plenum no longer waits for it and stops
-  what it can trace, but a stray `node` process may remain until you close it.
 
 ### Background mode
 
@@ -191,9 +189,10 @@ Data lives in `~/.plenum` (set `PLENUM_HOME` to move it).
 
 ## Project status
 
-**1.0.0** is the first public release: see the [changelog](CHANGELOG.md). It was checked with a 24-hour soak (11,250 tasks through simulated crashes, usage limits and forced restarts), real projects built by real AIs and scored by hidden tests, and an end-to-end suite that drives every screen. The numbers are in [bench/RESULTS.md](bench/RESULTS.md).
+**1.0** is the first public release (1.0.1 is the latest update): see the [changelog](CHANGELOG.md). It was checked with a 24-hour soak (11,250 tasks through simulated crashes, usage limits and forced restarts), real projects built by real AIs and scored by hidden tests, and an end-to-end suite that drives every screen. The numbers are in [bench/RESULTS.md](bench/RESULTS.md).
 
-Next: "Fast" and "Thorough" team presets, and code-signed installers.
+Next, in 1.1: a much shorter New project dialog, with your defaults in Settings and three presets (Fast, Balanced and
+Thorough).
 
 ## Development
 

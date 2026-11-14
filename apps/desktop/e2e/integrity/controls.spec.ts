@@ -132,6 +132,9 @@ for (const screen of SCREENS) {
     await screen.open(page);
     const controls = await controlsOf(page, 'main');
     found[screen.name] = controls;
+    // Every control is clicked from a freshly opened screen, about 15 s each on a fast machine:
+    // the time allowed grows with the screen (a fixed 10 min ran out on a busy one, 1.0.1 S4).
+    test.setTimeout(120_000 + controls.length * 40_000);
     const dead: string[] = [];
     for (let i = 0; i < controls.length; i++) {
       // Start each click from the screen as it was.

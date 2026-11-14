@@ -1,6 +1,6 @@
 {
   "name": "@plenum/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "The plenum command: doctor, chat, ask the council, run projects headless.",
   "license": "AGPL-3.0-only",

@@ -1,6 +1,6 @@
 {
   "name": "plenum",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "A desktop app that runs your AI coding CLIs (Claude Code, Codex, Antigravity, Copilot, Cursor and more) as one team: chat with any of them, ask them all at once, or let them build a project for days.",
   "license": "AGPL-3.0-only",
