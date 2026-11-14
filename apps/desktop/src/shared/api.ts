@@ -446,6 +446,8 @@ export interface AboutInfo {
   version: string;
   electron: string;
   platform: string;
+  /** "Windows_NT 10.0.26100 x64": what goes in a problem report, nothing about the user. */
+  system: string;
   /** The command that adds Plenum to Claude Code as an MCP server (F9). */
   mcp: string;
 }

@@ -663,9 +663,16 @@ function About() {
     try {
       const r = await api().about.exportLogs();
       if (r) setSaved(r.path);
+      return r;
     } finally {
       setBusy(false);
     }
+  };
+  // Report a problem (1.0.1 S1): save the redacted log, then open a new issue filled with the
+  // version and system only. The log stays on this computer until you attach it yourself.
+  const report = async () => {
+    const r = await exportLogs();
+    if (info) await api().openExternal(problemReportUrl(info, r?.path));
   };
   return (
     <Section
@@ -746,8 +753,33 @@ function About() {
           Saved to {saved}
         </p>
       )}
+      <Row
+        label="Report a problem"
+        hint="Saves the logs above, then opens a new issue on GitHub with your Plenum version and system filled in. You read it and send it from your own account; attach the log file if you want to."
+      >
+        <Button onClick={() => settle(report())} disabled={busy || !info}>
+          Report a problem…
+        </Button>
+      </Row>
     </Section>
   );
+}
+
+const ISSUES = 'https://github.com/MarcoWithoutPolo/plenum/issues/new';
+
+/**
+ * A new bug report, pre-filled through the issue form's fields. Only the version and the system go
+ * in the link, and the log file's name (never its folder): no paths, projects or usernames.
+ */
+export function problemReportUrl(info: AboutInfo, logPath?: string): string {
+  const file = logPath?.split(/[\\/]/).pop();
+  const params = new URLSearchParams({
+    template: 'bug.yml',
+    version: info.version,
+    system: `${info.system} · Electron ${info.electron}`,
+    ...(file && { logs: `Saved as ${file}: drag it here to attach it.` }),
+  });
+  return `${ISSUES}?${params.toString()}`;
 }
 
 function updateText(u: UpdateState | null): string {

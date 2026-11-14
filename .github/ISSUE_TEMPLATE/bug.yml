@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in Plenum doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Settings → About → Report a problem** fills in the version and system for you.
+        Security problems go to [private reporting](https://github.com/MarcoWithoutPolo/plenum/security/advisories/new), never a public issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, step by step, and what you saw.
+      placeholder: "1. Started a project with Codex building\n2. …"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plenum version
+      description: Settings → About.
+      placeholder: 1.0.1
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: ais
+    attributes:
+      label: Which AIs were involved?
+      description: With versions if you know them (for example `claude --version`).
+      placeholder: Claude Code 2.x, Codex 1.x
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Settings → About → Export logs saves a report with keys and tokens removed. Read it first, then drag the file here.

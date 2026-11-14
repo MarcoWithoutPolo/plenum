@@ -1,0 +1,31 @@
+name: An AI CLI changed
+description: Claude Code, Codex, Gemini or another CLI updated and something in Plenum broke.
+labels: [adapter]
+body:
+  - type: input
+    id: cli
+    attributes:
+      label: Which CLI, and which version?
+      description: The output of its `--version`.
+      placeholder: codex 1.4.0
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plenum version
+      description: Settings → About.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What broke?
+      description: The error Plenum shows, or what no longer works (sign-in, chats, projects, usage).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Settings → About → Export logs. Read it first, then drag the file here.

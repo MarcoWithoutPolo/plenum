@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { release, type as osType } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, shell } from 'electron';
@@ -133,6 +134,8 @@ function registerSettings(engine: Engine, brains: BrainManager): void {
     version: app.getVersion(),
     electron: process.versions.electron,
     platform: process.platform,
+    // For Report a problem: the system's name and version, nothing about you.
+    system: `${osType()} ${release()} ${process.arch}`,
     // The line that adds Plenum to Claude Code as an MCP server (F9).
     mcp: app.isPackaged
       ? `claude mcp add plenum -- "${process.execPath}" --mcp`
