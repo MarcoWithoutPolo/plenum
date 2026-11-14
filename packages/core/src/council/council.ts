@@ -5,6 +5,7 @@ import { collect, type RunResult } from '../collect.js';
 import { recordUsage, titleFrom, type EngineContext } from '../chat/service.js';
 import { renderTranscript, seatLabels } from '../chat/transcript.js';
 import { seatOptions } from '../seats.js';
+import { linkSignals } from '../signals.js';
 
 export interface CouncilOptions {
   members: Seat[];
@@ -322,7 +323,7 @@ export class Council {
     own?: AbortSignal,
   ): Promise<RunResult> {
     const adapter = this.ctx.adapters.get(seat.provider)!;
-    const signal = own && opts.signal ? AbortSignal.any([own, opts.signal]) : (own ?? opts.signal);
+    const { signal, dispose } = linkSignals(own, opts.signal);
     return collect(
       adapter.run({
         prompt,
@@ -331,10 +332,10 @@ export class Council {
         readOnly: true,
         timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         ...seatOptions(seat, this.ctx.store.settings),
-        ...(signal && { signal }),
+        signal,
       }),
       onEvent,
-    );
+    ).finally(dispose);
   }
 }
 

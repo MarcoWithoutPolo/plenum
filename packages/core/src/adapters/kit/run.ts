@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { AgentEvent, ProviderId } from '@plenum/shared';
 import { streamProcess, type ProcessChunk, type ProcessOptions } from '../../process.js';
+import { linkSignals } from '../../signals.js';
 import { limitResetsAt, looksLikeLimit } from './limits.js';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -52,7 +53,7 @@ export async function* runCli(
   // Our own stop, joined with the caller's: a run that edits outside its folder ends now, not
   // when its timeout comes (E8).
   const stop = new AbortController();
-  const signal = process.signal ? AbortSignal.any([process.signal, stop.signal]) : stop.signal;
+  const { signal, dispose } = linkSignals(process.signal, stop.signal);
   const emit = function* (bodies: EventBody[]) {
     for (const body of bodies) {
       if (body.type === 'error' || body.type === 'rate_limit') reportedError = true;
@@ -78,41 +79,49 @@ export async function* runCli(
     }
   };
 
-  for await (const chunk of exec({ ...process, signal })) {
-    if (chunk.kind === 'stderr') {
-      stderrTail = (stderrTail + chunk.text).slice(-4000);
-      continue;
-    }
-    if (chunk.kind === 'line') {
-      let message: unknown;
-      try {
-        message = JSON.parse(chunk.line);
-      } catch {
-        // Banners and warnings some CLIs print to stdout, or a plain-text CLI's answer.
-        if (!parser.plainText) continue;
-        message = chunk.line;
-      }
-      yield* emit(parser.parse(message));
-      continue;
-    }
+  try {
+    yield* replay();
+  } finally {
+    dispose();
+  }
 
-    let ok = chunk.code === 0 && !chunk.error && !parser.failed && !escaped;
-    if (parser.finish) {
-      yield* emit(parser.finish(ok));
-      ok = ok && !parser.failed && !escaped;
+  async function* replay(): AsyncGenerator<AgentEvent> {
+    for await (const chunk of exec({ ...process, signal })) {
+      if (chunk.kind === 'stderr') {
+        stderrTail = (stderrTail + chunk.text).slice(-4000);
+        continue;
+      }
+      if (chunk.kind === 'line') {
+        let message: unknown;
+        try {
+          message = JSON.parse(chunk.line);
+        } catch {
+          // Banners and warnings some CLIs print to stdout, or a plain-text CLI's answer.
+          if (!parser.plainText) continue;
+          message = chunk.line;
+        }
+        yield* emit(parser.parse(message));
+        continue;
+      }
+
+      let ok = chunk.code === 0 && !chunk.error && !parser.failed && !escaped;
+      if (parser.finish) {
+        yield* emit(parser.finish(ok));
+        ok = ok && !parser.failed && !escaped;
+      }
+      if (!ok && !reportedError) {
+        const message =
+          chunk.error ?? lastMeaningfulLine(stderrTail) ?? `Exited with code ${chunk.code}`;
+        const resetsAt = limitResetsAt(message);
+        yield stamp(
+          looksLikeLimit(message)
+            ? { type: 'rate_limit', message, ...(resetsAt && { resetsAt }) }
+            : { type: 'error', message },
+        );
+      }
+      yield stamp({ type: 'done', ok, exitCode: chunk.code, durationMs: Date.now() - started });
+      return;
     }
-    if (!ok && !reportedError) {
-      const message =
-        chunk.error ?? lastMeaningfulLine(stderrTail) ?? `Exited with code ${chunk.code}`;
-      const resetsAt = limitResetsAt(message);
-      yield stamp(
-        looksLikeLimit(message)
-          ? { type: 'rate_limit', message, ...(resetsAt && { resetsAt }) }
-          : { type: 'error', message },
-      );
-    }
-    yield stamp({ type: 'done', ok, exitCode: chunk.code, durationMs: Date.now() - started });
-    return;
   }
 }
 

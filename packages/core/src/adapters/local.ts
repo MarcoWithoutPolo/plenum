@@ -31,6 +31,7 @@ import {
 } from './kit/index.js';
 import type { Adapter, Capabilities, LoginCommand, ModelList, RunRequest } from './types.js';
 import { QUIET_MS } from './types.js';
+import { linkSignals } from '../signals.js';
 
 export const DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434';
 
@@ -529,8 +530,24 @@ export function openCodeConfig(
 /** Streams an HTTP response's lines as if a process printed them, so runCli can parse it. */
 export function httpExec(http: typeof fetch, url: string, body: unknown): Exec {
   return async function* (opts: ProcessOptions): AsyncGenerator<ProcessChunk> {
-    const signals = [opts.signal, opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined];
-    const signal = AbortSignal.any(signals.filter((s): s is AbortSignal => Boolean(s)));
+    // The caller's stop and our timeout, let go of when the request is over.
+    const timeout = new AbortController();
+    const timer = opts.timeoutMs
+      ? setTimeout(
+          () => timeout.abort(new Error(`Timed out after ${opts.timeoutMs} ms`)),
+          opts.timeoutMs,
+        )
+      : undefined;
+    const { signal, dispose } = linkSignals(opts.signal, timeout.signal);
+    try {
+      yield* request(signal);
+    } finally {
+      clearTimeout(timer);
+      dispose();
+    }
+  };
+
+  async function* request(signal: AbortSignal): AsyncGenerator<ProcessChunk> {
     let res: Response;
     try {
       res = await http(url, {
@@ -570,7 +587,7 @@ export function httpExec(http: typeof fetch, url: string, body: unknown): Exec {
     } catch (e) {
       yield { kind: 'exit', code: null, error: signal.aborted ? 'Stopped' : (e as Error).message };
     }
-  };
+  }
 }
 
 /** Ollama's streamed `/api/chat` lines: message pieces, then one line with `done` and the counts. */

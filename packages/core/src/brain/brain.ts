@@ -43,6 +43,7 @@ import {
   type ReviewShot,
   type TaskShots,
 } from '../preview/shots.js';
+import { linkSignals, type LinkedSignal } from '../signals.js';
 import type { Snapshotter } from '../preview/snapshot.js';
 import { extractJson, parsePlan, parseReview } from './json.js';
 import { acquireLock, lockHolder } from './lock.js';
@@ -347,9 +348,8 @@ export class Brain {
   async run(options: RunOptions = {}): Promise<RoundOutcome> {
     const lock = acquireLock(join(this.workspace.root, 'run.lock'));
     this.runAbort = new AbortController();
-    this.signal = options.signal
-      ? AbortSignal.any([options.signal, this.runAbort.signal])
-      : this.runAbort.signal;
+    const joined = linkSignals(options.signal, this.runAbort.signal);
+    this.signal = joined.signal;
     try {
       // "Wait until…" from the start-up check: wait like any waiting project (Stop works).
       if (options.startAt && options.startAt.at > Date.now() && this.project().status !== 'draft') {
@@ -371,6 +371,7 @@ export class Brain {
       return await (lanes > 1 ? this.lanes(options, lanes) : this.loop(options));
     } finally {
       this.signal = undefined;
+      joined.dispose();
       lock.release();
     }
   }
@@ -599,11 +600,12 @@ export class Brain {
     return this.interrupted || this.taskAborts.get(task.id)?.signal.aborted === true;
   }
 
-  /** The project's signal, joined with the running task's own (skipping a task mid-build). */
-  private signalFor(task?: Task): AbortSignal | undefined {
-    const own = task && this.taskAborts.get(task.id)?.signal;
-    if (own && this.signal) return AbortSignal.any([this.signal, own]);
-    return own ?? this.signal;
+  /**
+   * The project's signal, joined with the running task's own (skipping a task mid-build). Dispose
+   * it when the step is over, so a long project doesn't keep one per step.
+   */
+  private linkFor(task?: Task): LinkedSignal {
+    return linkSignals(this.signal, task && this.taskAborts.get(task.id)?.signal);
   }
 
   /**
@@ -1024,11 +1026,12 @@ export class Brain {
     const install = task.grants?.install;
     if (install && isRunnableInstall(install)) {
       // You approved this exact command; Plenum runs it, not the agent.
+      const link = this.linkFor(task);
       const ran = await runShell(install, {
         cwd,
         timeoutMs: this.testTimeout,
-        ...(this.signalFor(task) && { signal: this.signalFor(task) }),
-      });
+        signal: link.signal,
+      }).finally(link.dispose);
       if (this.cut(task)) return this.halt(task);
       const tail = ran.output.trim().slice(-3000);
       this.log('agent', `Ran ${install} (approved by you)`, { task, data: { output: tail } });
@@ -1231,11 +1234,12 @@ export class Brain {
     if (testCommand) {
       this.projects.updateTask(task.id, { status: 'verifying' }, LIVE);
       crashPoint('mid-tests');
+      const link = this.linkFor(task);
       const run = await runShell(testCommand, {
         cwd,
         timeoutMs: this.testTimeout,
-        ...(this.signalFor(task) && { signal: this.signalFor(task) }),
-      });
+        signal: link.signal,
+      }).finally(link.dispose);
       if (this.cut(task)) return this.halt(task);
       const tail = run.output.trim().slice(-4000);
       if (run.code !== 0) {
@@ -1491,7 +1495,8 @@ export class Brain {
           `${seatLabel(reviewer)} asked for changes again; asking ${seatLabel(other)} for a second opinion`,
           { task, provider: other.provider },
         );
-        const second = await ask(other, this.signalFor(task) ?? new AbortController().signal);
+        const link = this.linkFor(task);
+        const second = await ask(other, link.signal).finally(link.dispose);
         if (this.cut(task)) return this.halt(task);
         if (second.verdict?.approve) {
           this.log(
@@ -2424,10 +2429,12 @@ export class Brain {
         clearTimeout(timer);
       }
     };
-    const signals = [this.signal, own, extra.signal, quietMs ? quiet.signal : undefined].filter(
-      (s): s is AbortSignal => Boolean(s),
+    const { signal, dispose } = linkSignals(
+      this.signal,
+      own,
+      extra.signal,
+      quietMs ? quiet.signal : undefined,
     );
-    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
     const result = await collect(
       watched(
         adapter.run({
@@ -2437,7 +2444,7 @@ export class Brain {
           readOnly,
           ...(permissions && { permissions }),
           timeoutMs: this.agentTimeout,
-          ...(signal && { signal }),
+          signal,
           ...seatOptions(seat, this.ctx.store.settings),
           ...(extra.images?.length && { images: extra.images }),
         }),
@@ -2466,7 +2473,7 @@ export class Brain {
           }
         }
       },
-    );
+    ).finally(dispose);
     // Safety net for any provider: a failure that reads like a plan or spend limit is a limit,
     // so the work moves to the next provider and the task keeps its attempts.
     if (!result.ok && !result.rateLimited && looksLikeLimit(result.errors.join(' '))) {
